@@ -462,6 +462,9 @@ function normalizeMermaidSource(value: string) {
     .replace(/^\uFEFF/, "")
     .replace(/```(?:mermaid)?/gi, "")
     .replace(/```/g, "")
+    // Citation markers such as [1] or [网1] inside Mermaid labels often break parsing.
+    // The answer body can still show citations outside the Mermaid code block.
+    .replace(/\s*\[(?:网)?\d+\]/g, "")
     .trim();
 }
 
@@ -519,11 +522,11 @@ function transformCitationNodes(node: MarkdownAstNode, validIndexes: Set<number>
       nextChildren.push(child);
       continue;
     }
-    const regex = /\[(\d{1,2})\]/g;
+    const regex = /\[(\d{1,2})\]|【(\d{1,2})】/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(child.value)) !== null) {
-      const citationIndex = Number(match[1]);
+      const citationIndex = Number(match[1] ?? match[2]);
       if (!validIndexes.has(citationIndex)) continue;
       if (match.index > lastIndex) {
         nextChildren.push({ type: "text", value: child.value.slice(lastIndex, match.index) });

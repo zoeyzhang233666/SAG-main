@@ -4,6 +4,15 @@ export interface ManualKnowledgeEntity {
   type: string;
   name: string;
   description: string;
+  relation?: string;
+}
+
+export interface ManualKnowledgeSource {
+  name?: string;
+  type?: string;
+  date?: string;
+  author?: string;
+  url?: string;
 }
 
 export interface ManualKnowledgeEvent {
@@ -24,6 +33,7 @@ export interface ManualKnowledgeChunk {
 
 export interface ManualKnowledgeDocument {
   title: string;
+  source?: ManualKnowledgeSource;
   chunks: ManualKnowledgeChunk[];
 }
 
@@ -32,6 +42,11 @@ type FlatRow = Record<string, unknown>;
 type NormalizedRow = {
   documentKey: string;
   documentTitle: string;
+  sourceName: string;
+  sourceType: string;
+  sourceDate: string;
+  sourceAuthor: string;
+  sourceUrl: string;
   chunkKey: string;
   chunkHeading: string;
   chunkContent: string;
@@ -43,11 +58,17 @@ type NormalizedRow = {
   entityType: string;
   entityName: string;
   entityDescription: string;
+  relationDescription: string;
 };
 
 const COLUMN_ALIASES = {
   documentKey: ["document_id", "documentid", "system_document_id"],
   documentTitle: ["文档标题", "document_title", "documenttitle", "document"],
+  sourceName: ["来源名称", "source_name", "sourcename", "source_title", "sourcetitle"],
+  sourceType: ["来源类型", "source_type", "sourcetype"],
+  sourceDate: ["来源日期", "source_date", "sourcedate", "publish_date", "published_at"],
+  sourceAuthor: ["来源作者", "来源机构", "作者", "机构", "source_author", "sourceauthor", "source_org", "sourceorg", "organization", "author"],
+  sourceUrl: ["来源链接", "来源URL", "来源网址", "source_url", "sourceurl", "url", "link"],
   chunkKey: ["切片编号", "切片id", "chunk_id", "chunkid", "chunk_key"],
   chunkHeading: ["切片标题", "chunk_heading", "chunkheading", "heading"],
   chunkContent: ["原文切片", "切片原文", "chunk_content", "chunkcontent", "source_text", "原文"],
@@ -58,7 +79,8 @@ const COLUMN_ALIASES = {
   keywords: ["关键词", "keywords", "keyword"],
   entityType: ["实体类型", "entity_type", "entitytype"],
   entityName: ["实体名称", "entity_name", "entityname", "entity"],
-  entityDescription: ["实体说明", "关系说明", "entity_description", "entitydescription", "relation_description", "description"]
+  entityDescription: ["实体说明", "entity_description", "entitydescription", "description"],
+  relationDescription: ["关系说明", "relation_description", "relationdescription", "relation"]
 } as const;
 
 export function parseManualKnowledge(
@@ -122,22 +144,28 @@ function parseJsonDocuments(text: string, fallbackTitle?: string): ManualKnowled
     throw new Error("JSON 格式无效，请确认没有 Markdown 代码块标记或多余说明");
   }
 
-  if (isRecord(value) && Array.isArray(value.documents)) {
+  if (isRecord(value) && looksLikeKnowledgeExport(value)) {
     const documents = value.documents
       .filter(isRecord)
       .map((document, index) => normalizeExportDocument(document, index, fallbackTitle));
     if (documents.length === 0) {
-      throw new Error("项目导出 JSON 中没有可导入的 documents");
+      throw new Error("项目备份 JSON 中没有可导入的 documents");
+    }
+    return documents;
+  }
+
+  if (isRecord(value) && Array.isArray(value.documents)) {
+    const documents = value.documents
+      .filter(isRecord)
+      .map((document, index) => normalizeSimpleDocument(document, index, fallbackTitle));
+    if (documents.length === 0) {
+      throw new Error("简化 JSON 中没有可导入的 documents");
     }
     return documents;
   }
 
   if (isRecord(value) && Array.isArray(value.chunks)) {
-    const chunks = value.chunks.map((item, index) => normalizeStructuredChunk(item, index));
-    return [validateDocument({
-      title: readString(value.title) || fallbackTitle || "网页版 AI 导入",
-      chunks
-    })];
+    return [normalizeSimpleDocument(value, 0, fallbackTitle)];
   }
 
   const rows = Array.isArray(value)
@@ -149,6 +177,27 @@ function parseJsonDocuments(text: string, fallbackTitle?: string): ManualKnowled
     throw new Error("JSON 需要包含 documents、chunks、rows 数组，或直接使用行对象数组");
   }
   return buildDocumentsFromRows(rows.filter(isRecord), fallbackTitle);
+}
+
+function looksLikeKnowledgeExport(value: Record<string, any>): value is Record<string, any> & { documents: any[] } {
+  return value.schemaVersion === 1 &&
+    isRecord(value.idPolicy) &&
+    isRecord(value.project) &&
+    Array.isArray(value.documents);
+}
+
+function normalizeSimpleDocument(
+  value: Record<string, any>,
+  documentIndex: number,
+  fallbackTitle?: string
+): ManualKnowledgeDocument {
+  const chunksValue = Array.isArray(value.chunks) ? value.chunks : [];
+  const sourceValue = isRecord(value.source) ? value.source : value;
+  return validateDocument({
+    title: readString(value.title) || readString(value.documentTitle) || fallbackTitle || `导入文档 ${documentIndex + 1}`,
+    source: normalizeSource(sourceValue),
+    chunks: chunksValue.map((item, index) => normalizeStructuredChunk(item, index))
+  });
 }
 
 function normalizeExportDocument(
@@ -182,6 +231,7 @@ function normalizeExportDocument(
 
   return validateDocument({
     title: readString(value.title) || fallbackTitle || `导入文档 ${documentIndex + 1}`,
+    source: normalizeSource(value),
     chunks
   });
 }
@@ -200,10 +250,8 @@ function normalizeExportChunkEvent(
     ? event.entities.filter(isRecord).map((entity) => ({
         type: readString(entity.entityType) || readString(entity.type) || "subject",
         name: readString(entity.entityName) || readString(entity.name),
-        description: readString(entity.relationDescription) ||
-          readString(entity.entityDescription) ||
-          readString(entity.description) ||
-          `在事件「${eventTitle}」中被提及`
+        description: readString(entity.entityDescription) || readString(entity.description) || `在事件「${eventTitle}」中被提及`,
+        relation: readString(entity.relationDescription) || readString(entity.relation)
       })).filter((entity) => entity.name.length > 0)
     : [];
   return {
@@ -227,23 +275,27 @@ function normalizeStructuredChunk(value: unknown, index: number): ManualKnowledg
   }
   const eventValue = isRecord(value.event) ? value.event : value;
   const entitiesValue = Array.isArray(eventValue.entities) ? eventValue.entities : [];
-  const eventTitle = readString(eventValue.title) || readString(value.heading);
-  const chunkContent = readString(value.content) || readString(eventValue.content);
+  const eventTitle = readString(eventValue.title) || readString(eventValue.eventTitle) || readString(value.heading) || readString(value.chunkHeading);
+  const chunkContent = readString(value.content) || readString(value.rawContent) || readString(value.chunkContent) || readString(eventValue.content) || readString(eventValue.eventContent);
   return {
-    key: readString(value.id) || readString(value.key) || String(index + 1),
-    heading: readString(value.heading) || eventTitle || `切片 ${index + 1}`,
+    key: readString(value.key) || readString(value.chunkId) || readString(value.id) || String(index + 1),
+    heading: readString(value.heading) || readString(value.chunkHeading) || eventTitle || `切片 ${index + 1}`,
     content: chunkContent,
     event: {
       title: eventTitle || `事件 ${index + 1}`,
-      summary: readString(eventValue.summary) || readString(eventValue.content) || chunkContent,
-      content: readString(eventValue.content) || chunkContent,
-      category: readString(eventValue.category) || undefined,
+      summary: readString(eventValue.summary) || readString(eventValue.eventSummary) || readString(eventValue.content) || readString(eventValue.eventContent) || chunkContent,
+      content: readString(eventValue.content) || readString(eventValue.eventContent) || chunkContent,
+      category: readString(eventValue.category) || readString(eventValue.eventCategory) || undefined,
       keywords: normalizeKeywords(eventValue.keywords),
-      entities: entitiesValue.filter(isRecord).map((entity) => ({
-        type: readString(entity.type) || "subject",
-        name: readString(entity.name),
-        description: readString(entity.description) || `在事件「${eventTitle || `事件 ${index + 1}`}」中被提及`
-      })).filter((entity) => entity.name.length > 0)
+      entities: uniqueEntities(entitiesValue.filter(isRecord).map((entity) => ({
+        type: readString(entity.type) || readString(entity.entityType) || "subject",
+        name: readString(entity.name) || readString(entity.entityName),
+        description:
+          readString(entity.description) ||
+          readString(entity.entityDescription) ||
+          `在事件「${eventTitle || `事件 ${index + 1}`}」中被提及`,
+        relation: readString(entity.relation) || readString(entity.relationDescription)
+      })).filter((entity) => entity.name.length > 0))
     }
   };
 }
@@ -255,9 +307,15 @@ function parseCsv(text: string): FlatRow[] {
     throw new Error("CSV 至少需要一行表头和一行数据");
   }
   const headers = records[0].map((value) => value.trim());
+  const expectedCount = headers.length;
   return records.slice(1)
     .filter((record) => record.some((value) => value.trim()))
-    .map((record) => Object.fromEntries(headers.map((header, index) => [header, record[index] ?? ""])));
+    .map((record, rowIndex) => {
+      if (record.length !== expectedCount) {
+        throw new Error(`CSV 第 ${rowIndex + 2} 行列数错误：表头为 ${expectedCount} 列，实际为 ${record.length} 列。请检查是否少了逗号、双引号未闭合，或字段内换行没有被双引号包裹。`);
+      }
+      return Object.fromEntries(headers.map((header, index) => [header, record[index] ?? ""]));
+    });
 }
 
 function parseDelimitedRecords(text: string, delimiter: string): string[][] {
@@ -416,7 +474,8 @@ function buildDocumentFromNormalizedRows(
     const entities = uniqueEntities(group.map((row) => ({
       type: row.entityType || "subject",
       name: row.entityName,
-      description: row.entityDescription || `在事件「${eventTitle}」中被提及`
+      description: row.entityDescription || `在事件「${eventTitle}」中被提及`,
+      relation: row.relationDescription || undefined
     })).filter((entity) => entity.name));
     return {
       key,
@@ -433,8 +492,16 @@ function buildDocumentFromNormalizedRows(
     };
   });
 
+  const firstWithSource = normalized.find((row) => row.sourceName || row.sourceType || row.sourceDate || row.sourceAuthor || row.sourceUrl);
   return validateDocument({
     title: normalized.find((row) => row.documentTitle)?.documentTitle || fallbackTitle || "网页版 AI 导入",
+    source: firstWithSource ? {
+      name: firstWithSource.sourceName || undefined,
+      type: firstWithSource.sourceType || undefined,
+      date: firstWithSource.sourceDate || undefined,
+      author: firstWithSource.sourceAuthor || undefined,
+      url: firstWithSource.sourceUrl || undefined
+    } : undefined,
     chunks
   });
 }
@@ -453,6 +520,11 @@ function normalizeFlatRow(row: FlatRow): NormalizedRow {
   return {
     documentKey: read(COLUMN_ALIASES.documentKey),
     documentTitle: read(COLUMN_ALIASES.documentTitle),
+    sourceName: read(COLUMN_ALIASES.sourceName),
+    sourceType: read(COLUMN_ALIASES.sourceType),
+    sourceDate: read(COLUMN_ALIASES.sourceDate),
+    sourceAuthor: read(COLUMN_ALIASES.sourceAuthor),
+    sourceUrl: read(COLUMN_ALIASES.sourceUrl),
     chunkKey: read(COLUMN_ALIASES.chunkKey),
     chunkHeading: read(COLUMN_ALIASES.chunkHeading),
     chunkContent: read(COLUMN_ALIASES.chunkContent),
@@ -463,7 +535,8 @@ function normalizeFlatRow(row: FlatRow): NormalizedRow {
     keywords: read(COLUMN_ALIASES.keywords),
     entityType: read(COLUMN_ALIASES.entityType),
     entityName: read(COLUMN_ALIASES.entityName),
-    entityDescription: read(COLUMN_ALIASES.entityDescription)
+    entityDescription: read(COLUMN_ALIASES.entityDescription),
+    relationDescription: read(COLUMN_ALIASES.relationDescription)
   };
 }
 
@@ -484,8 +557,22 @@ function validateDocument(document: ManualKnowledgeDocument): ManualKnowledgeDoc
   }
   return {
     title: document.title.trim() || "网页版 AI 导入",
+    source: normalizeSource(document.source),
     chunks: document.chunks
   };
+}
+
+
+function normalizeSource(value: unknown): ManualKnowledgeSource | undefined {
+  if (!isRecord(value)) return undefined;
+  const source = {
+    name: readString(value.name) || readString(value.sourceName) || readString(value.source_name),
+    type: readString(value.type) || readString(value.sourceType) || readString(value.source_type),
+    date: readString(value.date) || readString(value.sourceDate) || readString(value.source_date),
+    author: readString(value.author) || readString(value.sourceAuthor) || readString(value.source_author) || readString(value.org) || readString(value.sourceOrg) || readString(value.source_org),
+    url: readString(value.url) || readString(value.sourceUrl) || readString(value.source_url)
+  };
+  return Object.values(source).some(Boolean) ? source : undefined;
 }
 
 function normalizeKeywords(value: unknown): string[] {
@@ -503,7 +590,16 @@ function uniqueEntities(entities: ManualKnowledgeEntity[]): ManualKnowledgeEntit
   const map = new Map<string, ManualKnowledgeEntity>();
   for (const entity of entities) {
     const key = `${entity.type.trim().toLowerCase()}\u0000${entity.name.trim().toLowerCase()}`;
-    if (!map.has(key)) map.set(key, entity);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, entity);
+      continue;
+    }
+    map.set(key, {
+      ...existing,
+      description: existing.description || entity.description,
+      relation: existing.relation || entity.relation
+    });
   }
   return [...map.values()];
 }

@@ -872,20 +872,20 @@ function buildFinalAnswerMessages(input: {
         input.autoMermaid
           ? [
               "If the evidence supports industry-chain relationships, append one valid fenced ```mermaid diagram at the bottom.",
-              "Use the following Mermaid template as a style and grouping reference. Replace placeholder labels with evidence-backed nodes and relationships.",
+              "Use the configured Mermaid template and generation rules below as the style reference. Replace placeholder labels with evidence-backed nodes and relationships.",
               "Do not keep placeholder nodes such as 原料A, 工艺A, 主产品 unless they are truly present in evidence.",
               "If project evidence is sparse, complete the Mermaid diagram with authoritative public knowledge when available, or cautious model general knowledge as a last resort.",
-              "In Mermaid node labels or edge labels, add project citation markers like [1] for relationships supported by citation_sources.",
-              "For public web supplements, use markers like [网1] in Mermaid labels and mention the source in the narrative.",
-              "For model-knowledge supplements, do not put any citation marker, footnote marker, URL, or label such as [模型知识补充] inside Mermaid node labels or edge labels.",
+              "Critical Mermaid citation rule: NEVER put citation markers like [1], [2], [网1], URLs, footnotes, or source notes inside Mermaid node IDs, node labels, edge labels, graph titles, or subgraph titles.",
+              "If a diagram relationship needs evidence attribution, put citations outside the Mermaid code block under the exact Markdown heading: ### 产业链关系图引用说明. Use normal clickable project citation markers like [1], [2] there; do not use full-width markers like 【1】. Keep the Mermaid code itself citation-free.",
+              "Every Mermaid node definition, edge line, style line, and classDef line must be on its own line. Never concatenate two edges on the same line.",
+              "Use safe node IDs such as 原料A, 工艺A, 产品A, 下游A, 终端A. Put the real entity name inside the node display label. Do not use entity names with brackets, slashes, plus signs, percent signs, commas, or CAS numbers as node IDs.",
+              "Edge labels must be short relationship names only, such as 进入, 生成, 副产, 主要下游, 终端行业. Do not include evidence numbers in edge labels.",
               "Do not mix unsupported supplements into project-evidence claims.",
-              "Do not put source-qualification text such as 基于现有证据, 补充公开知识, or 模型知识补充 in Mermaid graph titles, subgraph titles, node labels, or the Markdown heading before the diagram.",
+              "Do not put source-qualification text such as 基于现有证据, 补充公开知识, or 模型知识补充 in Mermaid graph titles, subgraph titles, node labels, edge labels, or the Markdown heading before the diagram.",
               "Keep Mermaid syntax conservative: graph/flowchart only, no HTML, no click actions, no unsupported icons.",
               "",
-              "Mermaid template:",
-              "```mermaid",
-              input.settings.mermaidTemplate,
-              "```"
+              "Configured Mermaid template and generation rules:",
+              input.settings.mermaidTemplate
             ].join("\n")
           : "Do not add a Mermaid diagram unless the user explicitly asks for one."
       ].join("\n")

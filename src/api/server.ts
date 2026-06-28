@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { z } from "zod";
 import { config, SUPPORTED_EMBEDDING_DIMENSIONS } from "../config/env.js";
@@ -81,6 +81,7 @@ const structuredImportSchema = z.object({
 
 const exportFilesQuerySchema = z.object({
   format: z.enum(["csv", "json"]).default("csv"),
+  profile: z.enum(["simple", "full"]).default("simple"),
   split: z.enum(["none", "documents", "size"]).default("none"),
   maxBytes: z.coerce.number().int().min(128 * 1024).max(1024 * 1024 * 1024).optional()
 });
@@ -307,33 +308,70 @@ export function buildHttpServer() {
     };
   });
 
-  app.get("/api/projects/:projectId/export", async (request, reply) => {
+  async function sendProjectExport(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    forcedProfile?: "simple" | "full"
+  ) {
     const params = request.params as { projectId: string };
-    const query = request.query as { format?: string };
+    const query = request.query as { format?: string; profile?: string };
     z.string().uuid().parse(params.projectId);
     const format = z.enum(["csv", "json"]).default("csv").parse(query.format);
-    const exported = await projectExportService.exportProject(params.projectId, format);
+    const profile = forcedProfile ?? z.enum(["simple", "full"]).default("simple").parse(query.profile);
+    const exported = await projectExportService.exportProject(params.projectId, format, profile);
     return reply
       .header("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(exported.fileName)}`)
+      .header("X-Export-Profile", profile)
       .type(exported.contentType)
       .send(exported.content);
-  });
+  }
 
-  app.get("/api/projects/:projectId/export-files", async (request, reply) => {
+  async function sendProjectExportFiles(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    forcedProfile?: "simple" | "full"
+  ) {
     const params = request.params as { projectId: string };
     z.string().uuid().parse(params.projectId);
     const query = exportFilesQuerySchema.parse(request.query);
+    const profile = forcedProfile ?? query.profile;
     const exported = await projectExportService.exportProjectArchive(params.projectId, {
       format: query.format,
+      profile,
       split: query.split,
       maxBytes: query.maxBytes
     });
     return reply
       .header("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(exported.fileName)}`)
+      .header("X-Export-Profile", profile)
       .header("X-Export-File-Count", String(exported.fileCount))
       .header("X-Export-Document-Count", String(exported.documentCount))
       .type(exported.contentType)
       .send(exported.content);
+  }
+
+  app.get("/api/projects/:projectId/export-simple", async (request, reply) => {
+    return sendProjectExport(request, reply, "simple");
+  });
+
+  app.get("/api/projects/:projectId/export-full", async (request, reply) => {
+    return sendProjectExport(request, reply, "full");
+  });
+
+  app.get("/api/projects/:projectId/export", async (request, reply) => {
+    return sendProjectExport(request, reply);
+  });
+
+  app.get("/api/projects/:projectId/export-files-simple", async (request, reply) => {
+    return sendProjectExportFiles(request, reply, "simple");
+  });
+
+  app.get("/api/projects/:projectId/export-files-full", async (request, reply) => {
+    return sendProjectExportFiles(request, reply, "full");
+  });
+
+  app.get("/api/projects/:projectId/export-files", async (request, reply) => {
+    return sendProjectExportFiles(request, reply);
   });
 
   app.post("/api/documents/upload", async (request, reply) => {

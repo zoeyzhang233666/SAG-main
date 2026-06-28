@@ -105,8 +105,12 @@ export const api = {
     return request<{ graph: ProjectGraphRecord }>(`/api/projects/${projectId}/graph`);
   },
 
-  async downloadProjectExport(projectId: string, format: "csv" | "json") {
-    const response = await fetch(`/api/projects/${projectId}/export?format=${format}`);
+  async downloadProjectExport(projectId: string, format: "csv" | "json", profile: "simple" | "full" = "simple") {
+    const params = new URLSearchParams({ format });
+    const endpoint = profile === "simple" ? "export-simple" : "export-full";
+    const response = await fetch(`/api/projects/${projectId}/${endpoint}?${params.toString()}`, {
+      cache: "no-store"
+    });
     if (!response.ok) {
       const text = await response.text();
       const data = safeParseJson(text);
@@ -130,9 +134,11 @@ export const api = {
 
   async downloadProjectExportFiles(projectId: string, input: {
     format: "csv" | "json";
+    profile?: "simple" | "full";
     split?: "none" | "documents" | "size";
     maxBytes?: number;
   }) {
+    const profile = input.profile ?? "simple";
     const params = new URLSearchParams({
       format: input.format,
       split: input.split ?? "none"
@@ -140,7 +146,10 @@ export const api = {
     if (input.maxBytes) {
       params.set("maxBytes", String(input.maxBytes));
     }
-    const response = await fetch(`/api/projects/${projectId}/export-files?${params.toString()}`);
+    const endpoint = profile === "simple" ? "export-files-simple" : "export-files-full";
+    const response = await fetch(`/api/projects/${projectId}/${endpoint}?${params.toString()}`, {
+      cache: "no-store"
+    });
     if (!response.ok) {
       const text = await response.text();
       const data = safeParseJson(text);
@@ -185,6 +194,7 @@ export const api = {
 
   async getChunkAssets(chunkIds: string[]) {
     return request<{
+      chunks: Array<ChunkRecord & { document?: DocumentRecord | null }>;
       events: Array<EventRecord & { entities: EntityRecord[] }>;
       entities: EntityRecord[];
     }>("/api/chunks/assets", {

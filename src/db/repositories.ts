@@ -75,6 +75,11 @@ function documentFromRow(row: Record<string, unknown>): DocumentRecord {
     id: String(row.id),
     sourceId: String(row.source_id),
     title: String(row.title),
+    sourceName: row.source_name == null ? null : String(row.source_name),
+    sourceType: row.source_type == null ? null : String(row.source_type),
+    sourceDate: row.source_date == null ? null : String(row.source_date),
+    sourceAuthor: row.source_author == null ? null : String(row.source_author),
+    sourceUrl: row.source_url == null ? null : String(row.source_url),
     status: String(row.status),
     parseStatus: String(row.parse_status),
     metadata: (row.metadata ?? {}) as Record<string, unknown>,
@@ -838,6 +843,11 @@ export async function getEventDetail(input: {
         e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
         d.id as document_id_for_detail,
         d.title as document_title,
+        d.source_name as document_source_name,
+        d.source_type as document_source_type,
+        d.source_date as document_source_date,
+        d.source_author as document_source_author,
+        d.source_url as document_source_url,
         d.status as document_status,
         d.parse_status as document_parse_status,
         d.metadata as document_metadata,
@@ -915,6 +925,11 @@ export async function getEventDetail(input: {
           id: row.document_id_for_detail,
           source_id: row.source_id_for_detail,
           title: row.document_title,
+          source_name: row.document_source_name,
+          source_type: row.document_source_type,
+          source_date: row.document_source_date,
+          source_author: row.document_source_author,
+          source_url: row.document_source_url,
           status: row.document_status,
           parse_status: row.document_parse_status,
           metadata: row.document_metadata,
@@ -1214,7 +1229,7 @@ export async function getDocumentDetail(input: {
 }): Promise<(DocumentRecord & { source: SourceRecord }) | null> {
   const result = await pool.query(
     `
-      select d.*, s.id as source_id_for_source, s.tenant_id, s.name as source_name,
+      select d.*, s.id as source_id_for_source, s.tenant_id, s.name as project_source_name,
              s.description as source_description, s.metadata as source_metadata
       from documents d
       join sources s on s.id = d.source_id
@@ -1231,7 +1246,7 @@ export async function getDocumentDetail(input: {
     source: {
       id: String(row.source_id),
       tenantId: String(row.tenant_id),
-      name: String(row.source_name),
+      name: String(row.project_source_name),
       description: row.source_description == null ? null : String(row.source_description),
       metadata: (row.source_metadata ?? {}) as Record<string, unknown>
     }
@@ -1573,13 +1588,64 @@ export async function getKnowledgeAssetsByChunkIds(input: {
   chunkIds: string[];
   tenantId: string;
 }): Promise<{
+  chunks: Array<ChunkRecord & { document?: DocumentRecord | null }>;
   events: Array<EventRecord & { entities: EntityRecord[] }>;
   entities: EntityRecord[];
 }> {
   const chunkIds = [...new Set(input.chunkIds)].filter(Boolean);
   if (chunkIds.length === 0) {
-    return { events: [], entities: [] };
+    return { chunks: [], events: [], entities: [] };
   }
+
+  const chunksResult = await pool.query(
+    `
+      select
+        c.id, c.source_id, c.document_id, c.heading, c.content, c.raw_content, c.rank,
+        c.references, c.metadata, c.created_at, c.embedding::text as embedding_preview,
+        d.id as document_id_for_detail,
+        d.title as document_title,
+        d.source_name as document_source_name,
+        d.source_type as document_source_type,
+        d.source_date as document_source_date,
+        d.source_author as document_source_author,
+        d.source_url as document_source_url,
+        d.status as document_status,
+        d.parse_status as document_parse_status,
+        d.metadata as document_metadata,
+        d.created_at as document_created_at,
+        d.updated_at as document_updated_at,
+        d.archived_at as document_archived_at
+      from source_chunks c
+      join documents d on d.id = c.document_id
+      join sources s on s.id = c.source_id
+      where c.id = any($1::uuid[])
+        and s.tenant_id = $2
+        and d.archived_at is null
+      order by array_position($1::uuid[], c.id), c.rank
+    `,
+    [chunkIds, input.tenantId]
+  );
+  const chunks = chunksResult.rows.map((row) => ({
+    ...chunkFromRow(row),
+    document: row.document_id_for_detail == null
+      ? null
+      : documentFromRow({
+          id: row.document_id_for_detail,
+          source_id: row.source_id,
+          title: row.document_title,
+          source_name: row.document_source_name,
+          source_type: row.document_source_type,
+          source_date: row.document_source_date,
+          source_author: row.document_source_author,
+          source_url: row.document_source_url,
+          status: row.document_status,
+          parse_status: row.document_parse_status,
+          metadata: row.document_metadata,
+          created_at: row.document_created_at,
+          updated_at: row.document_updated_at,
+          archived_at: row.document_archived_at
+        })
+  }));
 
   const eventsResult = await pool.query(
     `
@@ -1600,7 +1666,7 @@ export async function getKnowledgeAssetsByChunkIds(input: {
   );
   const events = eventsResult.rows.map(eventFromRow);
   if (events.length === 0) {
-    return { events: [], entities: [] };
+    return { chunks, events: [], entities: [] };
   }
 
   const eventIds = events.map((event) => event.id);
@@ -1635,6 +1701,7 @@ export async function getKnowledgeAssetsByChunkIds(input: {
   }
 
   return {
+    chunks,
     events: events.map((event) => ({
       ...event,
       entities: (entityIdsByEventId.get(event.id) ?? [])
@@ -1689,7 +1756,21 @@ export async function getEntityDetail(input: {
   }
   const eventsResult = await pool.query(
     `
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank
+      select
+        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+        d.id as document_id_for_detail,
+        d.title as document_title,
+        d.source_name as document_source_name,
+        d.source_type as document_source_type,
+        d.source_date as document_source_date,
+        d.source_author as document_source_author,
+        d.source_url as document_source_url,
+        d.status as document_status,
+        d.parse_status as document_parse_status,
+        d.metadata as document_metadata,
+        d.created_at as document_created_at,
+        d.updated_at as document_updated_at,
+        d.archived_at as document_archived_at
       from event_entities ee
       join events e on e.id = ee.event_id
       join sources s on s.id = e.source_id
@@ -1708,7 +1789,27 @@ export async function getEntityDetail(input: {
       description: entityRow.description == null ? null : String(entityRow.description),
       eventCount: Number(entityRow.event_count ?? 0)
     },
-    events: eventsResult.rows.map(eventFromRow),
+    events: eventsResult.rows.map((row) => ({
+      ...eventFromRow(row),
+      document: row.document_id_for_detail == null
+        ? null
+        : documentFromRow({
+            id: row.document_id_for_detail,
+            source_id: row.source_id,
+            title: row.document_title,
+            source_name: row.document_source_name,
+            source_type: row.document_source_type,
+            source_date: row.document_source_date,
+            source_author: row.document_source_author,
+            source_url: row.document_source_url,
+            status: row.document_status,
+            parse_status: row.document_parse_status,
+            metadata: row.document_metadata,
+            created_at: row.document_created_at,
+            updated_at: row.document_updated_at,
+            archived_at: row.document_archived_at
+          })
+    })),
     source: sourceFromRow({
       id: entityRow.source_id,
       tenant_id: entityRow.tenant_id,

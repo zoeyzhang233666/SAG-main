@@ -73,6 +73,7 @@ import { I18nProvider, useI18n, useLanguageController, type LanguagePreference, 
 type WorkspaceView = "chat" | "documents" | "graph" | "mcp" | "settings";
 type ResultView = "overview" | "chunks" | "events" | "entities" | "search";
 type ExportSplitMode = "none" | "documents" | "size";
+type ExportProfile = "simple" | "full";
 type ContextPanelMode = "process" | "assets" | "logs";
 type ProcessStepStatus = "running" | "done" | "failed";
 type ProcessStep = {
@@ -99,6 +100,7 @@ type AnswerCitation = {
   rank?: number;
   score?: number;
   query?: string;
+  document?: DocumentRecord | null;
 };
 type DetailDrawer =
   | { type: "event"; detail: EventDetailRecord }
@@ -784,16 +786,16 @@ function AppShell() {
     }
   }
 
-  async function exportProject(format: "csv" | "json", split: ExportSplitMode = "none", maxBytes?: number) {
+  async function exportProject(format: "csv" | "json", profile: ExportProfile = "simple", split: ExportSplitMode = "none", maxBytes?: number) {
     if (!selectedProjectId) return;
     try {
       setError("");
-      setStatus(t(`正在导出 ${format.toUpperCase()}...`, `Exporting ${format.toUpperCase()}...`));
+      setStatus(t(`正在导出 ${profile === "simple" ? "简化" : "完整"} ${format.toUpperCase()}...`, `Exporting ${profile} ${format.toUpperCase()}...`));
       if (split === "none") {
-        await api.downloadProjectExport(selectedProjectId, format);
+        await api.downloadProjectExport(selectedProjectId, format, profile);
         setStatus(t("项目数据已导出", "Project data exported"));
       } else {
-        const result = await api.downloadProjectExportFiles(selectedProjectId, { format, split, maxBytes });
+        const result = await api.downloadProjectExportFiles(selectedProjectId, { format, profile, split, maxBytes });
         setStatus(t(
           result.fileCount > 1 ? `项目数据已打包导出：${result.fileCount} 个数据文件` : "项目数据已导出",
           result.fileCount > 1 ? `Project data exported as one archive with ${result.fileCount} data files` : "Project data exported"
@@ -1233,9 +1235,10 @@ function AppShell() {
         "",
         "要求：",
         "1. 不要使用 HTML、click、icon 或 Mermaid 不稳定语法。",
-        "2. 节点和边标签里不要使用会破坏语法的方括号引用写法；如果需要引用，请放在普通回答文字里，不要放进 Mermaid 标签。",
-        "3. 每条边单独一行，避免把 end 和下一条边写在同一行。",
-        "4. 只输出修复后的简短说明和一个完整闭合的 ```mermaid 代码块。",
+        "2. 节点和边标签里不要使用 [1]、[2]、[网1]、URL 或脚注；如果需要引用，请放在 Mermaid 代码块外的普通文字里。",
+        "3. 每条节点定义、每条边、每个 classDef 都必须单独一行，避免把 end 和下一条边写在同一行。",
+        "4. 边标签只写关系名称，例如 进入、生成、副产、主要下游，不要写证据编号。",
+        "5. 只输出修复后的简短说明和一个完整闭合的 ```mermaid 代码块。",
         "",
         "Mermaid 报错：",
         "```text",
@@ -1254,8 +1257,9 @@ function AppShell() {
         "1. 结构层级更清楚，尽量体现上游、中游、下游、应用或企业关系。",
         "2. 节点命名简洁，边关系清楚，每条边单独一行。",
         "3. 不要使用 HTML、click、icon 或 Mermaid 不稳定语法。",
-        "4. 节点和边标签里不要放方括号引用，引用说明可以放在普通文字里。",
-        "5. 只输出简短说明和一个完整闭合的 ```mermaid 代码块。",
+        "4. 节点和边标签里不要放 [1]、[2]、[网1]、URL 或脚注；产业链关系图引用必须放在 Mermaid 代码块外，标题写“产业链关系图引用说明”，编号用 [1]、[2]。",
+        "5. 每条节点定义、每条边、每个 classDef 都必须单独一行。",
+        "6. 只输出简短说明和一个完整闭合的 ```mermaid 代码块。",
         "",
         "原 Mermaid 代码：",
         "```mermaid",
@@ -1277,6 +1281,34 @@ function AppShell() {
   async function openEntityDetail(entityId: string) {
     try {
       setDrawer({ type: "entity", detail: await api.getEntity(entityId) });
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function openCitationDetail(citation: AnswerCitation) {
+    setDrawer({ type: "citation", citation });
+    if (citation.document) {
+      return;
+    }
+    try {
+      const assets = await api.getChunkAssets([citation.chunkId]);
+      const chunk = assets.chunks.find((item) => item.id === citation.chunkId);
+      if (!chunk?.document) {
+        return;
+      }
+      const enrichedCitation: AnswerCitation = {
+        ...citation,
+        document: chunk.document,
+        documentId: citation.documentId ?? chunk.document.id,
+        heading: citation.heading || chunk.heading || undefined,
+        content: citation.content || chunk.content
+      };
+      setDrawer((current) => current?.type === "citation" &&
+        current.citation.chunkId === citation.chunkId &&
+        current.citation.index === citation.index
+        ? { type: "citation", citation: enrichedCitation }
+        : current);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -1548,7 +1580,7 @@ function AppShell() {
                 fileInputRef={fileInputRef}
                 onUploadFiles={(files) => void handleUploadFiles(files)}
                 onImportStructured={handleStructuredImport}
-                onExportProject={(format, split, maxBytes) => void exportProject(format, split, maxBytes)}
+                onExportProject={(format, profile, split, maxBytes) => void exportProject(format, profile, split, maxBytes)}
                 onToggleUploadQueue={() => setIsUploadQueueExpanded((current) => !current)}
                 onSelectDocument={setSelectedDocumentId}
                 onRenameDocument={(document) => void renameDocument(document)}
@@ -1601,7 +1633,7 @@ function AppShell() {
                 onCreateSession={() => void createMcpSession()}
                 onClearSession={() => void clearCurrentMcpSession()}
                 onDeleteSession={() => void deleteCurrentMcpSession()}
-                onOpenCitation={(citation) => setDrawer({ type: "citation", citation })}
+                onOpenCitation={(citation) => void openCitationDetail(citation)}
                 onStop={() => stopMcpMessage()}
                 onSend={() => void sendMcpMessage()}
                 onSendPrompt={(text) => {
@@ -2618,7 +2650,7 @@ function ProjectDocumentsWorkspace(props: {
     format: ManualImportFormat;
     content: string;
   }) => Promise<void>;
-  onExportProject: (format: "csv" | "json", split: ExportSplitMode, maxBytes?: number) => void;
+  onExportProject: (format: "csv" | "json", profile: ExportProfile, split: ExportSplitMode, maxBytes?: number) => void;
   onToggleUploadQueue: () => void;
   onSelectDocument: (documentId: string) => void;
   onRenameDocument: (document: DocumentRecord) => void;
@@ -2651,6 +2683,7 @@ function ProjectDocumentsWorkspace(props: {
   const [isManualImporting, setIsManualImporting] = useState(false);
   const [exportSplit, setExportSplit] = useState<ExportSplitMode>("none");
   const [exportMaxMb, setExportMaxMb] = useState(50);
+  const [exportChoice, setExportChoice] = useState<"simple:json" | "simple:csv" | "full:json" | "full:csv">("simple:json");
   const [docRailWidth, setDocRailWidth] = useState(() => loadStoredNumber(DOC_RAIL_WIDTH_STORAGE_KEY, 340, DOC_RAIL_MIN_WIDTH, DOC_RAIL_MAX_WIDTH));
   const manualImportFileRef = useRef<HTMLInputElement | null>(null);
 
@@ -2730,6 +2763,11 @@ function ProjectDocumentsWorkspace(props: {
     setManualImportError("");
   }
 
+  function exportSelectedProject() {
+    const [profile, format] = exportChoice.split(":") as [ExportProfile, "csv" | "json"];
+    props.onExportProject(format, profile, exportSplit, exportSplit === "size" ? Math.round(exportMaxMb * 1024 * 1024) : undefined);
+  }
+
   async function submitManualImport() {
     if ((!manualImportContent.trim() && manualImportFiles.length === 0) || isManualImporting) return;
     setIsManualImporting(true);
@@ -2801,29 +2839,33 @@ function ProjectDocumentsWorkspace(props: {
                 MB
               </label>
             ) : null}
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={exportChoice}
+              onChange={(event) => setExportChoice(event.target.value as "simple:json" | "simple:csv" | "full:json" | "full:csv")}
+              title={t("导出类型和格式，默认使用简化 JSON。", "Export type and format. Simple JSON is the default.")}
+            >
+              <option value="simple:json">{t("简化 JSON", "Simple JSON")}</option>
+              <option value="simple:csv">{t("简化 CSV", "Simple CSV")}</option>
+              <option value="full:json">{t("完整 JSON", "Full JSON")}</option>
+              <option value="full:csv">{t("完整 CSV", "Full CSV")}</option>
+            </select>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => props.onExportProject("csv", exportSplit, exportSplit === "size" ? Math.round(exportMaxMb * 1024 * 1024) : undefined)}
+              onClick={exportSelectedProject}
+              title={t("导出选中的格式。简化导出适合拼接后重新导入新库；完整导出适合完整知识备份或排查。", "Export the selected format. Simple export is for stitching and re-import; full export is for full backups or debugging.")}
             >
               <Download className="h-4 w-4" />
-              {t("导出 CSV", "Export CSV")}
+              {t("下载", "Download")}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => props.onExportProject("json", exportSplit, exportSplit === "size" ? Math.round(exportMaxMb * 1024 * 1024) : undefined)}
-            >
-              <Download className="h-4 w-4" />
-              JSON
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setManualImportOpen(true)}>
-              <Plus className="h-4 w-4" />
-              {t("导入 AI 表格", "Import AI table")}
-            </Button>
-            <Button size="sm" onClick={() => props.fileInputRef.current?.click()}>
+            <Button variant="outline" size="sm" onClick={() => props.fileInputRef.current?.click()}>
               {props.hasActiveUploads ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {t("添加文档", "Add document")}
+            </Button>
+            <Button size="sm" onClick={() => setManualImportOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t("导入 JSON / CSV / MD 结构化数据", "Import JSON / CSV / MD structured data")}
             </Button>
           </div>
         ) : null}
@@ -2902,6 +2944,7 @@ function ProjectDocumentsWorkspace(props: {
                       <span className="block text-xs text-muted-foreground">
                         {document.archivedAt ? t("已归档", "Archived") : `${document.parseStatus} · ${formatDate(document.createdAt)}`}
                       </span>
+                      <DocumentSourceSummary document={document} compact />
                     </span>
                   </button>
                   {document.id === props.selectedDocumentId ? (
@@ -3007,8 +3050,8 @@ function ProjectDocumentsWorkspace(props: {
               <div id="manual-import-title" className="text-sm font-semibold">{t("粘贴或上传网页版 AI 的数据", "Paste or upload AI-generated data")}</div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {t(
-                  "默认自动识别 CSV、Markdown 表格或 JSON，也支持一次选择多个本项目导出的 CSV / JSON 备份文件批量恢复。导出文件中的多个文档会分别恢复；相同“切片编号”的多行会合并为一个事件和多个实体。事件 UUID 始终由系统重新生成，导出的系统 ID 不会被当作主键复用。此导入过程不会调用远程 API。",
-                  "The default is auto detect for CSV, Markdown tables, or JSON. You can also select multiple exported CSV / JSON backup files and restore them in one batch. Multiple exported documents are restored separately. Rows with the same chunk ID are merged into one event with multiple entities. Event UUIDs are regenerated and exported system IDs are never reused as primary keys. No remote API is called."
+                  "默认自动识别简化 JSON v2、18 列 CSV、Markdown 表格，也兼容完整备份 JSON / CSV。简化格式包含来源字段和关系说明，但不包含数据库 ID 和 embedding；重新导入时系统会重新生成这些字段。相同“切片编号”的多行会合并为一个事件和多个实体。此导入过程不会调用远程 API。",
+                  "The default is auto detect for simple JSON v2, 18-column CSV, Markdown tables, and full backup JSON / CSV. Simple files include source fields and relation notes, but not database IDs or embeddings; those are regenerated on import. Rows with the same chunk ID are merged into one event with multiple entities. No remote API is called."
                 )}
               </p>
             </div>
@@ -3035,8 +3078,8 @@ function ProjectDocumentsWorkspace(props: {
 
               <div className="rounded-md border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
                 {t(
-                  "推荐列：文档标题、切片编号、切片标题、原文切片、事件标题、事件摘要、事件内容、事件分类、关键词、实体类型、实体名称、实体说明。",
-                  "Recommended columns: document_title, chunk_id, chunk_heading, chunk_content, event_title, event_summary, event_content, event_category, keywords, entity_type, entity_name, entity_description."
+                  "推荐使用“简化 JSON v2”或 18 列 CSV：文档标题、来源名称、来源类型、来源日期、来源作者、来源链接、切片编号、切片标题、原文切片、事件标题、事件摘要、事件内容、事件分类、关键词、实体类型、实体名称、实体说明、关系说明。完整备份格式只适合系统迁移保留参考字段。",
+                  "Recommended: simple JSON v2 or the 18-column CSV: document_title, source_name, source_type, source_date, source_author, source_url, chunk_id, chunk_heading, chunk_content, event_title, event_summary, event_content, event_category, keywords, entity_type, entity_name, entity_description, relation_description. Full backup format is only for system migration/reference fields."
                 )}
               </div>
 
@@ -3068,7 +3111,7 @@ function ProjectDocumentsWorkspace(props: {
                   {t("选择 CSV / MD / JSON 文件", "Choose CSV / MD / JSON")}
                 </Button>
                 <span className="text-xs text-muted-foreground">{t("下载模板：", "Templates:")}</span>
-                {(["csv", "markdown", "json"] as ImportDocFormat[]).map((format) => (
+                {(["json", "csv", "markdown"] as ImportDocFormat[]).map((format) => (
                   <Button
                     key={format}
                     type="button"
@@ -3108,8 +3151,8 @@ function ProjectDocumentsWorkspace(props: {
                     setManualImportError("");
                   }}
                   placeholder={t(
-                    "文档标题,切片编号,切片标题,原文切片,事件标题,事件摘要,事件内容,事件分类,关键词,实体类型,实体名称,实体说明",
-                    "document_title,chunk_id,chunk_heading,chunk_content,event_title,event_summary,event_content,event_category,keywords,entity_type,entity_name,entity_description"
+                    "文档标题,来源名称,来源类型,来源日期,来源作者,来源链接,切片编号,切片标题,原文切片,事件标题,事件摘要,事件内容,事件分类,关键词,实体类型,实体名称,实体说明,关系说明",
+                    "document_title,source_name,source_type,source_date,source_author,source_url,chunk_id,chunk_heading,chunk_content,event_title,event_summary,event_content,event_category,keywords,entity_type,entity_name,entity_description,relation_description"
                   )}
                 />
               </div>
@@ -3160,21 +3203,21 @@ function importTemplateMime(format: ImportDocFormat): string {
 }
 
 // 导入模板用到的列（中英两套；解析器对两者都识别）
-const IMPORT_HEADERS_ZH = ["文档标题", "切片编号", "切片标题", "原文切片", "事件标题", "事件摘要", "事件内容", "事件分类", "关键词", "实体类型", "实体名称", "实体说明"];
-const IMPORT_HEADERS_EN = ["document_title", "chunk_id", "chunk_heading", "chunk_content", "event_title", "event_summary", "event_content", "event_category", "keywords", "entity_type", "entity_name", "entity_description"];
+const IMPORT_HEADERS_ZH = ["文档标题", "来源名称", "来源类型", "来源日期", "来源作者", "来源链接", "切片编号", "切片标题", "原文切片", "事件标题", "事件摘要", "事件内容", "事件分类", "关键词", "实体类型", "实体名称", "实体说明", "关系说明"];
+const IMPORT_HEADERS_EN = ["document_title", "source_name", "source_type", "source_date", "source_author", "source_url", "chunk_id", "chunk_heading", "chunk_content", "event_title", "event_summary", "event_content", "event_category", "keywords", "entity_type", "entity_name", "entity_description", "relation_description"];
 const IMPORT_JSON_KEYS = IMPORT_HEADERS_EN;
 
 function importSampleRows(language: SupportedLanguage): string[][] {
   // 两行共用相同“切片编号”，演示「同一事件、多个实体」会被合并
   if (language === "en") {
     return [
-      ["Sample document", "1", "Industry overview", "Paste the matching source passage here; it can be long.", "Product X capacity expansion", "One-line event summary.", "Detailed description of the event...", "Industry update", "keywordA;keywordB", "company", "Sample Chemical Co.", "Role of this company in the event"],
-      ["Sample document", "1", "Industry overview", "Paste the matching source passage here; it can be long.", "Product X capacity expansion", "One-line event summary.", "Detailed description of the event...", "Industry update", "keywordA;keywordB", "product", "Sample product", "Role of this product in the event"]
+      ["Sample document", "Sample report", "report", "2025-03", "Sample Research Institute", "", "1", "Industry overview", "Paste the matching source passage here; it can be long.", "Product X capacity expansion", "One-line event summary.", "Detailed description of the event...", "Industry update", "keywordA;keywordB", "company", "Sample Chemical Co.", "Chemical company mentioned in the source", "Role of this company in the event"],
+      ["Sample document", "Sample report", "report", "2025-03", "Sample Research Institute", "", "1", "Industry overview", "Paste the matching source passage here; it can be long.", "Product X capacity expansion", "One-line event summary.", "Detailed description of the event...", "Industry update", "keywordA;keywordB", "product", "Sample product", "Chemical product mentioned in the source", "Role of this product in the event"]
     ];
   }
   return [
-    ["示例文档", "1", "行业概述", "这里粘贴该事件对应的原文片段，可以较长。", "某产品扩产事件", "一句话事件摘要。", "事件的详细描述……", "行业动态", "关键词A;关键词B", "企业", "示例化工企业", "该企业在事件中的角色说明"],
-    ["示例文档", "1", "行业概述", "这里粘贴该事件对应的原文片段，可以较长。", "某产品扩产事件", "一句话事件摘要。", "事件的详细描述……", "行业动态", "关键词A;关键词B", "产品", "示例产品", "该产品在事件中的角色说明"]
+    ["示例文档", "示例研究报告", "report", "2025-03", "示例研究机构", "", "1", "行业概述", "这里粘贴该事件对应的原文片段，可以较长。", "某产品扩产事件", "一句话事件摘要。", "事件的详细描述……", "行业动态", "关键词A;关键词B", "企业", "示例化工企业", "原文提到的化工企业", "该企业在事件中的角色说明"],
+    ["示例文档", "示例研究报告", "report", "2025-03", "示例研究机构", "", "1", "行业概述", "这里粘贴该事件对应的原文片段，可以较长。", "某产品扩产事件", "一句话事件摘要。", "事件的详细描述……", "行业动态", "关键词A;关键词B", "产品", "示例产品", "原文提到的化工产品", "该产品在事件中的角色说明"]
   ];
 }
 
@@ -3194,73 +3237,851 @@ function importTemplateContent(format: ImportDocFormat, language: SupportedLangu
     const bodyLines = rows.map((row) => `| ${row.map((cell) => cell.replace(/\|/g, "\\|")).join(" | ")} |`);
     return [headerLine, separator, ...bodyLines].join("\n");
   }
-  const objects = rows.map((row) => {
-    const record: Record<string, unknown> = {};
-    IMPORT_JSON_KEYS.forEach((key, index) => {
-      record[key] = key === "keywords" ? row[index].split(/[;；]/).filter(Boolean) : row[index];
-    });
-    return record;
-  });
-  return JSON.stringify(objects, null, 2);
+  return JSON.stringify({
+    documents: [
+      {
+        title: language === "en" ? "Sample document" : "示例文档",
+        source: {
+          name: language === "en" ? "Sample report" : "示例研究报告",
+          type: "report",
+          date: "2025-03",
+          author: language === "en" ? "Sample Research Institute" : "示例研究机构",
+          url: ""
+        },
+        chunks: [
+          {
+            key: "1",
+            heading: language === "en" ? "Industry overview" : "行业概述",
+            content: language === "en" ? "Paste the matching source passage here; it can be long." : "这里粘贴该事件对应的原文片段，可以较长。",
+            event: {
+              title: language === "en" ? "Product X capacity expansion" : "某产品扩产事件",
+              summary: language === "en" ? "One-line event summary." : "一句话事件摘要。",
+              content: language === "en" ? "Detailed description of the event..." : "事件的详细描述……",
+              category: language === "en" ? "Industry update" : "行业动态",
+              keywords: language === "en" ? ["keywordA", "keywordB"] : ["关键词A", "关键词B"],
+              entities: [
+                {
+                  type: language === "en" ? "company" : "企业",
+                  name: language === "en" ? "Sample Chemical Co." : "示例化工企业",
+                  description: language === "en" ? "Chemical company mentioned in the source" : "原文提到的化工企业",
+                  relation: language === "en" ? "Role of this company in the event" : "该企业在事件中的角色说明"
+                },
+                {
+                  type: language === "en" ? "product" : "产品",
+                  name: language === "en" ? "Sample product" : "示例产品",
+                  description: language === "en" ? "Chemical product mentioned in the source" : "原文提到的化工产品",
+                  relation: language === "en" ? "Role of this product in the event" : "该产品在事件中的角色说明"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }, null, 2);
 }
 
+const CHEMICAL_JSON_IMPORT_PROMPT_ZH = String.raw`你是一名化工产业链和期货知识抽取专家。请把我上传的资料整理成可以导入 SAG 的标准 JSON。
+
+只输出合法 JSON，不要输出解释、总结、Markdown 代码块或 JSON 以外的文字。
+
+## 1. 任务目标
+
+本任务不是摘要，也不是 QA，而是为化工产业链 SAG 抽取“chunk + event + entities”。
+
+SAG 以 event 为中心。event 类似知识超图中的“超边”，用于连接多个 entities。一个 event 应表达一个最小完整产业链事实，而不是零散三元组。
+
+- chunk.content：可核验原文证据，回答“原文是怎么说的”。
+- event.content：基于 chunk.content 去冗余、结构化后的产业链事实，回答“这段原文表达了什么事实关系”。
+- entities：用于检索、知识超图展示和多跳扩展的索引点。
+
+一个 chunk 原则上只对应一个 event；一个 event 通常包含 3～8 个高价值 entities。身份类短 event 可以少于 3 个；复杂工艺、企业装置或合规 event 可以超过 8 个，但不要为了凑数量提取低价值实体。
+
+## 2. 输出结构
+
+根对象必须严格为：
+
+{
+  "documents": [
+    {
+      "title": "",
+      "source": {
+        "name": "",
+        "type": "",
+        "date": "",
+        "author": "",
+        "url": ""
+      },
+      "chunks": [
+        {
+          "key": "",
+          "heading": "",
+          "content": "",
+          "event": {
+            "title": "",
+            "summary": "",
+            "content": "",
+            "category": "",
+            "keywords": [],
+            "entities": [
+              {
+                "type": "",
+                "name": "",
+                "description": "",
+                "relation": ""
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+
+字段要求：
+- title：文档标题；无标题时根据内容生成。
+- source.name：报告名、网页标题、数据库名、公众号文章名或资料名；没有填空字符串。
+- source.type：report、web_article、markdown、book、manual、database、unknown；无法判断填 unknown。
+- source.date：来源日期，保留原文日期表达；没有填空字符串。
+- source.author：作者、机构、网站、公众号、研究所或公司名称；没有填空字符串。
+- source.url：来源链接；没有填空字符串。
+- chunk.key：当前文档内唯一，从 1 开始递增；分批处理时继续递增。
+- chunk.heading：简短概括该切片事实。
+- chunk.content：原文切片，尽量贴近原文，保留可核验证据。
+- event.title：用“主体 + 关系/动作 + 对象”概括事件。
+- event.summary：一两句话概括事件。
+- event.content：完整事实陈述，必须保留时间、数值、单位、统计口径、变化方向、原因、不确定性和事实依据。
+- event.category：尽量从推荐事件类型中选择。
+- event.keywords：字符串数组，包含标准名、别名、简称、英文名、CAS号、核心产业链词和重要口径词。
+- entity.type：实体类型。
+- entity.name：一个实体名称，只能写一个对象。
+- entity.description：实体本身说明。
+- entity.relation：该实体在当前 event 中的角色或关系。
+
+不要输出以下字段：
+
+schemaVersion、exportedAt、idPolicy、project、id、documentId、chunkId、eventId、entityId、systemChunkId、sourceId、metadata、embedding、createdAt、updatedAt、archivedAt、status、parseStatus、rank、format、version、note。
+
+## 3. source 字段规则
+
+source 字段只能从上传资料的标题、封面、页眉页脚、网页信息或用户明确提供的信息中提取，不能根据内容猜测来源机构。
+
+如果无法判断：
+- source.name、source.date、source.author、source.url 填空字符串。
+- source.type 填 unknown。
+
+## 4. chunk.content 与 event.content 的区别
+
+chunk.content 是证据片段，应尽量保留原文句子或表格转写，不要只写摘要，不要加入原文没有的信息。chunk.content 可以包含原文中的必要上下文、限定条件、修饰语和背景信息，只要这些内容有助于核验事实。
+
+event.content 是产业链事实陈述，应基于 chunk.content 去冗余、补全主语和关系，并整理为一条清晰、完整、可检索的事实。event.content 应删除寒暄、过渡、重复、宣传性表达、无关背景和不影响事实判断的修饰语。
+
+event.content 推荐格式为：
+【时间/统计口径】+【主体】+【关系/动作】+【对象】+【数值/变化】+【原因/限制条件】
+
+如果原文没有某一项，不要编造。
+
+chunk.content 和 event.content 通常不应完全相同。只有当原文本身已经非常短、事实完整、没有冗余时，两者才可以接近或相同。
+
+如果原文存在代词、省略主语、跨句表达、表格行信息，event.content 应在忠实原文基础上补足主体、对象、关系和统计口径，但不能新增原文没有的信息。
+
+每个 chunk 建议 80～400 个中文字符。短事实如名称、别名、简称、英文名、CAS号、化学式、单条价格、单条产能、单条资质要求可以少于 80 字，但必须能独立核验。超过 400 字时，应按关系类型、时间口径、指标口径、主体对象或因果逻辑拆分。
+
+## 5. 优先抽取的化工产业链 event
+
+优先抽取对化工产业链问答、知识超图和多跳检索有价值的事实：
+
+1. 产品身份：名称、别名、简称、英文名、CAS号、化学式。
+2. 上下游关系：原料 → 中间体/产品 → 直接下游产品 → 终端应用领域。
+3. 原料路线和生产工艺：原料、工艺、化学反应、催化剂、装置、产物、副产品、联产品。
+4. 企业装置：企业、基地、项目、装置、产品、产能、投产/检修/复产/扩产状态。
+5. 市场指标：产品、区域、时间口径、价格、利润、库存、开工率、产量、消费量、供需变化、价差、加工费。
+6. 贸易和区域：进出口、进口依赖度、区域供需、港口、仓储、物流。
+7. 商业语境：品质分级、准入合规、功能角色、来源属性。
+8. 政策标准：明确影响产品、企业、工艺、准入或市场的政策、法规、标准。
+
+不要抽取没有明确产业链事实的背景句、过渡句、标题句、风险提示、免责声明、泛泛判断。只有当文本包含明确产品、企业、工艺、上下游、应用、指标、合规、来源属性、时间口径或数值时，才生成 chunk/event。
+
+## 6. 推荐 event.category
+
+尽量从以下类型中选择：
+
+产品身份、上下游关系、生产工艺、原料路线、副产联产、企业装置、产能建设、产量消费、价格变化、利润变化、库存变化、开工负荷、供需变化、进出口贸易、区域市场、应用领域、终端行业、品质分级、准入合规、功能角色、来源属性、政策标准、产业链分析。
+
+## 7. 最小完整关系单元
+
+一个最小完整关系单元 = 同一主体 + 同一关系类型 + 同一时间或统计范围 + 同一事实语义。
+
+必须拆成多个 event 的情况：
+- 关系类型不同。
+- 时间范围不同。
+- 指标口径不同。
+- 变化方向不同。
+- 因果逻辑不同。
+- 每个对象有独立数值、趋势、原因或结论。
+- 上游原料、直接下游产品、终端应用领域混在一起。
+- 品质分级不同，且对应不同市场、价格体系或应用场景。
+- 准入合规所属层级不同，如生产端准入和使用端准入。
+
+应合并为一个 event 的情况：
+- 同一化工品的名称、别名、简称、英文名、CAS号、化学式。
+- 同一产品的多个并列下游产品或终端应用领域，且原文只是并列列举。
+- 同一工艺或装置的多个并列产物，且原文只是并列列举。
+- 同一企业在同一时间范围内的同一事项，涉及多个并列装置、产品或基地。
+- 同一市场状态下的多个并列指标，且原文没有分别给出独立原因或结论。
+
+允许多个 chunk 复用同一段原文，只要对应 event 不同。只抽取原文明确表达的事实；不要补充、推测或使用外部知识。原文出现“疑似、可能、相关、预计、或将、有望”等不确定表达，必须保留在 event.content 或 entity.relation 中。
+
+## 8. 直接下游产品 vs 终端应用领域
+
+必须区分：
+- 直接下游产品：由该化工品继续反应、加工、聚合或配方生产出的具体产品，例如双酚A → 聚碳酸酯、环氧树脂。
+- 终端应用领域：下游产品最终进入的行业或场景，例如电子电器、汽车、建筑、光伏、医药、农药。
+
+不要把直接下游产品误标为应用领域，也不要把终端行业误标为下游产品。
+
+## 9. 带品质分级的产品名
+
+如果原文出现“电子级氢氟酸”“食品级抗氧剂 BHT”“医药级甘油”等带等级产品名：
+- 产品实体优先写基础产品名，如 氢氟酸、抗氧剂BHT、甘油。
+- 品质分级实体写 电子级、食品级、医药级。
+- event.content 必须保留完整表达，如“电子级氢氟酸”。
+- 如果带等级名称本身是商品名、牌号、规格或固定采购对象，可额外作为 产品 或 牌号/规格 实体保留。
+
+## 10. 四个商业语境维度
+
+必须区分并尽量保留：
+
+1. 品质分级：产品本身是什么级别，如通用级、食品级、医药级、电子级、试剂级、化妆品级、饲料级、农药级、军工级、核级、航空级、光学级。
+   常见映射：工业级/普通级 → 通用级；药用级/药典级 → 医药级；半导体级/超纯级/光伏级 → 电子级；日化级/IECIC收录级 → 化妆品级。
+
+2. 准入合规：生产、销售、出口、供应或使用需要什么资质、许可、标准或认证。分为生产端准入、使用端准入、产品端认证、供应商端资质。
+   例如 GMP、安全生产许可证、危化品使用许可证、ISO 9001、农药登记证。
+
+3. 功能角色：产品在下游生产中起什么作用，如核心原料、结构共聚物、功能助剂、催化剂、溶剂/介质、工艺辅料、中间品。
+
+4. 来源属性：产品来自哪里，如常规生产、联产、副产、回收再生、进口依赖。
+
+常见误判：
+- “电子级、食品级、医药级”是品质分级，不是认证或功能角色。
+- “GMP、安全生产许可证、危化品使用许可证、ISO 9001、农药登记证”是准入合规，不是品质分级。
+- “联产、副产、回收再生、进口依赖”是来源属性，不是功能角色。
+- 如果原文同时出现品质分级、准入合规、功能角色、来源属性，必须分别提取，不能互相替代。
+
+## 11. 表格和行情数据处理
+
+如果原文是表格，必须把表头、行名、列名、单位、时间口径合并进 chunk.content 和 event.content，不能只抽单元格数值。
+
+例如表格为“产品 | 2024年产能 | 同比；双酚A | 500万吨/年 | +8%”，event.content 应写为：
+“2024年，双酚A产能为500万吨/年，同比增加8%。”
+
+价格、利润、库存、开工率、价差、加工费、供需变化等行情数据必须作为 event 保存。event.content 必须包含：
+产品 + 指标 + 时间/周期 + 数值/方向 + 单位 + 统计口径 + 原因/结论。
+
+这些指标名称、数值和变化方向不要作为 entity。
+
+## 12. 推荐 entity 类型
+
+优先选择以下实体类型，必要时可新增更精确类型：
+
+原料、中间体、产品、下游产品、联产品、副产品、生产工艺、化学反应、催化剂、生产设备、企业、采购商、供应商、生产基地、项目、装置、产线、工厂、化工园区、基地、行政地区、市场区域、港口、仓储、管道、能源、公用工程、资源、矿产、油气田、政策、法规、标准、监管机构、行业组织、CAS号、化学式、危险性、应用领域、终端行业、别名、简称、英文名、品质分级、准入合规、功能角色、来源属性、牌号/规格。
+
+实体优先级：
+- 第一优先级：产品、原料、中间体、下游产品、企业、工艺、装置、应用领域、终端行业、品质分级、准入合规、功能角色、来源属性。
+- 第二优先级：地区、基地、项目、政策、标准、供应商、采购商。
+- 第三优先级：危险性、能源、公用工程、港口、仓储、资源。
+
+不要提取成 entity，但必须保留在 event.content 中：
+时间、日期、数值、单位、产能、产量、消费量、价格、利润、库存、开工率、产能利用率、价差、加工费、指标变化、市场状态、动作词、分析判断、程度词、泛称角色。
+例如“2024年”“20万吨/年”“300元/吨”“价格上涨”“库存下降”“供应偏紧”“投产”“检修”“成本支撑”不要作为 entity。
+
+## 13. entity 规则
+
+- 每个 entity 只表示一个对象。
+- 同一 event 的多个实体放入同一个 entities 数组。
+- 不要为了多个 entities 重复生成多个 event。
+- 相同实体尽量使用一致的 type + name。
+- 具体标准、许可证、认证、法规、政策名称可以作为 entity；“准入、认证要求、合规门槛”等泛称不能作为 entity。
+- description 写实体本身是什么。
+- relation 写实体在当前 event 中的作用。
+
+relation 示例：
+- “ABS树脂的简称”
+- “该化工品的英文名”
+- “双酚A的直接下游产品之一”
+- “聚碳酸酯的终端应用领域之一”
+- “连续本体法生产ABS的生产工艺”
+- “该氢氟酸产品的品质分级，对应半导体刻蚀场景”
+- “生产该产品所需的生产端准入资质”
+- “该原料在下游生产中的功能角色，为核心原料”
+- “该产品的来源属性，为生物柴油生产的副产物”
+
+## 14. 关键示例
+
+原文：“ABS树脂一般指丙烯腈-丁二烯-苯乙烯共聚物(Acrylonitrile butadiene Styrene copolymers)，简称ABS。”
+应生成一个 event：ABS树脂的标准名、英文名和简称。
+entities：产品=ABS树脂；产品=丙烯腈-丁二烯-苯乙烯共聚物；英文名=Acrylonitrile butadiene Styrene copolymers；简称=ABS。
+不要拆成多个名称 event。
+
+原文：“ABS下游应用领域中，主要用于电子电器、交通工具、轻工业、办公设备、建材等领域。”
+应生成一个 event：ABS应用于多个终端应用领域。
+entities：产品=ABS；终端行业/应用领域=电子电器、交通工具、轻工业、办公设备、建材。
+不要机械拆成 5 个 event，除非原文分别给出每个领域的独立比例、变化、原因或结论。
+
+原文：“电子电器领域的消费占比提升了1个百分点至64%，交通用具的消费占比保持在9%左右，建材及其他领域的需求占比从7%下滑至6%。”
+应拆成多个 event，因为每个领域有独立指标和变化。
+
+原文：“该工厂生产的电子级氢氟酸需取得安全生产许可证后才能向下游晶圆厂供货，晶圆厂使用该产品则需具备危化品使用许可证。”
+应拆成两个 event：电子级氢氟酸生产需安全生产许可证；晶圆厂使用电子级氢氟酸需危化品使用许可证。
+第一个 event 提取：产品=氢氟酸；品质分级=电子级；准入合规=安全生产许可证。
+第二个 event 提取：产品=氢氟酸；应用领域=晶圆制造；准入合规=危化品使用许可证。
+
+原文：“生物柴油生产中副产的甘油，纯度提升后可作为化妆品保湿剂使用，化妆品厂通常要求供应商具备ISO 22716资质。”
+应生成一个 event，并同时提取：产品=甘油；来源属性=副产；品质分级=化妆品级；功能角色=功能助剂；应用领域=化妆品；准入合规=ISO 22716。
+
+## 15. 输出自检
+
+- 根对象只包含 documents。
+- 每个 document 包含 title、source、chunks。
+- source 包含 name、type、date、author、url，且不能编造。
+- 每个 chunk 包含 key、heading、content、event。
+- 每个 event 包含 title、summary、content、category、keywords、entities。
+- 每个 entity 包含 type、name、description、relation。
+- chunk.content 是原文证据，不是摘要。
+- event.content 是去冗余后的完整产业链事实，不是原文复制，也不是 QA。
+- chunk.content 和 event.content 通常不应完全相同；除非原文本身极短且无冗余。
+- keywords 是字符串数组。
+- 不要把多个实体合并到一个 name。
+- 不要把数值、时间、指标、变化方向抽成 entity。
+- 检查是否遗漏别名、简称、英文名、CAS号、化学式、上下游产品、应用领域、终端行业、工艺、企业、装置、日期和数值口径。
+- 输出必须是 Pretty Print JSON，每层缩进 2 个空格。
+
+现在开始处理我上传的文档，只输出 JSON。`;
+
+const CHEMICAL_CSV_IMPORT_PROMPT_ZH = String.raw`你是一名化工产业链和期货知识抽取专家。请把我上传的资料整理成可以导入 SAG 的标准 CSV。
+
+只输出标准 CSV，不要输出解释、总结、Markdown 代码块或 CSV 以外的文字。
+
+## 1. 任务目标
+
+本任务不是摘要，也不是 QA，而是为化工产业链 SAG 抽取“原文切片 + 事件 + 实体”。
+
+SAG 以事件为中心。事件类似知识超图中的“超边”，用于连接多个实体。一个事件应表达一个最小完整产业链事实，而不是零散三元组。
+
+- 原文切片：可核验原文证据，回答“原文是怎么说的”。
+- 事件内容：基于原文切片去冗余、结构化后的产业链事实，回答“这段原文表达了什么事实关系”。
+- 实体：用于检索、知识超图展示和多跳扩展的索引点。
+
+一个切片原则上只对应一个事件；一个事件通常包含 3～8 个高价值实体。身份类短事件可以少于 3 个；复杂工艺、企业装置或合规事件可以超过 8 个，但不要为了凑数量提取低价值实体。
+
+## 2. 输出结构
+
+第一行必须严格为以下 18 列，不能改名、删列或增加列：
+
+"文档标题","来源名称","来源类型","来源日期","来源作者","来源链接","切片编号","切片标题","原文切片","事件标题","事件摘要","事件内容","事件分类","关键词","实体类型","实体名称","实体说明","关系说明"
+
+字段要求：
+- 文档标题：原文标题；无标题时根据内容生成。
+- 来源名称：报告名、网页标题、数据库名、公众号文章名或资料名；没有留空。
+- 来源类型：report、web_article、markdown、book、manual、database、unknown；无法判断填 unknown。
+- 来源日期：来源日期，保留原文日期表达；没有留空。
+- 来源作者：作者、机构、网站、公众号、研究所或公司名称；没有留空。
+- 来源链接：来源链接；没有留空。
+- 切片编号：当前文档内唯一，从 1 开始递增；同一事件的多行必须完全相同。
+- 切片标题：简短概括该切片事实。
+- 原文切片：原文证据片段，尽量贴近原文。
+- 事件标题：用“主体 + 关系/动作 + 对象”概括事件。
+- 事件摘要：一两句话概括事件。
+- 事件内容：完整事实陈述，必须保留时间、数值、单位、统计口径、变化方向、原因、不确定性和事实依据。
+- 事件分类：尽量从推荐事件类型中选择。
+- 关键词：用中文分号“；”分隔，包含标准名、别名、简称、英文名、CAS号、核心产业链词和重要口径词。
+- 实体类型：实体类型。
+- 实体名称：一个实体名称，只能写一个对象。
+- 实体说明：实体本身说明。
+- 关系说明：该实体在当前事件中的角色或关系。
+
+## 3. 来源字段规则
+
+来源字段只能从上传资料的标题、封面、页眉页脚、网页信息或用户明确提供的信息中提取，不能根据内容猜测来源机构。
+
+如果无法判断：
+- 来源名称、来源日期、来源作者、来源链接留空。
+- 来源类型填 unknown。
+
+## 4. 原文切片与事件内容的区别
+
+原文切片是证据片段，应尽量保留原文句子或表格转写，不要只写摘要，不要加入原文没有的信息。原文切片可以包含原文中的必要上下文、限定条件、修饰语和背景信息，只要这些内容有助于核验事实。
+
+事件内容是产业链事实陈述，应基于原文切片去冗余、补全主语和关系，并整理为一条清晰、完整、可检索的事实。事件内容应删除寒暄、过渡、重复、宣传性表达、无关背景和不影响事实判断的修饰语。
+
+事件内容推荐格式为：
+【时间/统计口径】+【主体】+【关系/动作】+【对象】+【数值/变化】+【原因/限制条件】
+
+如果原文没有某一项，不要编造。
+
+原文切片和事件内容通常不应完全相同。只有当原文本身已经非常短、事实完整、没有冗余时，两者才可以接近或相同。
+
+如果原文存在代词、省略主语、跨句表达、表格行信息，事件内容应在忠实原文基础上补足主体、对象、关系和统计口径，但不能新增原文没有的信息。
+
+每个切片建议 80～400 个中文字符。短事实如名称、别名、简称、英文名、CAS号、化学式、单条价格、单条产能、单条资质要求可以少于 80 字，但必须能独立核验。超过 400 字时，应按关系类型、时间口径、指标口径、主体对象或因果逻辑拆分。
+
+## 5. 优先抽取的化工产业链事件
+
+优先抽取对化工产业链问答、知识超图和多跳检索有价值的事实：
+
+1. 产品身份：名称、别名、简称、英文名、CAS号、化学式。
+2. 上下游关系：原料 → 中间体/产品 → 直接下游产品 → 终端应用领域。
+3. 原料路线和生产工艺：原料、工艺、化学反应、催化剂、装置、产物、副产品、联产品。
+4. 企业装置：企业、基地、项目、装置、产品、产能、投产/检修/复产/扩产状态。
+5. 市场指标：产品、区域、时间口径、价格、利润、库存、开工率、产量、消费量、供需变化、价差、加工费。
+6. 贸易和区域：进出口、进口依赖度、区域供需、港口、仓储、物流。
+7. 商业语境：品质分级、准入合规、功能角色、来源属性。
+8. 政策标准：明确影响产品、企业、工艺、准入或市场的政策、法规、标准。
+
+不要抽取没有明确产业链事实的背景句、过渡句、标题句、风险提示、免责声明、泛泛判断。只有当文本包含明确产品、企业、工艺、上下游、应用、指标、合规、来源属性、时间口径或数值时，才生成切片/事件。
+
+## 6. 推荐事件分类
+
+尽量从以下类型中选择：
+
+产品身份、上下游关系、生产工艺、原料路线、副产联产、企业装置、产能建设、产量消费、价格变化、利润变化、库存变化、开工负荷、供需变化、进出口贸易、区域市场、应用领域、终端行业、品质分级、准入合规、功能角色、来源属性、政策标准、产业链分析。
+
+## 7. 最小完整关系单元
+
+一个最小完整关系单元 = 同一主体 + 同一关系类型 + 同一时间或统计范围 + 同一事实语义。
+
+必须拆成多个事件的情况：
+- 关系类型不同。
+- 时间范围不同。
+- 指标口径不同。
+- 变化方向不同。
+- 因果逻辑不同。
+- 每个对象有独立数值、趋势、原因或结论。
+- 上游原料、直接下游产品、终端应用领域混在一起。
+- 品质分级不同，且对应不同市场、价格体系或应用场景。
+- 准入合规所属层级不同，如生产端准入和使用端准入。
+
+应合并为一个事件的情况：
+- 同一化工品的名称、别名、简称、英文名、CAS号、化学式。
+- 同一产品的多个并列下游产品或终端应用领域，且原文只是并列列举。
+- 同一工艺或装置的多个并列产物，且原文只是并列列举。
+- 同一企业在同一时间范围内的同一事项，涉及多个并列装置、产品或基地。
+- 同一市场状态下的多个并列指标，且原文没有分别给出独立原因或结论。
+
+允许多个切片复用同一段原文，只要对应事件不同。只抽取原文明确表达的事实；不要补充、推测或使用外部知识。原文出现“疑似、可能、相关、预计、或将、有望”等不确定表达，必须保留在事件内容或关系说明中。
+
+## 8. 直接下游产品 vs 终端应用领域
+
+必须区分：
+- 直接下游产品：由该化工品继续反应、加工、聚合或配方生产出的具体产品，例如双酚A → 聚碳酸酯、环氧树脂。
+- 终端应用领域：下游产品最终进入的行业或场景，例如电子电器、汽车、建筑、光伏、医药、农药。
+
+不要把直接下游产品误标为应用领域，也不要把终端行业误标为下游产品。
+
+## 9. 带品质分级的产品名
+
+如果原文出现“电子级氢氟酸”“食品级抗氧剂 BHT”“医药级甘油”等带等级产品名：
+- 产品实体优先写基础产品名，如 氢氟酸、抗氧剂BHT、甘油。
+- 品质分级实体写 电子级、食品级、医药级。
+- 事件内容必须保留完整表达，如“电子级氢氟酸”。
+- 如果带等级名称本身是商品名、牌号、规格或固定采购对象，可额外作为 产品 或 牌号/规格 实体保留。
+
+## 10. 四个商业语境维度
+
+必须区分并尽量保留：
+
+1. 品质分级：产品本身是什么级别，如通用级、食品级、医药级、电子级、试剂级、化妆品级、饲料级、农药级、军工级、核级、航空级、光学级。
+   常见映射：工业级/普通级 → 通用级；药用级/药典级 → 医药级；半导体级/超纯级/光伏级 → 电子级；日化级/IECIC收录级 → 化妆品级。
+
+2. 准入合规：生产、销售、出口、供应或使用需要什么资质、许可、标准或认证。分为生产端准入、使用端准入、产品端认证、供应商端资质。
+   例如 GMP、安全生产许可证、危化品使用许可证、ISO 9001、农药登记证。
+
+3. 功能角色：产品在下游生产中起什么作用，如核心原料、结构共聚物、功能助剂、催化剂、溶剂/介质、工艺辅料、中间品。
+
+4. 来源属性：产品来自哪里，如常规生产、联产、副产、回收再生、进口依赖。
+
+常见误判：
+- “电子级、食品级、医药级”是品质分级，不是认证或功能角色。
+- “GMP、安全生产许可证、危化品使用许可证、ISO 9001、农药登记证”是准入合规，不是品质分级。
+- “联产、副产、回收再生、进口依赖”是来源属性，不是功能角色。
+- 如果原文同时出现品质分级、准入合规、功能角色、来源属性，必须分别提取，不能互相替代。
+
+## 11. 表格和行情数据处理
+
+如果原文是表格，必须把表头、行名、列名、单位、时间口径合并进原文切片和事件内容，不能只抽单元格数值。
+
+例如表格为“产品 | 2024年产能 | 同比；双酚A | 500万吨/年 | +8%”，事件内容应写为：
+“2024年，双酚A产能为500万吨/年，同比增加8%。”
+
+价格、利润、库存、开工率、价差、加工费、供需变化等行情数据必须作为事件保存。事件内容必须包含：
+产品 + 指标 + 时间/周期 + 数值/方向 + 单位 + 统计口径 + 原因/结论。
+
+这些指标名称、数值和变化方向不要作为实体。
+
+## 12. 推荐实体类型
+
+优先选择以下实体类型，必要时可新增更精确类型：
+
+原料、中间体、产品、下游产品、联产品、副产品、生产工艺、化学反应、催化剂、生产设备、企业、采购商、供应商、生产基地、项目、装置、产线、工厂、化工园区、基地、行政地区、市场区域、港口、仓储、管道、能源、公用工程、资源、矿产、油气田、政策、法规、标准、监管机构、行业组织、CAS号、化学式、危险性、应用领域、终端行业、别名、简称、英文名、品质分级、准入合规、功能角色、来源属性、牌号/规格。
+
+实体优先级：
+- 第一优先级：产品、原料、中间体、下游产品、企业、工艺、装置、应用领域、终端行业、品质分级、准入合规、功能角色、来源属性。
+- 第二优先级：地区、基地、项目、政策、标准、供应商、采购商。
+- 第三优先级：危险性、能源、公用工程、港口、仓储、资源。
+
+不要提取成实体，但必须保留在事件内容中：
+时间、日期、数值、单位、产能、产量、消费量、价格、利润、库存、开工率、产能利用率、价差、加工费、指标变化、市场状态、动作词、分析判断、程度词、泛称角色。
+例如“2024年”“20万吨/年”“300元/吨”“价格上涨”“库存下降”“供应偏紧”“投产”“检修”“成本支撑”不要作为实体。
+
+## 13. 实体规则
+
+- 每行只写一个实体。
+- 同一事件的多个实体必须重复相同的前 15 列，只改变实体类型、实体名称、实体说明、关系说明。
+- 同一事件的所有行必须使用完全相同的切片编号。
+- 相同实体尽量使用一致的 实体类型 + 实体名称。
+- 具体标准、许可证、认证、法规、政策名称可以作为实体；“准入、认证要求、合规门槛”等泛称不能作为实体。
+- 实体说明写实体本身是什么。
+- 关系说明写实体在当前事件中的作用。
+
+关系说明示例：
+- “ABS树脂的简称”
+- “该化工品的英文名”
+- “双酚A的直接下游产品之一”
+- “聚碳酸酯的终端应用领域之一”
+- “连续本体法生产ABS的生产工艺”
+- “该氢氟酸产品的品质分级，对应半导体刻蚀场景”
+- “生产该产品所需的生产端准入资质”
+- “该原料在下游生产中的功能角色，为核心原料”
+- “该产品的来源属性，为生物柴油生产的副产物”
+
+## 14. 关键示例
+
+原文：“ABS树脂一般指丙烯腈-丁二烯-苯乙烯共聚物(Acrylonitrile butadiene Styrene copolymers)，简称ABS。”
+应生成一个事件：ABS树脂的标准名、英文名和简称。
+实体：产品=ABS树脂；产品=丙烯腈-丁二烯-苯乙烯共聚物；英文名=Acrylonitrile butadiene Styrene copolymers；简称=ABS。
+不要拆成多个名称事件。
+
+原文：“ABS下游应用领域中，主要用于电子电器、交通工具、轻工业、办公设备、建材等领域。”
+应生成一个事件：ABS应用于多个终端应用领域。
+实体：产品=ABS；终端行业/应用领域=电子电器、交通工具、轻工业、办公设备、建材。
+不要机械拆成 5 个事件，除非原文分别给出每个领域的独立比例、变化、原因或结论。
+
+原文：“电子电器领域的消费占比提升了1个百分点至64%，交通用具的消费占比保持在9%左右，建材及其他领域的需求占比从7%下滑至6%。”
+应拆成多个事件，因为每个领域有独立指标和变化。
+
+原文：“该工厂生产的电子级氢氟酸需取得安全生产许可证后才能向下游晶圆厂供货，晶圆厂使用该产品则需具备危化品使用许可证。”
+应拆成两个事件：电子级氢氟酸生产需安全生产许可证；晶圆厂使用电子级氢氟酸需危化品使用许可证。
+第一个事件提取：产品=氢氟酸；品质分级=电子级；准入合规=安全生产许可证。
+第二个事件提取：产品=氢氟酸；应用领域=晶圆制造；准入合规=危化品使用许可证。
+
+原文：“生物柴油生产中副产的甘油，纯度提升后可作为化妆品保湿剂使用，化妆品厂通常要求供应商具备ISO 22716资质。”
+应生成一个事件，并同时提取：产品=甘油；来源属性=副产；品质分级=化妆品级；功能角色=功能助剂；应用领域=化妆品；准入合规=ISO 22716。
+
+## 15. CSV 输出要求
+
+- 只输出标准 CSV，不要输出解释或 Markdown 代码块。
+- 所有字段用英文半角双引号包裹。
+- 字段内部双引号写成两个双引号。
+- 字段内部不要换行，原文换行改为空格。
+- 每行必须严格 18 列。
+- 不要生成事件 ID、实体 ID、UUID、数据库主键、embedding、metadata 或时间戳。
+- 如果文档太长，每次输出一批完整 CSV，并继续沿用相同表头；切片编号从上一批最后一个编号继续。
+
+## 16. 输出自检
+
+- 表头严格为 18 列。
+- 每行严格 18 列。
+- 同一事件多行切片编号完全相同。
+- 原文切片是原文证据，不是摘要。
+- 事件内容是去冗余后的完整产业链事实，不是原文复制，也不是 QA。
+- 原文切片和事件内容通常不应完全相同；除非原文本身极短且无冗余。
+- 事件摘要和事件分类之间必须有事件内容。
+- 实体说明和关系说明必须区分。
+- 不要把多个实体合并到一个实体名称。
+- 不要把数值、时间、指标、变化方向抽成实体。
+- 检查是否遗漏别名、简称、英文名、CAS号、化学式、上下游产品、应用领域、终端行业、工艺、企业、装置、日期和数值口径。
+
+现在开始处理我上传的文档，只输出 CSV。`;
+
+const CHEMICAL_MARKDOWN_IMPORT_PROMPT_ZH = String.raw`你是一名化工产业链和期货知识抽取专家。请把我上传的资料整理成可以导入 SAG 的标准 Markdown 表格。
+
+只输出标准 Markdown 表格，不要输出解释、总结、代码块或 Markdown 表格以外的文字。
+
+## 1. 任务目标
+
+本任务不是摘要，也不是 QA，而是为化工产业链 SAG 抽取“原文切片 + 事件 + 实体”。
+
+SAG 以事件为中心。事件类似知识超图中的“超边”，用于连接多个实体。一个事件应表达一个最小完整产业链事实，而不是零散三元组。
+
+- 原文切片：可核验原文证据，回答“原文是怎么说的”。
+- 事件内容：基于原文切片去冗余、结构化后的产业链事实，回答“这段原文表达了什么事实关系”。
+- 实体：用于检索、知识超图展示和多跳扩展的索引点。
+
+一个切片原则上只对应一个事件；一个事件通常包含 3～8 个高价值实体。身份类短事件可以少于 3 个；复杂工艺、企业装置或合规事件可以超过 8 个，但不要为了凑数量提取低价值实体。
+
+## 2. 输出结构
+
+第一行必须严格为以下 18 列表头，第二行为分隔行，不能改名、删列或增加列：
+
+"文档标题","来源名称","来源类型","来源日期","来源作者","来源链接","切片编号","切片标题","原文切片","事件标题","事件摘要","事件内容","事件分类","关键词","实体类型","实体名称","实体说明","关系说明"
+
+字段要求：
+- 文档标题：原文标题；无标题时根据内容生成。
+- 来源名称：报告名、网页标题、数据库名、公众号文章名或资料名；没有留空。
+- 来源类型：report、web_article、markdown、book、manual、database、unknown；无法判断填 unknown。
+- 来源日期：来源日期，保留原文日期表达；没有留空。
+- 来源作者：作者、机构、网站、公众号、研究所或公司名称；没有留空。
+- 来源链接：来源链接；没有留空。
+- 切片编号：当前文档内唯一，从 1 开始递增；同一事件的多行必须完全相同。
+- 切片标题：简短概括该切片事实。
+- 原文切片：原文证据片段，尽量贴近原文。
+- 事件标题：用“主体 + 关系/动作 + 对象”概括事件。
+- 事件摘要：一两句话概括事件。
+- 事件内容：完整事实陈述，必须保留时间、数值、单位、统计口径、变化方向、原因、不确定性和事实依据。
+- 事件分类：尽量从推荐事件类型中选择。
+- 关键词：用中文分号“；”分隔，包含标准名、别名、简称、英文名、CAS号、核心产业链词和重要口径词。
+- 实体类型：实体类型。
+- 实体名称：一个实体名称，只能写一个对象。
+- 实体说明：实体本身说明。
+- 关系说明：该实体在当前事件中的角色或关系。
+
+## 3. 来源字段规则
+
+来源字段只能从上传资料的标题、封面、页眉页脚、网页信息或用户明确提供的信息中提取，不能根据内容猜测来源机构。
+
+如果无法判断：
+- 来源名称、来源日期、来源作者、来源链接留空。
+- 来源类型填 unknown。
+
+## 4. 原文切片与事件内容的区别
+
+原文切片是证据片段，应尽量保留原文句子或表格转写，不要只写摘要，不要加入原文没有的信息。原文切片可以包含原文中的必要上下文、限定条件、修饰语和背景信息，只要这些内容有助于核验事实。
+
+事件内容是产业链事实陈述，应基于原文切片去冗余、补全主语和关系，并整理为一条清晰、完整、可检索的事实。事件内容应删除寒暄、过渡、重复、宣传性表达、无关背景和不影响事实判断的修饰语。
+
+事件内容推荐格式为：
+【时间/统计口径】+【主体】+【关系/动作】+【对象】+【数值/变化】+【原因/限制条件】
+
+如果原文没有某一项，不要编造。
+
+原文切片和事件内容通常不应完全相同。只有当原文本身已经非常短、事实完整、没有冗余时，两者才可以接近或相同。
+
+如果原文存在代词、省略主语、跨句表达、表格行信息，事件内容应在忠实原文基础上补足主体、对象、关系和统计口径，但不能新增原文没有的信息。
+
+每个切片建议 80～400 个中文字符。短事实如名称、别名、简称、英文名、CAS号、化学式、单条价格、单条产能、单条资质要求可以少于 80 字，但必须能独立核验。超过 400 字时，应按关系类型、时间口径、指标口径、主体对象或因果逻辑拆分。
+
+## 5. 优先抽取的化工产业链事件
+
+优先抽取对化工产业链问答、知识超图和多跳检索有价值的事实：
+
+1. 产品身份：名称、别名、简称、英文名、CAS号、化学式。
+2. 上下游关系：原料 → 中间体/产品 → 直接下游产品 → 终端应用领域。
+3. 原料路线和生产工艺：原料、工艺、化学反应、催化剂、装置、产物、副产品、联产品。
+4. 企业装置：企业、基地、项目、装置、产品、产能、投产/检修/复产/扩产状态。
+5. 市场指标：产品、区域、时间口径、价格、利润、库存、开工率、产量、消费量、供需变化、价差、加工费。
+6. 贸易和区域：进出口、进口依赖度、区域供需、港口、仓储、物流。
+7. 商业语境：品质分级、准入合规、功能角色、来源属性。
+8. 政策标准：明确影响产品、企业、工艺、准入或市场的政策、法规、标准。
+
+不要抽取没有明确产业链事实的背景句、过渡句、标题句、风险提示、免责声明、泛泛判断。只有当文本包含明确产品、企业、工艺、上下游、应用、指标、合规、来源属性、时间口径或数值时，才生成切片/事件。
+
+## 6. 推荐事件分类
+
+尽量从以下类型中选择：
+
+产品身份、上下游关系、生产工艺、原料路线、副产联产、企业装置、产能建设、产量消费、价格变化、利润变化、库存变化、开工负荷、供需变化、进出口贸易、区域市场、应用领域、终端行业、品质分级、准入合规、功能角色、来源属性、政策标准、产业链分析。
+
+## 7. 最小完整关系单元
+
+一个最小完整关系单元 = 同一主体 + 同一关系类型 + 同一时间或统计范围 + 同一事实语义。
+
+必须拆成多个事件的情况：
+- 关系类型不同。
+- 时间范围不同。
+- 指标口径不同。
+- 变化方向不同。
+- 因果逻辑不同。
+- 每个对象有独立数值、趋势、原因或结论。
+- 上游原料、直接下游产品、终端应用领域混在一起。
+- 品质分级不同，且对应不同市场、价格体系或应用场景。
+- 准入合规所属层级不同，如生产端准入和使用端准入。
+
+应合并为一个事件的情况：
+- 同一化工品的名称、别名、简称、英文名、CAS号、化学式。
+- 同一产品的多个并列下游产品或终端应用领域，且原文只是并列列举。
+- 同一工艺或装置的多个并列产物，且原文只是并列列举。
+- 同一企业在同一时间范围内的同一事项，涉及多个并列装置、产品或基地。
+- 同一市场状态下的多个并列指标，且原文没有分别给出独立原因或结论。
+
+允许多个切片复用同一段原文，只要对应事件不同。只抽取原文明确表达的事实；不要补充、推测或使用外部知识。原文出现“疑似、可能、相关、预计、或将、有望”等不确定表达，必须保留在事件内容或关系说明中。
+
+## 8. 直接下游产品 vs 终端应用领域
+
+必须区分：
+- 直接下游产品：由该化工品继续反应、加工、聚合或配方生产出的具体产品，例如双酚A → 聚碳酸酯、环氧树脂。
+- 终端应用领域：下游产品最终进入的行业或场景，例如电子电器、汽车、建筑、光伏、医药、农药。
+
+不要把直接下游产品误标为应用领域，也不要把终端行业误标为下游产品。
+
+## 9. 带品质分级的产品名
+
+如果原文出现“电子级氢氟酸”“食品级抗氧剂 BHT”“医药级甘油”等带等级产品名：
+- 产品实体优先写基础产品名，如 氢氟酸、抗氧剂BHT、甘油。
+- 品质分级实体写 电子级、食品级、医药级。
+- 事件内容必须保留完整表达，如“电子级氢氟酸”。
+- 如果带等级名称本身是商品名、牌号、规格或固定采购对象，可额外作为 产品 或 牌号/规格 实体保留。
+
+## 10. 四个商业语境维度
+
+必须区分并尽量保留：
+
+1. 品质分级：产品本身是什么级别，如通用级、食品级、医药级、电子级、试剂级、化妆品级、饲料级、农药级、军工级、核级、航空级、光学级。
+   常见映射：工业级/普通级 → 通用级；药用级/药典级 → 医药级；半导体级/超纯级/光伏级 → 电子级；日化级/IECIC收录级 → 化妆品级。
+
+2. 准入合规：生产、销售、出口、供应或使用需要什么资质、许可、标准或认证。分为生产端准入、使用端准入、产品端认证、供应商端资质。
+   例如 GMP、安全生产许可证、危化品使用许可证、ISO 9001、农药登记证。
+
+3. 功能角色：产品在下游生产中起什么作用，如核心原料、结构共聚物、功能助剂、催化剂、溶剂/介质、工艺辅料、中间品。
+
+4. 来源属性：产品来自哪里，如常规生产、联产、副产、回收再生、进口依赖。
+
+常见误判：
+- “电子级、食品级、医药级”是品质分级，不是认证或功能角色。
+- “GMP、安全生产许可证、危化品使用许可证、ISO 9001、农药登记证”是准入合规，不是品质分级。
+- “联产、副产、回收再生、进口依赖”是来源属性，不是功能角色。
+- 如果原文同时出现品质分级、准入合规、功能角色、来源属性，必须分别提取，不能互相替代。
+
+## 11. 表格和行情数据处理
+
+如果原文是表格，必须把表头、行名、列名、单位、时间口径合并进原文切片和事件内容，不能只抽单元格数值。
+
+例如表格为“产品 | 2024年产能 | 同比；双酚A | 500万吨/年 | +8%”，事件内容应写为：
+“2024年，双酚A产能为500万吨/年，同比增加8%。”
+
+价格、利润、库存、开工率、价差、加工费、供需变化等行情数据必须作为事件保存。事件内容必须包含：
+产品 + 指标 + 时间/周期 + 数值/方向 + 单位 + 统计口径 + 原因/结论。
+
+这些指标名称、数值和变化方向不要作为实体。
+
+## 12. 推荐实体类型
+
+优先选择以下实体类型，必要时可新增更精确类型：
+
+原料、中间体、产品、下游产品、联产品、副产品、生产工艺、化学反应、催化剂、生产设备、企业、采购商、供应商、生产基地、项目、装置、产线、工厂、化工园区、基地、行政地区、市场区域、港口、仓储、管道、能源、公用工程、资源、矿产、油气田、政策、法规、标准、监管机构、行业组织、CAS号、化学式、危险性、应用领域、终端行业、别名、简称、英文名、品质分级、准入合规、功能角色、来源属性、牌号/规格。
+
+实体优先级：
+- 第一优先级：产品、原料、中间体、下游产品、企业、工艺、装置、应用领域、终端行业、品质分级、准入合规、功能角色、来源属性。
+- 第二优先级：地区、基地、项目、政策、标准、供应商、采购商。
+- 第三优先级：危险性、能源、公用工程、港口、仓储、资源。
+
+不要提取成实体，但必须保留在事件内容中：
+时间、日期、数值、单位、产能、产量、消费量、价格、利润、库存、开工率、产能利用率、价差、加工费、指标变化、市场状态、动作词、分析判断、程度词、泛称角色。
+例如“2024年”“20万吨/年”“300元/吨”“价格上涨”“库存下降”“供应偏紧”“投产”“检修”“成本支撑”不要作为实体。
+
+## 13. 实体规则
+
+- 每行只写一个实体。
+- 同一事件的多个实体必须重复相同的前 15 列，只改变实体类型、实体名称、实体说明、关系说明。
+- 同一事件的所有行必须使用完全相同的切片编号。
+- 相同实体尽量使用一致的 实体类型 + 实体名称。
+- 具体标准、许可证、认证、法规、政策名称可以作为实体；“准入、认证要求、合规门槛”等泛称不能作为实体。
+- 实体说明写实体本身是什么。
+- 关系说明写实体在当前事件中的作用。
+
+关系说明示例：
+- “ABS树脂的简称”
+- “该化工品的英文名”
+- “双酚A的直接下游产品之一”
+- “聚碳酸酯的终端应用领域之一”
+- “连续本体法生产ABS的生产工艺”
+- “该氢氟酸产品的品质分级，对应半导体刻蚀场景”
+- “生产该产品所需的生产端准入资质”
+- “该原料在下游生产中的功能角色，为核心原料”
+- “该产品的来源属性，为生物柴油生产的副产物”
+
+## 14. 关键示例
+
+原文：“ABS树脂一般指丙烯腈-丁二烯-苯乙烯共聚物(Acrylonitrile butadiene Styrene copolymers)，简称ABS。”
+应生成一个事件：ABS树脂的标准名、英文名和简称。
+实体：产品=ABS树脂；产品=丙烯腈-丁二烯-苯乙烯共聚物；英文名=Acrylonitrile butadiene Styrene copolymers；简称=ABS。
+不要拆成多个名称事件。
+
+原文：“ABS下游应用领域中，主要用于电子电器、交通工具、轻工业、办公设备、建材等领域。”
+应生成一个事件：ABS应用于多个终端应用领域。
+实体：产品=ABS；终端行业/应用领域=电子电器、交通工具、轻工业、办公设备、建材。
+不要机械拆成 5 个事件，除非原文分别给出每个领域的独立比例、变化、原因或结论。
+
+原文：“电子电器领域的消费占比提升了1个百分点至64%，交通用具的消费占比保持在9%左右，建材及其他领域的需求占比从7%下滑至6%。”
+应拆成多个事件，因为每个领域有独立指标和变化。
+
+原文：“该工厂生产的电子级氢氟酸需取得安全生产许可证后才能向下游晶圆厂供货，晶圆厂使用该产品则需具备危化品使用许可证。”
+应拆成两个事件：电子级氢氟酸生产需安全生产许可证；晶圆厂使用电子级氢氟酸需危化品使用许可证。
+第一个事件提取：产品=氢氟酸；品质分级=电子级；准入合规=安全生产许可证。
+第二个事件提取：产品=氢氟酸；应用领域=晶圆制造；准入合规=危化品使用许可证。
+
+原文：“生物柴油生产中副产的甘油，纯度提升后可作为化妆品保湿剂使用，化妆品厂通常要求供应商具备ISO 22716资质。”
+应生成一个事件，并同时提取：产品=甘油；来源属性=副产；品质分级=化妆品级；功能角色=功能助剂；应用领域=化妆品；准入合规=ISO 22716。
+
+## 15. Markdown 表格输出要求
+
+- 只输出标准 Markdown 表格，不要输出解释或代码块。
+- 使用 Markdown 表格格式：表头行 + 分隔行 + 数据行。
+- 每行必须严格 18 列。
+- 单元格内部不要换行，原文换行改为空格。
+- 单元格内部如果出现竖线 |，必须写成 \|。
+- 不要生成事件 ID、实体 ID、UUID、数据库主键、embedding、metadata 或时间戳。
+- 如果文档太长，每次输出一批完整 Markdown 表格，并继续沿用相同表头；切片编号从上一批最后一个编号继续。
+
+## 16. 输出自检
+
+- 表头严格为 18 列。
+- 每行严格 18 列。
+- 必须包含 Markdown 表格分隔行。
+- 同一事件多行切片编号完全相同。
+- 原文切片是原文证据，不是摘要。
+- 事件内容是去冗余后的完整产业链事实，不是原文复制，也不是 QA。
+- 原文切片和事件内容通常不应完全相同；除非原文本身极短且无冗余。
+- 事件摘要和事件分类之间必须有事件内容。
+- 实体说明和关系说明必须区分。
+- 不要把多个实体合并到一个实体名称。
+- 不要把数值、时间、指标、变化方向抽成实体。
+- 检查是否遗漏别名、简称、英文名、CAS号、化学式、上下游产品、应用领域、终端行业、工艺、企业、装置、日期和数值口径。
+
+现在开始处理我上传的文档，只输出 Markdown 表格。`;
+
 function defaultImportPrompt(format: ImportDocFormat, language: SupportedLanguage): string {
-  const headersZh = IMPORT_HEADERS_ZH.join("，");
   const headersEn = IMPORT_HEADERS_EN.join(", ");
   if (language === "en") {
     if (format === "json") {
       return [
-        "You are a knowledge-extraction assistant for the chemical industry chain. Convert the source text I provide below into JSON that can be imported directly.",
-        "Requirements:",
-        `1. Output a JSON array. Each element is a row object with these keys: ${headersEn}.`,
-        "2. \"keywords\" must be an array of strings. Every event needs at least one entity; write multiple entities of the same event as separate objects that share the same \"chunk_id\" (the system merges rows with the same chunk_id into one event with multiple entities).",
-        "3. Put the matching source passage in \"chunk_content\". Do not fabricate; leave a field empty (\"\") if unknown.",
-        "4. Output ONLY the raw JSON array — no explanations and no ``` code fences.",
+        "You are a chemical industry-chain and futures knowledge extraction expert. Convert the uploaded source material into standard SAG import JSON.",
+        "Output ONLY valid JSON. Do not output explanations, summaries, Markdown code fences, or any text outside JSON.",
+        "The root object must contain only documents. Each document contains title, source, and chunks. source contains name, type, date, author, url. Each chunk contains key, heading, content, event. Each event contains title, summary, content, category, keywords, entities. Each entity contains type, name, description, relation.",
+        "chunk.content is verifiable source evidence and should stay close to the source text. event.content is a de-redundant structured industry-chain fact based on chunk.content; it should preserve time, numbers, units, scope, direction, causes, uncertainty, and evidence, but remove irrelevant background and promotional language. chunk.content and event.content should usually not be identical unless the source fact is extremely short and already clean.",
+        "Prioritize chemical industry-chain facts: product identity, upstream/downstream relations, production routes, processes, catalysts, company assets, capacity, output, prices, inventory, operating rates, profits, trade, regions, quality grade, access/compliance, functional role, and source attribute.",
+        "Do not extract time, numbers, units, indicator names, price/capacity/inventory/profit values, market state, action verbs, or analytical judgments as entities; preserve them in event.content.",
+        "Do not fabricate source metadata. If unknown, leave source.name/date/author/url empty and set source.type to unknown.",
+        "Do NOT output database/runtime fields: id, documentId, chunkId, eventId, entityId, systemChunkId, schemaVersion, exportedAt, project, metadata, embedding, createdAt, updatedAt, status, parseStatus, rank, format, version, note.",
         "Source text:",
         "<paste the source text here>"
       ].join("\n");
     }
-    const shape = format === "csv"
-      ? "CSV (first line is the header row, comma-separated)"
-      : "a Markdown table (header row, a separator row of ---, then data rows)";
+    const shape = format === "csv" ? "standard CSV" : "a standard Markdown table";
     return [
-      `You are a knowledge-extraction assistant for the chemical industry chain. Convert the source text I provide below into ${shape} that can be imported directly.`,
-      "Requirements:",
-      `1. Use exactly these column names in this order: ${headersEn}.`,
-      "2. Every event needs at least one entity; write multiple entities of the same event as multiple rows that keep the SAME chunk_id (the system merges rows with the same chunk_id into one event with multiple entities).",
-      "3. Separate multiple keywords with a semicolon (;)." + (format === "csv" ? " If a field contains a comma or newline, wrap it in double quotes." : " Replace any literal | inside a cell with \\|."),
-      "4. Put the matching source passage in chunk_content. Do not fabricate; leave a field empty if unknown.",
-      `5. Output ONLY the ${format === "csv" ? "CSV" : "Markdown table"} itself — no explanations and no \`\`\` code fences.`,
+      `You are a chemical industry-chain and futures knowledge extraction expert. Convert the uploaded source material into ${shape} that can be imported into SAG.`,
+      `Use exactly these 18 columns in this order: ${headersEn}.`,
+      "Output only the table/CSV itself; do not output explanations or code fences.",
+      "chunk_content is source evidence; event_content is a de-redundant structured industry-chain fact and should usually not be identical to chunk_content unless the source fact is extremely short and already clean.",
+      "One event can have multiple entities. In CSV/Markdown rows, repeat the same document/source/chunk/event fields and keep the same chunk_id for all entity rows belonging to the same event.",
+      "Do not extract time, numbers, units, indicator names, price/capacity/inventory/profit values, market state, action verbs, or analytical judgments as entities; preserve them in event_content.",
+      "Do not fabricate source metadata. Leave unknown fields empty and set source_type to unknown if needed.",
       "Source text:",
       "<paste the source text here>"
     ].join("\n");
   }
-  if (format === "json") {
-    return [
-      "你是化工产业链知识抽取助手。请把我接下来提供的原文，转换成可直接导入的 JSON。",
-      "要求：",
-      `1. 输出一个 JSON 数组，每个元素是一行对象，包含这些键：${headersEn}。`,
-      "2. keywords 用字符串数组。每个“事件”至少有 1 个实体；同一事件的多个实体写成多个对象，并让它们的 chunk_id 保持相同（系统会按 chunk_id 合并为一个事件、多个实体）。",
-      "3. “chunk_content”填该事件对应的原文片段；不要编造，缺失就留空字符串（\"\"）。",
-      "4. 只输出 JSON 数组本身，不要任何解释，也不要 ``` 代码块。",
-      "原文如下：",
-      "<在此粘贴原文>"
-    ].join("\n");
-  }
-  const shapeZh = format === "csv"
-    ? "可直接导入的 CSV（第一行为表头，逗号分隔）"
-    : "可直接导入的 Markdown 表格（表头行 + 一行 --- 分隔 + 数据行）";
-  return [
-    `你是化工产业链知识抽取助手。请把我接下来提供的原文，转换成${shapeZh}。`,
-    "要求：",
-    `1. 严格使用这些列名（顺序一致）：${headersZh}。`,
-    "2. 每个“事件”至少拆出 1 个实体；同一事件的多个实体写成多行，并让这些行的“切片编号”保持相同（系统会按切片编号合并为一个事件、多个实体）。",
-    "3. 关键词用分号(;)分隔。" + (format === "csv" ? "字段内若含逗号或换行，请用英文双引号包裹。" : "单元格内若含 | 请写成 \\|。"),
-    "4. “原文切片”填该事件对应的原文片段；不要编造内容，缺失就留空。",
-    `5. 只输出${format === "csv" ? " CSV" : " Markdown 表格"}本身，不要多余解释，也不要 \`\`\` 代码块。`,
-    "原文如下：",
-    "<在此粘贴原文>"
-  ].join("\n");
+  if (format === "json") return CHEMICAL_JSON_IMPORT_PROMPT_ZH;
+  if (format === "csv") return CHEMICAL_CSV_IMPORT_PROMPT_ZH;
+  return CHEMICAL_MARKDOWN_IMPORT_PROMPT_ZH;
 }
 
 function loadCustomImportPrompts(): Partial<Record<ImportDocFormat, string>> {
@@ -3276,7 +4097,7 @@ function loadCustomImportPrompts(): Partial<Record<ImportDocFormat, string>> {
 
 function AiImportPromptTools() {
   const { t, language } = useI18n();
-  const [promptFormat, setPromptFormat] = useState<ImportDocFormat>("csv");
+  const [promptFormat, setPromptFormat] = useState<ImportDocFormat>("json");
   const [customPrompts, setCustomPrompts] = useState<Partial<Record<ImportDocFormat, string>>>(() => loadCustomImportPrompts());
   const [editorOpen, setEditorOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -3331,7 +4152,7 @@ function AiImportPromptTools() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-foreground">{t("用 AI 生成可导入文件的提示词", "AI prompt to generate an importable file")}</span>
         <div className="flex overflow-hidden rounded-md border border-border">
-          {(["csv", "markdown", "json"] as ImportDocFormat[]).map((format) => (
+          {(["json", "csv", "markdown"] as ImportDocFormat[]).map((format) => (
             <button
               key={format}
               type="button"
@@ -3533,6 +4354,7 @@ type KnowledgeAssetOverview = {
 };
 
 type ChunkAssetLookup = {
+  chunks?: Array<ChunkRecord & { document?: DocumentRecord | null }>;
   events: Array<EventRecord & { entities?: EntityRecord[] }>;
   entities: EntityRecord[];
 };
@@ -3607,7 +4429,8 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
                   {citation.rank != null ? <span>Rank {citation.rank}</span> : null}
                   {citation.score != null ? <span>Score {citation.score.toFixed(3)}</span> : null}
                 </div>
-                <p className="line-clamp-4 text-xs leading-5 text-muted-foreground">{citation.content}</p>
+                <DocumentSourceSummary document={citation.document} compact />
+                <p className="mt-2 line-clamp-4 text-xs leading-5 text-muted-foreground">{citation.content}</p>
               </div>
             ))}
           </div>
@@ -3858,6 +4681,7 @@ function OverviewPanel(props: {
           <div className="text-sm font-semibold">{props.document.title}</div>
           <div className="text-xs text-muted-foreground">{t("处理状态", "Processing status")}：{props.document.parseStatus}</div>
           <div className="text-xs text-muted-foreground">{t("创建时间", "Created at")}：{formatDate(props.document.createdAt)}</div>
+          <DocumentSourceDetails document={props.document} />
         </CardContent>
       </Card>
       <div className="grid grid-cols-3 gap-2">
@@ -4657,8 +5481,8 @@ function SettingsPanel(props: {
           />
           <div className="text-xs leading-5 text-muted-foreground">
             {t(
-              "开启“自动生成 Mermaid 图”后，模型会参考这个模板的分组和样式，并用检索证据替换节点与关系。",
-              "When automatic Mermaid diagrams are enabled, the model follows this grouping and style template while replacing nodes and relationships with retrieved evidence."
+              "开启“自动生成 Mermaid 图”后，模型会参考这里的生成规则、分组和样式。建议把“禁止图内引用标记、每条连线单独一行、产业链关系图引用说明放图外并使用 [1] 编号”等规则直接保留在这里。",
+              "When automatic Mermaid diagrams are enabled, the model follows these generation rules, groups, and styles. Keep the rules about no citations inside the diagram, one edge per line, and graph citations outside the Mermaid block."
             )}
           </div>
         </div>
@@ -5046,6 +5870,7 @@ function EventDetailPanel({ detail, onOpenEntity }: { detail: EventDetailRecord;
   return (
     <div className="space-y-4">
       <PanelInfo label={t("所属文档", "Source document")} value={detail.document?.title ?? t("未知文档", "Unknown document")} />
+      <DocumentSourceDetails document={detail.document} />
       <PanelInfo label={t("事件内容", "Event content")} value={detail.event.content || detail.event.summary} multiline />
       <PanelSection title={t("关联实体", "Related entities")}>
         <div className="flex flex-wrap gap-2">
@@ -5081,6 +5906,7 @@ function EntityDetailPanel({ detail, onOpenEvent }: { detail: EntityDetailRecord
           {detail.events.length === 0 ? <EmptyLine text={t("暂无关联事件。", "No related events.")} /> : detail.events.map((event) => (
             <button key={event.id} className="w-full rounded-md border border-border p-3 text-left hover:bg-accent" onClick={() => onOpenEvent(event.id)}>
               <div className="text-sm font-medium">{event.title}</div>
+              <DocumentSourceSummary document={event.document} compact />
               <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{event.summary || event.content}</p>
             </button>
           ))}
@@ -5102,6 +5928,7 @@ function CitationDetailPanel({ citation }: { citation: AnswerCitation }) {
       {citation.query ? <PanelInfo label={t("搜索语句", "Search query")} value={citation.query} multiline /> : null}
       <PanelInfo label={t("切片 ID", "Chunk ID")} value={citation.chunkId} />
       {citation.documentId ? <PanelInfo label={t("文档 ID", "Document ID")} value={citation.documentId} /> : null}
+      <DocumentSourceDetails document={citation.document} />
       <PanelSection title={t("原文块", "Original chunk")}>
         <Card>
           <CardContent>
@@ -5144,6 +5971,82 @@ function PanelInfo({ label, value, multiline }: { label: string; value: string; 
       <div className={cn("break-words text-sm", multiline && "whitespace-pre-wrap leading-6")}>{value}</div>
     </div>
   );
+}
+
+
+function DocumentSourceSummary({ document, compact }: { document?: DocumentRecord | null; compact?: boolean }) {
+  const { t } = useI18n();
+  if (!hasDocumentSource(document)) {
+    return null;
+  }
+  const parts = [
+    document?.sourceName || document?.title,
+    document?.sourceDate,
+    document?.sourceAuthor,
+    document?.sourceType
+  ].filter(Boolean);
+  if (parts.length === 0 && !document?.sourceUrl) {
+    return null;
+  }
+  return (
+    <div className={cn(
+      "min-w-0 text-xs leading-5 text-muted-foreground",
+      compact ? "mt-1 line-clamp-2" : "rounded-md border border-border bg-muted/30 p-2"
+    )}>
+      <span className="font-medium text-foreground/80">{t("来源", "Source")}：</span>
+      {parts.join(" · ")}
+      {document?.sourceUrl ? (
+        <>
+          {parts.length > 0 ? " · " : ""}
+          {compact ? (
+            <span>{t("有链接", "Has link")}</span>
+          ) : (
+            <a className="underline underline-offset-2" href={document.sourceUrl} target="_blank" rel="noreferrer">
+              {t("链接", "Link")}
+            </a>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function DocumentSourceDetails({ document }: { document?: DocumentRecord | null }) {
+  const { t } = useI18n();
+  if (!hasDocumentSource(document)) {
+    return null;
+  }
+  const rows = [
+    [t("来源名称", "Source name"), document?.sourceName],
+    [t("来源类型", "Source type"), document?.sourceType],
+    [t("来源日期", "Source date"), document?.sourceDate],
+    [t("来源作者", "Source author"), document?.sourceAuthor],
+    [t("来源链接", "Source URL"), document?.sourceUrl]
+  ].filter(([, value]) => Boolean(value));
+  if (rows.length === 0) {
+    return null;
+  }
+  return (
+    <div className="rounded-lg border border-border bg-muted/25 p-3">
+      <div className="mb-2 text-xs font-medium text-muted-foreground">{t("来源信息", "Source information")}</div>
+      <div className="space-y-1.5">
+        {rows.map(([label, value]) => (
+          <div key={label} className="grid gap-1 text-xs sm:grid-cols-[72px_minmax(0,1fr)]">
+            <span className="text-muted-foreground">{label}</span>
+            {label === t("来源链接", "Source URL") ? (
+              <a className="break-all text-primary underline underline-offset-2" href={String(value)} target="_blank" rel="noreferrer">{String(value)}</a>
+            ) : (
+              <span className="break-words text-foreground">{String(value)}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function hasDocumentSource(document?: DocumentRecord | null) {
+  return Boolean(document?.sourceName || document?.sourceType || document?.sourceDate || document?.sourceAuthor || document?.sourceUrl);
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
@@ -5267,6 +6170,13 @@ function mergeKnowledgeAssetOverview(base: KnowledgeAssetOverview, chunkAssets: 
   if (!chunkAssets) {
     return base;
   }
+  const chunkById = new Map((chunkAssets.chunks ?? []).map((chunk) => [chunk.id, chunk]));
+  const citations = base.citations.map((citation) => {
+    const chunk = chunkById.get(citation.chunkId);
+    return chunk?.document
+      ? { ...citation, document: chunk.document, documentId: citation.documentId ?? chunk.document.id }
+      : citation;
+  });
   const events = new Map(base.events.map((event) => [event.id, event]));
   const entities = new Map(base.entities.map((entity) => [entity.id, entity]));
   for (const event of chunkAssets.events) {
@@ -5306,6 +6216,7 @@ function mergeKnowledgeAssetOverview(base: KnowledgeAssetOverview, chunkAssets: 
   }
   return {
     ...base,
+    citations,
     events: [...events.values()],
     entities: [...entities.values()]
   };

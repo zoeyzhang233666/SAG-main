@@ -4,6 +4,7 @@ import { pool } from "../db/pool.js";
 
 export type ProjectExportFormat = "csv" | "json";
 export type ProjectExportSplitMode = "none" | "documents" | "size";
+export type ProjectExportProfile = "simple" | "full";
 
 export type ProjectExportFile = {
   fileName: string;
@@ -26,6 +27,11 @@ type ExportDocument = {
   id: string;
   title: string;
   content: string | null;
+  sourceName: string | null;
+  sourceType: string | null;
+  sourceDate: string | null;
+  sourceAuthor: string | null;
+  sourceUrl: string | null;
   status: string;
   parseStatus: string;
   metadata: Record<string, unknown>;
@@ -90,9 +96,10 @@ export class ProjectExportService {
   async exportProject(
     projectId: string,
     format: ProjectExportFormat,
+    profile: ProjectExportProfile = "simple",
     tenantId = config.DEFAULT_TENANT_ID
   ): Promise<{ fileName: string; contentType: string; content: string }> {
-    const [file] = await this.exportProjectFiles(projectId, { format, split: "none" }, tenantId);
+    const [file] = await this.exportProjectFiles(projectId, { format, profile, split: "none" }, tenantId);
     return {
       fileName: file.fileName,
       contentType: file.contentType,
@@ -102,7 +109,7 @@ export class ProjectExportService {
 
   async exportProjectFiles(
     projectId: string,
-    options: { format: ProjectExportFormat; split?: ProjectExportSplitMode; maxBytes?: number },
+    options: { format: ProjectExportFormat; profile?: ProjectExportProfile; split?: ProjectExportSplitMode; maxBytes?: number },
     tenantId = config.DEFAULT_TENANT_ID
   ): Promise<ProjectExportFile[]> {
     const data = await this.loadProjectData(projectId, tenantId);
@@ -114,15 +121,16 @@ export class ProjectExportService {
         ? splitDocumentsByApproximateSize(data, options.maxBytes ?? 50 * 1024 * 1024)
         : [data.documents];
     const groups = documentGroups.length > 0 ? documentGroups : [[]];
+    const profile = options.profile ?? "simple";
     return groups.map((documents, index) => {
       const fileStem = buildSplitFileStem(safeName, documents, groups.length, index, split);
-      return buildExportFile({ ...data, documents }, options.format, fileStem);
+      return buildExportFile({ ...data, documents }, options.format, fileStem, profile);
     });
   }
 
   async exportProjectArchive(
     projectId: string,
-    options: { format: ProjectExportFormat; split?: ProjectExportSplitMode; maxBytes?: number },
+    options: { format: ProjectExportFormat; profile?: ProjectExportProfile; split?: ProjectExportSplitMode; maxBytes?: number },
     tenantId = config.DEFAULT_TENANT_ID
   ): Promise<ProjectExportArchive> {
     const files = await this.exportProjectFiles(projectId, options, tenantId);
@@ -138,9 +146,10 @@ export class ProjectExportService {
       fileName: file.fileName,
       content: Buffer.from(file.content, "utf8")
     })));
-    const firstStem = files[0]?.fileName.replace(/(?:-part-\d+)?-knowledge-export\.(?:csv|json)$/i, "") || "sag-project";
+    const firstStem = files[0]?.fileName.replace(/(?:-part-\d+)?-(?:knowledge-export|simple-import)\.(?:csv|json)$/i, "") || "sag-project";
+    const profile = options.profile ?? "simple";
     return {
-      fileName: `${firstStem}-knowledge-export-bundle.zip`,
+      fileName: `${firstStem}-${profile === "simple" ? "simple-import" : "knowledge-export"}-bundle.zip`,
       contentType: "application/zip",
       content: zipContent,
       bytes: zipContent.byteLength,
@@ -166,7 +175,7 @@ export class ProjectExportService {
     const [documentsResult, chunksResult, eventsResult, relationsResult] = await Promise.all([
       pool.query(
         `
-          select id, title, content, status, parse_status, metadata, archived_at, created_at, updated_at
+          select id, title, content, source_name, source_type, source_date, source_author, source_url, status, parse_status, metadata, archived_at, created_at, updated_at
           from documents
           where source_id = $1
           order by created_at, id
@@ -214,6 +223,11 @@ export class ProjectExportService {
       id: String(row.id),
       title: String(row.title),
       content: row.content == null ? null : String(row.content),
+      sourceName: row.source_name == null ? null : String(row.source_name),
+      sourceType: row.source_type == null ? null : String(row.source_type),
+      sourceDate: row.source_date == null ? null : String(row.source_date),
+      sourceAuthor: row.source_author == null ? null : String(row.source_author),
+      sourceUrl: row.source_url == null ? null : String(row.source_url),
       status: String(row.status),
       parseStatus: String(row.parse_status),
       metadata: asRecord(row.metadata),
@@ -276,26 +290,47 @@ export class ProjectExportService {
 
 export const projectExportService = new ProjectExportService();
 
-function buildExportFile(data: ProjectExportData, format: ProjectExportFormat, fileStem: string): ProjectExportFile {
+function buildExportFile(
+  data: ProjectExportData,
+  format: ProjectExportFormat,
+  fileStem: string,
+  profile: ProjectExportProfile
+): ProjectExportFile {
   const selected = selectDataForDocuments(data);
+  const suffix = profile === "simple" ? "simple-import" : "knowledge-export";
   const content = format === "csv"
-    ? `\uFEFF${buildCsv({
-        projectId: data.projectId,
-        projectName: data.project.name,
-        documents: selected.documents,
-        chunks: selected.chunks,
-        events: selected.events,
-        relations: selected.relations
-      })}`
-    : JSON.stringify(buildJsonPayload({
-        ...data,
-        documents: selected.documents,
-        chunks: selected.chunks,
-        events: selected.events,
-        relations: selected.relations
-      }), null, 2);
+    ? `\uFEFF${profile === "simple"
+        ? buildSimpleCsv({
+            documents: selected.documents,
+            chunks: selected.chunks,
+            events: selected.events,
+            relations: selected.relations
+          })
+        : buildCsv({
+            projectId: data.projectId,
+            projectName: data.project.name,
+            documents: selected.documents,
+            chunks: selected.chunks,
+            events: selected.events,
+            relations: selected.relations
+          })}`
+    : JSON.stringify(profile === "simple"
+        ? buildSimpleJsonPayload({
+            ...data,
+            documents: selected.documents,
+            chunks: selected.chunks,
+            events: selected.events,
+            relations: selected.relations
+          })
+        : buildJsonPayload({
+            ...data,
+            documents: selected.documents,
+            chunks: selected.chunks,
+            events: selected.events,
+            relations: selected.relations
+          }), null, 2);
   return {
-    fileName: `${fileStem}-knowledge-export.${format}`,
+    fileName: `${fileStem}-${suffix}.${format}`,
     contentType: format === "csv" ? "text/csv; charset=utf-8" : "application/json; charset=utf-8",
     content,
     bytes: Buffer.byteLength(content, "utf8"),
@@ -363,6 +398,158 @@ function buildJsonPayload(data: ProjectExportData) {
   };
 }
 
+
+function buildSimpleJsonPayload(data: ProjectExportData) {
+  const selected = selectDataForDocuments(data);
+  const relationsByEventId = groupBy(selected.relations, (relation) => relation.eventId);
+  const eventsByChunkId = groupBy(selected.events, (event) => event.chunkId ?? "");
+  const chunksByDocumentId = groupBy(selected.chunks, (chunk) => chunk.documentId ?? "");
+  const orphanEventsByDocumentId = groupBy(
+    selected.events.filter((event) => !event.chunkId),
+    (event) => event.documentId ?? ""
+  );
+
+  return {
+    documents: selected.documents.map((document) => ({
+      title: document.title,
+      source: cleanSource({
+        name: document.sourceName || document.title,
+        type: document.sourceType || undefined,
+        date: document.sourceDate || undefined,
+        author: document.sourceAuthor || undefined,
+        url: document.sourceUrl || undefined
+      }),
+      chunks: [
+        ...(chunksByDocumentId.get(document.id) ?? []).flatMap((chunk, chunkIndex) => {
+          const events = eventsByChunkId.get(chunk.id) ?? [];
+          return events.map((event, eventIndex) => simpleChunkFromEvent({
+            chunk,
+            event,
+            relations: relationsByEventId.get(event.id) ?? [],
+            chunkIndex,
+            eventIndex,
+            eventCount: events.length
+          }));
+        }),
+        ...(orphanEventsByDocumentId.get(document.id) ?? []).map((event, eventIndex) => simpleChunkFromEvent({
+          chunk: null,
+          event,
+          relations: relationsByEventId.get(event.id) ?? [],
+          chunkIndex: eventIndex,
+          eventIndex: 0,
+          eventCount: 1
+        }))
+      ]
+    }))
+  };
+}
+
+function simpleChunkFromEvent(input: {
+  chunk: ExportChunk | null;
+  event: ExportEvent;
+  relations: ExportRelation[];
+  chunkIndex: number;
+  eventIndex: number;
+  eventCount: number;
+}) {
+  const baseKey = input.chunk?.key || String(input.chunkIndex + 1);
+  return {
+    key: input.eventCount > 1 ? `${baseKey}:${input.eventIndex + 1}` : baseKey,
+    heading: input.chunk?.heading || input.event.title,
+    content: input.chunk?.rawContent || input.chunk?.content || input.event.content,
+    event: {
+      title: input.event.title,
+      summary: input.event.summary,
+      content: input.event.content,
+      category: input.event.category ?? "",
+      keywords: input.event.keywords,
+      entities: input.relations.map((relation) => ({
+        type: relation.entityType,
+        name: relation.entityName,
+        description: relation.entityDescription,
+        relation: relation.relationDescription || relation.entityDescription
+      }))
+    }
+  };
+}
+
+function buildSimpleCsv(input: {
+  documents: ExportDocument[];
+  chunks: ExportChunk[];
+  events: ExportEvent[];
+  relations: ExportRelation[];
+}): string {
+  const documentsById = new Map(input.documents.map((document) => [document.id, document]));
+  const chunksById = new Map(input.chunks.map((chunk) => [chunk.id, chunk]));
+  const relationsByEventId = groupBy(input.relations, (relation) => relation.eventId);
+  const headers = [
+    "文档标题",
+    "来源名称",
+    "来源类型",
+    "来源日期",
+    "来源作者",
+    "来源链接",
+    "切片编号",
+    "切片标题",
+    "原文切片",
+    "事件标题",
+    "事件摘要",
+    "事件内容",
+    "事件分类",
+    "关键词",
+    "实体类型",
+    "实体名称",
+    "实体说明",
+    "关系说明"
+  ];
+  const rows: string[][] = [];
+  const chunkEventCounters = new Map<string, number>();
+
+  for (const event of input.events) {
+    const document = event.documentId ? documentsById.get(event.documentId) : undefined;
+    const chunk = event.chunkId ? chunksById.get(event.chunkId) : undefined;
+    const chunkKey = chunk?.key || chunk?.id || event.id;
+    const countKey = event.chunkId || event.id;
+    const eventIndex = chunkEventCounters.get(countKey) ?? 0;
+    chunkEventCounters.set(countKey, eventIndex + 1);
+    const manualKey = eventIndex > 0 ? `${chunkKey}:${eventIndex + 1}` : chunkKey;
+    const relations = relationsByEventId.get(event.id) ?? [null];
+    for (const relation of relations) {
+      rows.push([
+        document?.title ?? "",
+        document?.sourceName || document?.title || "",
+        document?.sourceType ?? "",
+        document?.sourceDate ?? "",
+        document?.sourceAuthor ?? "",
+        document?.sourceUrl ?? "",
+        manualKey,
+        chunk?.heading || event.title,
+        chunk?.rawContent ?? chunk?.content ?? event.content,
+        event.title,
+        event.summary,
+        event.content,
+        event.category ?? "",
+        event.keywords.join(";"),
+        relation?.entityType ?? "",
+        relation?.entityName ?? "",
+        relation?.entityDescription ?? "",
+        relation?.relationDescription ?? ""
+      ]);
+    }
+  }
+
+  return [headers, ...rows]
+    .map((row) => row.map(csvCell).join(","))
+    .join("\r\n");
+}
+
+function cleanSource(source: { name?: string; type?: string; date?: string; author?: string; url?: string }) {
+  const cleaned = Object.fromEntries(
+    Object.entries(source).filter(([, value]) => typeof value === "string" && value.trim().length > 0)
+  );
+  return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+}
+
 function splitDocumentsByApproximateSize(data: ProjectExportData, maxBytes: number): ExportDocument[][] {
   const safeMaxBytes = Math.max(128 * 1024, maxBytes);
   const groups: ExportDocument[][] = [];
@@ -419,6 +606,11 @@ function buildCsv(input: {
     "project_name",
     "document_id",
     "document_title",
+    "source_name",
+    "source_type",
+    "source_date",
+    "source_author",
+    "source_url",
     "chunk_id",
     "system_chunk_id",
     "chunk_heading",
@@ -448,6 +640,11 @@ function buildCsv(input: {
         input.projectName,
         document?.id ?? event.documentId ?? "",
         document?.title ?? "",
+        document?.sourceName ?? "",
+        document?.sourceType ?? "",
+        document?.sourceDate ?? "",
+        document?.sourceAuthor ?? "",
+        document?.sourceUrl ?? "",
         chunk?.key ?? chunk?.id ?? "",
         chunk?.id ?? event.chunkId ?? "",
         chunk?.heading ?? "",

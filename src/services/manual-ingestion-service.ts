@@ -60,7 +60,7 @@ export class ManualIngestionService {
             ...entity,
             entityEmbedding: deterministicEmbedding(entity.name, SUPPORTED_EMBEDDING_DIMENSIONS),
             relationEmbedding: deterministicEmbedding(
-              entity.description || `${item.event.title} ${entity.name}`,
+              entity.relation || entity.description || `${item.event.title} ${entity.name}`,
               SUPPORTED_EMBEDDING_DIMENSIONS
             )
           }))
@@ -76,20 +76,30 @@ export class ManualIngestionService {
       await client.query("begin");
       await client.query(
         `
-          insert into documents (id, source_id, title, content, status, parse_status, metadata)
-          values ($1, $2, $3, $4, 'COMPLETED', 'COMPLETED', $5::jsonb)
+          insert into documents (
+            id, source_id, title, content, status, parse_status,
+            source_name, source_type, source_date, source_author, source_url,
+            metadata
+          )
+          values ($1, $2, $3, $4, 'COMPLETED', 'COMPLETED', $5, $6, $7, $8, $9, $10::jsonb)
         `,
         [
           documentId,
           source.id,
           input.document.title,
           documentContent,
+          input.document.source?.name ?? null,
+          input.document.source?.type ?? null,
+          input.document.source?.date ?? null,
+          input.document.source?.author ?? null,
+          input.document.source?.url ?? null,
           JSON.stringify({
             traceId,
             fileName: input.fileName ?? null,
             importedVia: "manual-structured",
             importFormat: input.format,
-            localEmbedding: true
+            localEmbedding: true,
+            source: input.document.source ?? null
           })
         ]
       );
@@ -195,7 +205,7 @@ export class ManualIngestionService {
               randomUUID(),
               item.event.id,
               saved.id,
-              entity.description,
+              entity.relation || entity.description,
               toVectorLiteral(entity.relationEmbedding),
               JSON.stringify({ importedVia: "manual-structured" })
             ]

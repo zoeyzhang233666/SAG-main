@@ -13,6 +13,11 @@ export interface DocumentRecord {
   id: string;
   sourceId: string;
   title: string;
+  sourceName?: string | null;
+  sourceType?: string | null;
+  sourceDate?: string | null;
+  sourceAuthor?: string | null;
+  sourceUrl?: string | null;
   status: string;
   parseStatus: string;
   metadata: Record<string, unknown>;
@@ -38,6 +43,7 @@ export interface ChunkRecord {
   references: string[];
   metadata: Record<string, unknown>;
   createdAt: string;
+  document?: DocumentRecord | null;
   embedding?: EmbeddingPreview | null;
 }
 
@@ -51,6 +57,7 @@ export interface EventRecord {
   content: string;
   rank: number;
   score?: number;
+  document?: DocumentRecord | null;
   entityCount?: number;
   entities?: EntityRecord[];
   titleEmbedding?: EmbeddingPreview | null;
