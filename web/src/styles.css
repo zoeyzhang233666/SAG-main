@@ -1,0 +1,1179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * 配色全部走 CSS 变量。
+ * 下面 :root 里的值只是「首屏默认（白天）」，页面加载后 theme.tsx 会立刻
+ * 把白天/夜间以及用户自定义的颜色写到 <html> 上覆盖它们。
+ */
+:root {
+  --background: 220 16% 97%;
+  --foreground: 218 41% 16%;
+  --muted: 220 16% 95%;
+  --muted-foreground: 216 16% 44%;
+  --accent: 24 100% 95%;
+  --accent-foreground: 18 78% 43%;
+  --primary: 18 74% 51%;
+  --primary-foreground: 0 0% 100%;
+  --border: 220 16% 91%;
+  --input: 220 16% 91%;
+  --ring: 18 74% 51%;
+  --radius: 0.95rem;
+
+  --chem-blue: #1b6fcc;
+  --chem-orange: #df5b25;
+  --chem-ink: #18243a;
+  --chem-canvas: #f5f6f8;
+  --chem-surface: rgba(255, 255, 255, 0.82);
+
+  /* 语义表面 / 文字 / 描边（白天默认） */
+  --surface-page: #f5f6f8;
+  --surface-raised: #ffffff;
+  --surface-panel: #ffffff;
+  --surface-inset: #f1f3f6;
+  --surface-glass: rgba(255, 255, 255, 0.78);
+  --hairline: #e4e7ec;
+  --accent-color: #df5b25;
+  --accent-soft: rgba(223, 91, 37, 0.12);
+  --accent-softer: rgba(223, 91, 37, 0.06);
+  --text-strong: #18243a;
+  --text: #18243a;
+  --text-muted: #5a6b82;
+  --shadow-strong: rgba(24, 36, 58, 0.12);
+  --shadow-soft: rgba(24, 36, 58, 0.07);
+}
+
+/* 夜间模式下 theme.tsx 没有覆盖的少数颜色 */
+.dark {
+  --chem-blue: #6f9bff;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 82% -18%, var(--accent-softer), transparent 38%),
+    var(--surface-page);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", Inter, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 240ms ease, color 240ms ease;
+}
+
+pre,
+code {
+  font-family: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", monospace;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 40%, transparent) transparent;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+.chem-app-shell {
+  grid-template-columns: var(--chem-left-rail-width, 280px) minmax(0, 1fr);
+  background:
+    radial-gradient(circle at 100% 0%, var(--accent-softer), transparent 34%),
+    var(--surface-page);
+}
+
+.chem-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1024px) {
+  .chem-content-grid[data-activity-panel="true"] {
+    grid-template-columns: minmax(0, 1fr) var(--chem-right-panel-width, 360px);
+  }
+}
+
+.chem-sidebar {
+  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  box-shadow: 12px 0 30px var(--shadow-soft);
+  backdrop-filter: blur(18px);
+}
+
+.chem-sidebar-collapsed .chem-sidebar-full-content {
+  display: none;
+}
+
+.chem-sidebar-resize-handle,
+.chem-activity-resize-handle {
+  position: absolute;
+  top: 0;
+  z-index: 30;
+  width: 10px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.chem-sidebar-resize-handle {
+  right: -5px;
+}
+
+.chem-activity-resize-handle {
+  left: -5px;
+}
+
+.chem-sidebar-resize-handle::after,
+.chem-activity-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  content: "";
+  background: transparent;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.chem-sidebar-resize-handle:hover::after,
+.chem-activity-resize-handle:hover::after,
+.chem-panel-resizing .chem-sidebar-resize-handle::after,
+.chem-panel-resizing .chem-activity-resize-handle::after {
+  background: color-mix(in srgb, var(--accent-color) 52%, transparent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.chem-panel-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.chem-sidebar-collapse-button {
+  position: absolute;
+  top: 20px;
+  right: 52px;
+  z-index: 35;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  box-shadow: 0 8px 18px var(--shadow-soft);
+}
+
+.chem-sidebar-collapse-button:hover {
+  color: var(--text-strong);
+  border-color: color-mix(in srgb, var(--accent-color) 32%, transparent);
+}
+
+.chem-activity-panel-collapsed {
+  background: color-mix(in srgb, var(--surface-panel) 82%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.chem-activity-collapsed-label {
+  writing-mode: vertical-rl;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chem-topbar {
+  background: color-mix(in srgb, var(--surface-panel) 74%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.chem-main-workspace {
+  background:
+    radial-gradient(circle at 70% 0%, var(--accent-softer), transparent 34%),
+    color-mix(in srgb, var(--surface-page) 72%, transparent);
+}
+
+.chemcloud-mark {
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--accent-color) 82%, #ffffff) 0%,
+    var(--accent-color) 52%,
+    color-mix(in srgb, var(--accent-color) 78%, #000000) 100%);
+  box-shadow:
+    0 8px 22px var(--accent-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.chemcloud-mark svg {
+  width: 68%;
+  height: 68%;
+}
+
+.chem-system-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface-inset);
+  padding: 7px 11px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chem-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22a06b;
+  box-shadow: 0 0 0 4px rgba(34, 160, 107, 0.12);
+}
+
+.chem-workspace-tabs {
+  background: var(--surface-inset);
+  box-shadow: inset 0 1px 2px var(--shadow-soft);
+}
+
+.chem-tab-active {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  box-shadow:
+    0 3px 10px var(--shadow-soft),
+    0 0 0 1px var(--accent-soft);
+}
+
+.chem-tab-active svg {
+  color: var(--accent-color);
+}
+
+.chem-new-space {
+  background: color-mix(in srgb, var(--surface-raised) 62%, transparent);
+  transition: 160ms ease;
+}
+
+.chem-new-space:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 38%, transparent);
+  background: var(--accent-softer);
+  color: var(--accent-color);
+  transform: translateY(-1px);
+}
+
+/* 选中项目：取消左侧细色条，改用强调色描边 + 柔光高科技风格（#7） */
+.chem-project-active {
+  background:
+    linear-gradient(135deg, var(--accent-soft), transparent 70%),
+    color-mix(in srgb, var(--accent-color) 8%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 34%, transparent),
+    0 6px 18px color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+
+.chem-section-header {
+  background: color-mix(in srgb, var(--surface-panel) 50%, transparent);
+}
+
+.chem-conversation {
+  background:
+    radial-gradient(circle at 50% 12%, var(--accent-softer), transparent 27%),
+    color-mix(in srgb, var(--surface-page) 40%, transparent);
+}
+
+.chem-conversation-scroll {
+  scrollbar-gutter: stable;
+}
+
+.chem-welcome {
+  background:
+    radial-gradient(circle at 50% -15%, var(--accent-soft), transparent 35%),
+    var(--surface-raised);
+  box-shadow: 0 22px 60px var(--shadow-soft);
+}
+
+.chem-prompt-card {
+  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+  color: var(--text-muted);
+  transition: 160ms ease;
+}
+
+.chem-prompt-card:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 30%, transparent);
+  background: var(--accent-softer);
+  color: var(--text-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px var(--shadow-soft);
+}
+
+.chem-message {
+  box-shadow: 0 5px 18px var(--shadow-soft);
+}
+
+.chem-message-assistant {
+  border-top-left-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.chem-message-user {
+  border-top-right-radius: 6px;
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--accent-color) 88%, #ffffff),
+    var(--accent-color));
+  box-shadow: 0 8px 20px var(--accent-soft);
+}
+
+.chem-message-user,
+.chem-message-user .chem-markdown,
+.chem-message-user .chem-markdown *,
+.chem-message-user .chem-outline-row,
+.chem-message-user .chem-outline-toggle {
+  color: #fff;
+}
+
+.chem-message-user .chem-markdown h1,
+.chem-message-user .chem-markdown h2,
+.chem-message-user .chem-markdown h3,
+.chem-message-user .chem-markdown h4,
+.chem-message-user .chem-markdown h5,
+.chem-message-user .chem-markdown h6 {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.chem-message-user .chem-outline-toggle {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.chem-message-user .chem-outline-row::before {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.chem-message-user .chem-markdown code {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.chem-message-user .chem-markdown a {
+  color: #fff;
+  text-decoration-color: rgba(255, 255, 255, 0.72);
+}
+
+/* 用户气泡内的 Mermaid 图与代码块拥有独立的浅底配色，不能被上面「全部白字」规则吞掉，
+   否则会出现白底白字、白色图标看不清的情况（截图问题 #4）。这里恢复其原本配色。 */
+.chem-message-user .chem-markdown .chem-mermaid,
+.chem-message-user .chem-markdown .chem-mermaid * {
+  color: var(--text);
+}
+
+.chem-message-user .chem-markdown .chem-mermaid-toolbar .font-semibold,
+.chem-message-user .chem-markdown .chem-mermaid-toolbar .text-foreground {
+  color: var(--text-strong);
+}
+
+.chem-message-user .chem-markdown .chem-mermaid-toolbar .text-muted-foreground,
+.chem-message-user .chem-markdown .chem-mermaid-pending {
+  color: var(--text-muted);
+}
+
+.chem-message-user .chem-markdown .chem-mermaid-toolbar button {
+  color: var(--text-strong);
+}
+
+.chem-message-user .chem-markdown .chem-mermaid-toolbar button svg {
+  color: var(--chem-blue);
+}
+
+.chem-message-user .chem-markdown .chem-mermaid-toolbar button:hover {
+  color: var(--accent-color);
+}
+
+.chem-message-user .chem-markdown .chem-mermaid-toolbar button:hover svg {
+  color: var(--accent-color);
+}
+
+.chem-message-user .chem-markdown .chem-mermaid-error {
+  color: #d9603a;
+}
+
+/* 代码块本身是深色底，文字应保持浅色，而非被强制成纯白后丢失语义高亮层次。 */
+.chem-message-user .chem-markdown .chem-code-block pre,
+.chem-message-user .chem-markdown .chem-code-block code {
+  color: #e5edf7;
+}
+
+.chem-message-user .chem-markdown .chem-code-toolbar {
+  color: #aebbd0;
+}
+
+.chem-message-user .chem-markdown .chem-code-toolbar button {
+  color: #d7e0ed;
+}
+
+.chem-markdown {
+  min-width: 0;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.chem-markdown > :first-child {
+  margin-top: 0;
+}
+
+.chem-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.chem-markdown h1,
+.chem-markdown h2,
+.chem-markdown h3,
+.chem-markdown h4,
+.chem-markdown h5,
+.chem-markdown h6 {
+  color: var(--text-strong);
+  font-weight: 720;
+  line-height: 1.35;
+  scroll-margin-top: 1rem;
+}
+
+.chem-markdown h1 {
+  margin: 1.15rem 0 0.55rem;
+  font-size: 1.45rem;
+  letter-spacing: 0;
+}
+
+.chem-markdown h2 {
+  margin: 1rem 0 0.5rem;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 0.3rem;
+  font-size: 1.2rem;
+}
+
+.chem-markdown h3 {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.chem-markdown h4,
+.chem-markdown h5,
+.chem-markdown h6 {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.chem-markdown p {
+  margin: 0.42rem 0;
+  white-space: pre-wrap;
+}
+
+.chem-markdown ul,
+.chem-markdown ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.chem-markdown ul {
+  list-style: disc;
+}
+
+.chem-markdown ol {
+  list-style: decimal;
+}
+
+.chem-markdown li {
+  margin: 0.2rem 0;
+  padding-left: 0.15rem;
+}
+
+.chem-markdown li > ul,
+.chem-markdown li > ol {
+  margin-block: 0.15rem;
+}
+
+.chem-md-heading {
+  position: relative;
+}
+
+.chem-md-heading-toggle {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chem-md-heading-toggle svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.chem-md-heading-toggle:hover svg {
+  color: var(--accent-color);
+}
+
+.chem-md-heading-collapsed {
+  opacity: 0.86;
+}
+
+.chem-markdown .chem-outline-list {
+  margin: 0.5rem 0;
+  padding-left: 0;
+  list-style: none;
+  counter-reset: chem-outline;
+}
+
+.chem-markdown .chem-outline-list .chem-outline-list {
+  margin: 0.16rem 0 0.18rem 0.65rem;
+  border-left: 2px solid var(--hairline);
+  padding-left: 0.7rem;
+}
+
+.chem-markdown .chem-outline-item {
+  position: relative;
+  margin: 0.16rem 0;
+  padding-left: 0;
+}
+
+.chem-outline-row {
+  position: relative;
+  display: flex;
+  min-height: 1.45rem;
+  align-items: flex-start;
+  gap: 0.25rem;
+  color: var(--text);
+}
+
+.chem-outline-row::before {
+  content: "";
+  position: absolute;
+  top: 0.72rem;
+  left: 1.55rem;
+  width: 0.34rem;
+  height: 0.34rem;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--accent-color);
+  z-index: 2;
+}
+
+.chem-outline-toggle,
+.chem-outline-toggle-placeholder {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 1.1rem;
+  width: 1.1rem;
+  height: 1.45rem;
+}
+
+.chem-outline-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: var(--surface-raised);
+  padding: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chem-outline-toggle:hover {
+  color: var(--accent-color);
+}
+
+.chem-outline-content {
+  min-width: 0;
+  padding-left: 0.78rem;
+}
+
+.chem-outline-content > p:first-child {
+  margin-top: 0;
+}
+
+.chem-outline-content > p:last-child {
+  margin-bottom: 0;
+}
+
+.chem-outline-children {
+  margin-left: 1.1rem;
+}
+
+.chem-outline-list .chem-outline-list > .chem-outline-item > .chem-outline-row::before {
+  background: #a87800;
+}
+
+.chem-outline-list .chem-outline-list .chem-outline-list > .chem-outline-item > .chem-outline-row::before {
+  background: #14a647;
+}
+
+.chem-outline-list .chem-outline-list .chem-outline-list .chem-outline-list > .chem-outline-item > .chem-outline-row::before {
+  background: var(--chem-blue);
+}
+
+.chem-outline-list .chem-outline-list .chem-outline-list .chem-outline-list .chem-outline-list > .chem-outline-item > .chem-outline-row::before {
+  background: #8a5cf6;
+}
+
+/* 取消左侧色条，改为整体圆角描边的强调色卡片（#6） */
+.chem-markdown blockquote {
+  position: relative;
+  margin: 0.7rem 0;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 22%, transparent);
+  border-radius: 10px;
+  background: var(--accent-softer);
+  padding: 0.55rem 0.9rem;
+  color: var(--text-muted);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent-color) 10%, transparent);
+}
+
+.chem-markdown a {
+  color: var(--chem-blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.chem-markdown strong {
+  color: var(--text-strong);
+  font-weight: 720;
+}
+
+.chem-markdown em {
+  color: var(--text-muted);
+}
+
+.chem-markdown del {
+  opacity: 0.7;
+}
+
+.chem-markdown hr {
+  margin: 0.9rem 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.chem-markdown :not(pre) > code {
+  border: 1px solid var(--hairline);
+  border-radius: 5px;
+  background: var(--surface-inset);
+  padding: 0.12rem 0.35rem;
+  color: var(--accent-color);
+  font-size: 0.82em;
+}
+
+.chem-table-wrap {
+  margin: 0.8rem 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow:
+    0 10px 24px var(--shadow-soft),
+    inset 0 1px 0 color-mix(in srgb, var(--surface-raised) 90%, #ffffff);
+}
+
+.chem-markdown table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.82rem;
+}
+
+.chem-markdown thead {
+  background: var(--surface-inset);
+}
+
+.chem-markdown th,
+.chem-markdown td {
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  padding: 0.62rem 0.78rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.chem-markdown th + th,
+.chem-markdown td + td {
+  border-left: 1px solid var(--hairline);
+}
+
+.chem-markdown th {
+  color: var(--text-strong);
+  font-size: 0.76rem;
+  font-weight: 720;
+  letter-spacing: 0;
+}
+
+.chem-markdown tbody tr {
+  transition: background 130ms ease, box-shadow 130ms ease;
+}
+
+.chem-markdown tbody tr:hover {
+  background: var(--accent-softer);
+}
+
+.chem-markdown tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.chem-markdown td .chem-outline-list {
+  margin: 0.1rem 0;
+}
+
+.chem-markdown td .chem-outline-row {
+  min-height: 1.35rem;
+}
+
+.chem-markdown td .chem-outline-content {
+  padding-left: 0.62rem;
+}
+
+.chem-markdown .contains-task-list {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+
+.chem-markdown input[type="checkbox"] {
+  margin-right: 0.45rem;
+}
+
+.chem-citation-link {
+  display: inline-flex;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  margin-inline: 0.1rem;
+  transform: translateY(-1px);
+  border: 1px solid var(--hairline);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  padding-inline: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.chem-citation-link:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, transparent);
+  background: var(--accent-softer);
+  color: var(--accent-color);
+}
+
+.chem-web-citation {
+  display: inline-flex;
+  min-width: 1.6rem;
+  height: 1.35rem;
+  align-items: center;
+  justify-content: center;
+  margin-inline: 0.1rem;
+  transform: translateY(-1px);
+  border: 1px solid color-mix(in srgb, var(--chem-blue) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chem-blue) 12%, transparent);
+  padding-inline: 0.42rem;
+  color: var(--chem-blue);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.chem-code-block {
+  margin: 0.75rem 0;
+  overflow: hidden;
+  border: 1px solid #25334b;
+  border-radius: 10px;
+  background: #111827;
+  box-shadow: 0 8px 22px rgba(17, 24, 39, 0.12);
+}
+
+.chem-code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  background: #182235;
+  padding: 0.4rem 0.65rem;
+  color: #aebbd0;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.chem-code-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 6px;
+  padding: 0.25rem 0.45rem;
+  color: #d7e0ed;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.chem-code-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chem-code-block pre {
+  max-height: 34rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.85rem;
+  color: #e5edf7;
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.chem-mermaid {
+  margin: 0.85rem 0;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: 0 12px 30px var(--shadow-soft);
+}
+
+.chem-mermaid-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--surface-panel) 82%, transparent);
+  padding: 0.65rem 0.75rem;
+}
+
+.chem-mermaid-toolbar button {
+  border-color: var(--hairline);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px var(--shadow-soft);
+}
+
+.chem-mermaid-toolbar button svg {
+  color: var(--chem-blue);
+}
+
+.chem-mermaid-toolbar button:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
+  background: var(--accent-softer);
+  color: var(--accent-color);
+}
+
+.chem-mermaid-toolbar button:hover svg {
+  color: var(--accent-color);
+}
+
+.chem-mermaid-viewport {
+  min-height: 18rem;
+  max-height: 56rem;
+  overflow: auto;
+  background-image: radial-gradient(color-mix(in srgb, var(--text-muted) 22%, transparent) 0.7px, transparent 0.7px);
+  background-size: 18px 18px;
+  padding: 2rem;
+}
+
+.chem-mermaid-canvas {
+  width: max-content;
+  min-width: 100%;
+  transform-origin: top left;
+  transition: transform 140ms ease;
+}
+
+.chem-mermaid-canvas svg {
+  display: block;
+  max-width: none !important;
+  height: auto;
+  margin: 0 auto;
+}
+
+.chem-mermaid-pending {
+  display: flex;
+  min-height: 11rem;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.chem-mermaid-error {
+  padding: 1rem;
+  color: #d9603a;
+}
+
+.chem-mermaid-fullscreen-open {
+  overflow: hidden;
+}
+
+.chem-mermaid-fullscreen {
+  position: fixed;
+  inset: 18px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.35);
+}
+
+.chem-mermaid-fullscreen::before {
+  content: "";
+  position: fixed;
+  inset: -18px;
+  z-index: -1;
+  background: var(--surface-raised);
+}
+
+.chem-mermaid-fullscreen .chem-mermaid-viewport {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+  background-color: var(--surface-raised);
+  padding: 2.5rem;
+}
+
+.chem-mermaid-fullscreen .chem-mermaid-pending {
+  flex: 1;
+  min-height: 0;
+  background: var(--surface-raised);
+}
+
+.chem-composer-wrap {
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--surface-page) 90%, transparent));
+  backdrop-filter: blur(16px);
+}
+
+.chem-composer {
+  background: var(--surface-raised);
+  box-shadow:
+    0 16px 36px var(--shadow-soft),
+    0 0 0 1px var(--hairline);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.chem-composer:focus-within {
+  border-color: color-mix(in srgb, var(--accent-color) 42%, transparent);
+  box-shadow:
+    0 18px 40px var(--shadow-soft),
+    0 0 0 3px var(--accent-soft);
+}
+
+.chem-assets-rail,
+.chem-activity-panel {
+  background: color-mix(in srgb, var(--surface-panel) 70%, transparent);
+}
+
+/* 文档栏宽度可拖动（#11）：大屏下用 CSS 变量驱动栅格列宽 */
+@media (min-width: 1024px) {
+  .chem-documents-grid {
+    grid-template-columns: var(--chem-doc-rail-width, 340px) minmax(0, 1fr);
+  }
+}
+
+.chem-doc-rail-resize-handle {
+  position: absolute;
+  top: 0;
+  z-index: 30;
+  width: 10px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.chem-doc-rail-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  content: "";
+  background: transparent;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.chem-doc-rail-resize-handle:hover::after,
+.chem-panel-resizing .chem-doc-rail-resize-handle::after {
+  background: color-mix(in srgb, var(--accent-color) 52%, transparent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.chem-result-tabs {
+  width: fit-content;
+  box-shadow: 0 4px 16px var(--shadow-soft);
+}
+
+.chem-graph-workspace {
+  background:
+    radial-gradient(circle at 75% 20%, var(--accent-softer), transparent 28%),
+    transparent;
+}
+
+.chem-metric {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-raised);
+  box-shadow: 0 4px 14px var(--shadow-soft);
+}
+
+.chem-metric::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 0 0 0 34px;
+  background: linear-gradient(145deg, var(--accent-soft), transparent);
+}
+
+.chem-settings-card {
+  background: var(--surface-raised);
+  box-shadow: 0 8px 24px var(--shadow-soft);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent-color);
+}
+
+select {
+  border-radius: 10px !important;
+}
+
+/* React Flow 在夜间模式下的控件适配 */
+.dark .react-flow__controls-button {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--text);
+  fill: var(--text);
+}
+
+.dark .react-flow__controls-button:hover {
+  background: var(--surface-inset);
+}
+
+.dark .react-flow__attribution {
+  background: transparent;
+}
+
+@media (max-width: 1023px) {
+  .chem-welcome {
+    margin-block: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .chem-app-shell {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .chem-workspace-tabs {
+    min-width: 0;
+  }
+}
+
+/* ===== 知识超图节点：取消左侧色条，改用高科技角标 + 发光描边 ===== */
+.sag-graph-node {
+  position: relative;
+  overflow: visible !important;
+  isolation: isolate;
+}
+
+/* 顶部一条极细的强调色渐变线（期刊图注式），取代原先的左侧色条 */
+.sag-graph-node::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  height: 2px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg, transparent, var(--node-accent, currentColor), transparent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* 隐藏 React Flow 自带的连接点小黑点（卡片上/下方那个点），连线仍连到卡片边缘 */
+.sag-graph-node .react-flow__handle,
+.react-flow__handle {
+  opacity: 0 !important;
+  width: 2px;
+  height: 2px;
+  min-width: 2px;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+  transform: none !important;
+}
+
+.sag-graph-node .react-flow__handle-top {
+  top: 0;
+  left: 50%;
+}
+
+.sag-graph-node .react-flow__handle-right {
+  left: 100%;
+  right: auto;
+  top: 50%;
+}
+
+.sag-graph-node .react-flow__handle-bottom {
+  bottom: auto;
+  left: 50%;
+  top: 100%;
+}
+
+.sag-graph-node .react-flow__handle-left {
+  left: 0;
+  top: 50%;
+}
+
+/* 实体类型列表：默认高度 + 可上下拖动改变长度（#8） */
+.react-flow__edge-path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.react-flow__edge,
+.react-flow__edge-path,
+.react-flow__edge-interaction {
+  pointer-events: none;
+}
+
+.sag-entity-type-list {
+  height: 128px;
+  min-height: 64px;
+  max-height: 60vh;
+  resize: vertical;
+}
+
+/* ===== 画布拖动手感修复：抓手光标，而不是“点击手指” ===== */
+.react-flow__pane { cursor: grab; }
+.react-flow__pane.draggable:active,
+.react-flow__pane.dragging { cursor: grabbing !important; }
+.sag-graph-node { cursor: grab; }
+.sag-graph-node:active { cursor: grabbing; }
