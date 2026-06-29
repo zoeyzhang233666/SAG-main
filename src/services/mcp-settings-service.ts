@@ -40,7 +40,7 @@ export function getPublicMcpSettings(): PublicMcpSettings {
       },
       {
         name: "sag_search",
-        description: "对 MCP server 配置绑定的项目执行 SAG 多路检索，并返回内部检索 trace。支持 searchMode=fast 使用实体全文匹配 + qwen3-rerank 极速检索。",
+        description: "对 MCP server 配置绑定的项目执行 SAG 多路检索，并返回内部检索 trace。支持 searchMode=fast 使用实体全文匹配 + rerank 模型极速检索。",
         inputSchema: objectSchema({
           query: { type: "string", minLength: 1, description: "检索问题或 Agent 改写后的搜索语句。" },
           strategy: { type: "string", enum: ["vector", "multi"], description: "可选。vector 为纯向量，multi 为 SAG 多路检索。" },

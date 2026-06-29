@@ -211,3 +211,18 @@ embedding 模型是云端 API，不需要显卡，也不需要本地部署。推
 修复：embedding 请求现在**默认不发送 `dimensions`**（bge-m3 原生输出 1024 维，发回的维度仍会被校验是否等于 1024）。无需任何额外设置，重新 `npm run build` 并重启即可。
 
 仅当你改用支持自定义维度、且原生维度不是 1024 的模型（如 OpenAI `text-embedding-3-*`）需要降维到 1024 时，才在环境变量里设 `EMBEDDING_SEND_DIMENSIONS=true` 重新发送该参数。
+
+## rerank（重排）模型配置
+
+rerank 只在「快速」检索模式使用；「标准」模式由 LLM 重排。没有可用的远程 rerank 时会自动降级为本地关键词+向量分数重排，**不是必需项**。
+
+默认 rerank 复用问答 LLM 的地址和 key。如果你的问答 LLM 服务商没有 rerank 接口（如某些中转站只提供对话模型），可以让 rerank 独立指向其它服务商：
+
+```bash
+# 例：用硅基流动免费的 BAAI/bge-reranker-v2-m3（与 embedding 同一个 key 即可）
+RERANK_MODEL=BAAI/bge-reranker-v2-m3
+RERANK_BASE_URL=https://api.siliconflow.cn/v1   # 留空则回退到 embedding 地址
+RERANK_API_KEY=<硅基流动的 key>
+```
+
+填了 `RERANK_API_KEY` 就用这组独立配置；否则回退到 LLM 的地址/key（旧行为）。接口路径默认拼成单数 `/rerank`（硅基流动、Cohere、Jina、Voyage 等的标准），若 `RERANK_BASE_URL` 已以 `/rerank` 或 `/reranks` 结尾则原样使用。改完需 `npm run build` 并重启。

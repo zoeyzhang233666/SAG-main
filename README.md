@@ -97,7 +97,7 @@ In the Chat tab, you can ask continuous questions over the current project. Each
 
 SAG provides two modes:
 
-- **Fast mode**: directly matches the query against the entity store using full-text / BM25 search, expands through SAG multi-hop retrieval, and finally uses `qwen3-rerank` to select top-k. This mode does not use an LLM to extract query entities or filter candidates, so it is much faster.
+- **Fast mode**: directly matches the query against the entity store using full-text / BM25 search, expands through SAG multi-hop retrieval, and finally uses the rerank model (defaults to `qwen3-rerank`; switchable to another provider via the `RERANK_*` env vars, e.g. SiliconFlow's free `BAAI/bge-reranker-v2-m3`; falls back to local reranking when none is available) to select top-k. This mode does not use an LLM to extract query entities or filter candidates, so it is much faster.
 - **Standard mode**: uses an LLM to extract query entities, then runs SAG multi-route recall and LLM reranking. This is useful when you want to compare the higher-precision pipeline.
 
 Both modes are more than ordinary vector search because both use SAG's event/entity index and SQL multi-hop expansion.
@@ -210,6 +210,9 @@ LLM_BASE_URL=https://api.302ai.cn/v1
 LLM_MODEL=qwen3.6-flash
 
 RERANK_MODEL=qwen3-rerank
+# rerank can point to a different provider (leave empty to reuse the LLM config)
+RERANK_BASE_URL=
+RERANK_API_KEY=
 DEFAULT_SEARCH_MODE=fast
 ```
 

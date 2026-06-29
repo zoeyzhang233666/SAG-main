@@ -27,6 +27,10 @@ const envSchema = z.object({
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
   LLM_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
   RERANK_MODEL: z.string().min(1).default("qwen3-rerank"),
+  // rerank 可使用与问答 LLM 不同的服务商：填了 RERANK_API_KEY 就用这组独立配置，
+  // 否则回退到 LLM 的地址/key（旧行为）。地址留空时回退到 embedding 地址，再回退到 LLM 地址。
+  RERANK_BASE_URL: z.string().default(""),
+  RERANK_API_KEY: z.string().default(""),
   RERANK_INSTRUCT: z.string().min(1).default("Given a user question, rank SAG event candidates by relevance and usefulness for retrieval-augmented question answering."),
   DEFAULT_SEARCH_MODE: z.enum(["standard", "fast"]).default("fast"),
   INGEST_CONCURRENCY: z.coerce.number().int().positive().max(20).default(5),

@@ -23,7 +23,8 @@ export class QwenRerankClient implements RerankClient {
       return [];
     }
     const settings = await aiSettingsService.getRuntimeSettings();
-    if (!settings.hasRemoteLlm) {
+    const target = resolveRerankTarget(settings);
+    if (!target.apiKey) {
       const ids = localScoreRerank(input.query, input.candidates, input.topK);
       const log = createModelCallLogger({
         kind: "llm",
@@ -40,18 +41,18 @@ export class QwenRerankClient implements RerankClient {
     }
 
     try {
-      return await this.remoteRerank(settings, input);
+      return await this.remoteRerank(target, settings, input);
     } catch {
       return localScoreRerank(input.query, input.candidates, input.topK);
     }
   }
 
-  private async remoteRerank(settings: AiRuntimeSettings, input: {
+  private async remoteRerank(target: { baseUrl: string; apiKey: string }, settings: AiRuntimeSettings, input: {
     query: string;
     candidates: EventRecord[];
     topK: number;
   }): Promise<string[]> {
-    const url = buildRerankUrl(settings.llmBaseUrl);
+    const url = buildRerankUrl(target.baseUrl);
     const documents = input.candidates.map((candidate) => eventToRerankDocument(candidate, input.candidates.length));
     const body = {
       model: config.RERANK_MODEL,
@@ -89,7 +90,7 @@ export class QwenRerankClient implements RerankClient {
           method: "POST",
           signal: controller.signal,
           headers: {
-            Authorization: `Bearer ${settings.llmApiKey}`,
+            Authorization: `Bearer ${target.apiKey}`,
             "Content-Type": "application/json"
           },
           body: JSON.stringify(body)
@@ -140,13 +141,31 @@ export function buildRerankUrl(baseUrl: string): string {
     .trim()
     .replace(/\/+$/, "")
     .replace(/\/chat\/completions$/i, "");
-  if (/\/v1$/i.test(base)) {
-    return `${base}/reranks`;
-  }
-  if (/\/reranks$/i.test(base)) {
+  // 已经是 rerank 端点（单数 /rerank 或复数 /reranks）则原样使用
+  if (/\/reranks?$/i.test(base)) {
     return base;
   }
-  return `${base}/v1/reranks`;
+  // 默认用单数 /rerank（硅基流动、Cohere、Jina、Voyage 等的标准）
+  if (/\/v1$/i.test(base)) {
+    return `${base}/rerank`;
+  }
+  return `${base}/v1/rerank`;
+}
+
+/**
+ * 解析 rerank 调用使用的服务商：
+ * - 填了 RERANK_API_KEY → 用这组独立配置（地址留空时回退到 embedding 地址，再回退到 LLM 地址）
+ * - 否则用问答 LLM 的地址/key（旧行为）
+ */
+function resolveRerankTarget(settings: AiRuntimeSettings): { baseUrl: string; apiKey: string } {
+  const dedicatedKey = config.RERANK_API_KEY.trim();
+  if (dedicatedKey.length > 0) {
+    return {
+      baseUrl: config.RERANK_BASE_URL.trim() || settings.embeddingBaseUrl || settings.llmBaseUrl,
+      apiKey: dedicatedKey
+    };
+  }
+  return { baseUrl: settings.llmBaseUrl, apiKey: settings.llmApiKey };
 }
 
 function eventToRerankDocument(event: EventRecord, candidateCount: number): string {

@@ -5132,7 +5132,7 @@ function SearchPanel(props: {
         </div>
         <div className="basis-full text-xs text-muted-foreground">
           {props.searchMode === "fast"
-            ? t("实体全文匹配 + qwen3-rerank，不走 LLM 过滤。", "Entity full-text matching + qwen3-rerank, without LLM filtering.")
+            ? t("实体全文匹配 + rerank 模型，不走 LLM 过滤。", "Entity full-text matching + rerank model, without LLM filtering.")
             : t("LLM 抽取查询实体 + LLM 重排，适合对比质量。", "LLM extracts query entities + LLM reranking, useful for quality comparison.")}
         </div>
       </div>
@@ -5500,7 +5500,7 @@ function SettingsPanel(props: {
           <div className="text-sm font-medium">{t("默认检索模式", "Default search mode")}</div>
           <div className="flex w-fit rounded-md border border-border bg-background p-0.5">
             {([
-              { value: "fast" as const, label: t("极速模式", "Fast mode"), description: t("实体全文匹配 + qwen3-rerank，不调用 LLM 抽 key 和过滤。", "Entity full-text matching + qwen3-rerank, without LLM key extraction or filtering.") },
+              { value: "fast" as const, label: t("极速模式", "Fast mode"), description: t("实体全文匹配 + rerank 模型，不调用 LLM 抽 key 和过滤。", "Entity full-text matching + rerank model, without LLM key extraction or filtering.") },
               { value: "standard" as const, label: t("标准模式", "Standard mode"), description: t("LLM 抽取查询实体 + LLM 重排，适合质量对比。", "LLM extracts query entities + LLM reranking, useful for quality comparison.") }
             ]).map((mode) => (
               <button
@@ -5518,7 +5518,7 @@ function SettingsPanel(props: {
           </div>
           <div className="text-xs leading-5 text-muted-foreground">
             {defaultSearchMode === "fast"
-              ? t("默认使用极速链路：问题直接匹配实体库，最后用 qwen3-rerank 选 top-k。", "Default fast path: match the question directly against the entity store, then use qwen3-rerank to select top-k.")
+              ? t("默认使用极速链路：问题直接匹配实体库，最后用 rerank 模型选 top-k。", "Default fast path: match the question directly against the entity store, then use the rerank model to select top-k.")
               : t("默认使用标准链路：先由 LLM 识别查询实体，最后由 LLM 选择候选事件。", "Default standard path: first let the LLM identify query entities, then let the LLM choose candidate events.")}
           </div>
         </div>

@@ -263,7 +263,7 @@ SAG 使用 TypeScript 贯穿前后端。前端是 React + Vite + Tailwind CSS �
 
 SAG 提供两种模式：
 
-- **极速模式**：直接用 query 在实体库做全文 / BM25 匹配，结合 SAG 多跳扩展，最后用 `qwen3-rerank` 选择 top-k。这个模式不需要 LLM 抽 query 实体，也不需要 LLM 过滤候选，速度更快。
+- **极速模式**：直接用 query 在实体库做全文 / BM25 匹配，结合 SAG 多跳扩展，最后用 rerank 模型（默认 `qwen3-rerank`，可通过 `RERANK_*` 环境变量改用其它服务商，如硅基流动免费的 `BAAI/bge-reranker-v2-m3`；无可用 rerank 时自动降级为本地重排）选择 top-k。这个模式不需要 LLM 抽 query 实体，也不需要 LLM 过滤候选，速度更快。
 - **标准模式**：用 LLM 抽取 query 实体，再走 SAG 多路召回和 LLM 精排，适合对比更高精度链路。
 
 两种模式都不是普通向量搜索，因为它们都使用 SAG 的 event/entity 索引和 SQL 多跳扩展。
@@ -372,6 +372,9 @@ LLM_BASE_URL=https://api.302ai.cn/v1
 LLM_MODEL=qwen3.6-flash
 
 RERANK_MODEL=qwen3-rerank
+# rerank 可独立指向其它服务商（留空则复用 LLM 配置）
+RERANK_BASE_URL=
+RERANK_API_KEY=
 DEFAULT_SEARCH_MODE=fast
 ```
 

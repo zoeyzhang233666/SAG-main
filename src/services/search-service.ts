@@ -335,7 +335,7 @@ export class SearchService {
     ), emit, {
       title: searchMode === "fast" ? "Rerank 模型重排" : "LLM 重排",
       detail: searchMode === "fast"
-        ? "用 qwen3-rerank 对候选事件排序，不调用 LLM 过滤。"
+        ? "用 rerank 模型对候选事件排序，不调用 LLM 过滤。"
         : "让 LLM 根据问题从候选事件中选择最终事件。"
     });
     if (selectedIds.length === 0) {
