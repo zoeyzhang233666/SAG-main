@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { deterministicEmbedding } from "../ai/embedding-client.js";
-import { config, SUPPORTED_EMBEDDING_DIMENSIONS } from "../config/env.js";
+import { embeddingClient, type EmbeddingClient } from "../ai/embedding-client.js";
+import { config } from "../config/env.js";
 import { pool } from "../db/pool.js";
 import { createSource, upsertEntity } from "../db/repositories.js";
 import { toVectorLiteral } from "../db/vector.js";
@@ -9,6 +9,8 @@ import type { ManualKnowledgeDocument } from "../ingestion/manual-import.js";
 import type { IngestDocumentResult } from "../types.js";
 
 export class ManualIngestionService {
+  constructor(private readonly embeddings: EmbeddingClient = embeddingClient) {}
+
   async ingest(
     input: {
       sourceId: string;
@@ -31,7 +33,29 @@ export class ManualIngestionService {
         importedVia: "manual-structured"
       }
     });
-    const prepared = input.document.chunks.map((item, rank) => {
+    const chunks = input.document.chunks;
+    // 使用配置的 embedding 客户端：填了远程 API Key 就用真语义向量，
+    // 没填则 embeddingClient 内部自动退回确定性哈希向量（与上传文档行为一致）。
+    const embed = (texts: string[]): Promise<number[][]> =>
+      texts.length > 0 ? this.embeddings.batchGenerate(texts) : Promise.resolve([]);
+
+    const chunkEmbeddings = await embed(chunks.map((item) => `${item.heading}\n${item.content}`));
+    const titleEmbeddings = await embed(chunks.map((item) => item.event.title));
+    const contentEmbeddings = await embed(chunks.map((item) => `${item.event.title}\n\n${item.event.content}`));
+
+    const entityNameTexts: string[] = [];
+    const relationTexts: string[] = [];
+    for (const item of chunks) {
+      for (const entity of item.event.entities) {
+        entityNameTexts.push(entity.name);
+        relationTexts.push(entity.relation || entity.description || `${item.event.title} ${entity.name}`);
+      }
+    }
+    const entityNameEmbeddings = await embed(entityNameTexts);
+    const relationEmbeddings = await embed(relationTexts);
+
+    let entityCursor = 0;
+    const prepared = chunks.map((item, rank) => {
       const sectionId = randomUUID();
       const chunkId = randomUUID();
       const eventId = randomUUID();
@@ -49,21 +73,22 @@ export class ManualIngestionService {
           heading: item.heading,
           content: item.content,
           rawContent: item.content,
-          embedding: deterministicEmbedding(`${item.heading}\n${item.content}`, SUPPORTED_EMBEDDING_DIMENSIONS)
+          embedding: chunkEmbeddings[rank]
         },
         event: {
           id: eventId,
           ...item.event,
-          titleEmbedding: deterministicEmbedding(item.event.title, SUPPORTED_EMBEDDING_DIMENSIONS),
-          contentEmbedding: deterministicEmbedding(`${item.event.title}\n\n${item.event.content}`, SUPPORTED_EMBEDDING_DIMENSIONS),
-          entities: item.event.entities.map((entity) => ({
-            ...entity,
-            entityEmbedding: deterministicEmbedding(entity.name, SUPPORTED_EMBEDDING_DIMENSIONS),
-            relationEmbedding: deterministicEmbedding(
-              entity.relation || entity.description || `${item.event.title} ${entity.name}`,
-              SUPPORTED_EMBEDDING_DIMENSIONS
-            )
-          }))
+          titleEmbedding: titleEmbeddings[rank],
+          contentEmbedding: contentEmbeddings[rank],
+          entities: item.event.entities.map((entity) => {
+            const embeddingIndex = entityCursor;
+            entityCursor += 1;
+            return {
+              ...entity,
+              entityEmbedding: entityNameEmbeddings[embeddingIndex],
+              relationEmbedding: relationEmbeddings[embeddingIndex]
+            };
+          })
         }
       };
     });

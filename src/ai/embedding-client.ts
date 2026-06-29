@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { config } from "../config/env.js";
 import { normalizeVector } from "../db/vector.js";
 import { aiSettingsService } from "../services/ai-settings-service.js";
 import { createModelCallLogger } from "../observability/model-call-log.js";
@@ -42,11 +43,14 @@ export class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
     }
 
     const url = `${settings.embeddingBaseUrl.replace(/\/$/, "")}/embeddings`;
-    const body = {
+    const body: Record<string, unknown> = {
       model: settings.embeddingModel,
-      input: texts,
-      dimensions: settings.embeddingDimensions
+      input: texts
     };
+    // 仅当显式开启时才发送 dimensions：bge-m3 等固定维度模型收到该参数会返回 400。
+    if (config.EMBEDDING_SEND_DIMENSIONS) {
+      body.dimensions = settings.embeddingDimensions;
+    }
     const log = createModelCallLogger({
       kind: "embedding",
       operation: "batchGenerate",

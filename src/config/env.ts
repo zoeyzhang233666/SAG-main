@@ -17,6 +17,10 @@ const envSchema = z.object({
   EMBEDDING_MODEL: z.string().min(1).default("text-embedding-3-large"),
   EMBEDDING_API_KEY: z.string().default(""),
   EMBEDDING_BASE_URL: z.string().url().default(DEFAULT_302AI_BASE_URL),
+  // 是否在 embedding 请求里发送 `dimensions` 参数。默认关闭：bge-m3 等固定维度模型
+  // 会因为收到该参数而返回 400（parameter is invalid）。仅当所用模型支持自定义维度
+  // 且需要降维到 1024（如 OpenAI text-embedding-3）时，设为 true。
+  EMBEDDING_SEND_DIMENSIONS: z.string().optional().transform((value) => value === "true" || value === "1"),
   LLM_MODEL: z.string().min(1).default("qwen3.6-flash"),
   LLM_API_KEY: z.string().default(""),
   LLM_BASE_URL: z.string().url().default(DEFAULT_302AI_BASE_URL),

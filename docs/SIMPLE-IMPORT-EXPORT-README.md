@@ -164,3 +164,50 @@ npm start
 - 知识超图：点击事件后的详情栏；点击实体后的关联事件卡片会显示对应事件所属文档的来源摘要。
 
 这些来源字段只用于网页展示和导入导出，不会加入最终问答生成上下文，也不会被拼进回答正文的参考资料。这样可以保留来源可追溯性，同时避免增加回答生成噪音。
+
+## 结构化导入的向量（embedding）修复与配置
+
+### 问题背景
+
+结构化导入（`manual-ingestion-service`）以前**写死使用确定性哈希向量**（`deterministicEmbedding`），即使在「设置」里配置了真正的 embedding 模型也不会使用。哈希向量不表达语义，因此结构化导入的内容**无法被智能问答的向量检索召回**，提问时正文和下方都不会出现引用切片（而正常「上传文档」走 `ingestion-service`，用的是真 embedding，可被引用）。
+
+此外，最终筛选 `filterUsefulEventIds` 要求“向量分数达标，或中文词级命中”。哈希向量分数≈0，而中文整句缺少分词，导致结构化导入的中文事件被全部过滤掉。
+
+### 本次修复
+
+`manual-ingestion-service` 改为使用配置的 embedding 客户端 `embeddingClient`，与「上传文档」一致：
+
+- **填了远程 embedding API Key → 使用真正的语义向量**，结构化导入的内容可被检索和引用。
+- **没填 → `embeddingClient` 内部自动退回确定性哈希向量**，离线仍可运行（行为同此前）。
+
+也就是“有真模型就用真的，没有就退回”，自动切换，无需额外开关。
+
+### 维度要求
+
+数据库向量列固定为 `vector(1024)`，`EMBEDDING_DIMENSIONS` 强制为 `1024`（见 `src/config/env.ts`）。**所选 embedding 模型必须输出 1024 维**，否则写入失败。
+
+### 推荐配置：免费的 bge-m3（云端 API，无需显卡 / 本地部署）
+
+embedding 模型是云端 API，不需要显卡，也不需要本地部署。推荐免费、1024 维、对中文友好的 **`BAAI/bge-m3`**（硅基流动 SiliconFlow，OpenAI 兼容）：
+
+- 接口地址 / baseUrl：`https://api.siliconflow.cn/v1`
+- 模型 / model：`BAAI/bge-m3`
+- API Key：在 siliconflow.cn 注册后于控制台「API 密钥」创建
+- 维度 / dimensions：`1024`
+
+备选（都支持 1024 维、需充值）：阿里百炼 `text-embedding-v3`、智谱 `embedding-3`。
+
+### 配置后的生效步骤
+
+1. 在「设置」填好上述 embedding 配置并保存。
+2. 重新构建并重启服务：`npm run build`，然后 `npm run dev` 或 `npm start`。
+3. **删除旧的结构化导入文档并重新导入**：旧数据里仍是哈希向量，需要用真向量覆盖。到「知识资产」删除旧文档，再重新上传 `*-simple-import.json`。
+4. 提问时带上确定在实体里的具体词（产品名、企业名等），例如“原油最近的供需和价格怎么样，为什么？”，即可看到引用切片。
+
+### 常见报错：`embedding request failed: 400 ... parameter is invalid`（code 20015）
+
+原因：embedding 请求里发送了 `dimensions` 参数，而 **bge-m3 等固定维度模型不接受该参数**，硅基流动直接返回 400。
+
+修复：embedding 请求现在**默认不发送 `dimensions`**（bge-m3 原生输出 1024 维，发回的维度仍会被校验是否等于 1024）。无需任何额外设置，重新 `npm run build` 并重启即可。
+
+仅当你改用支持自定义维度、且原生维度不是 1024 的模型（如 OpenAI `text-embedding-3-*`）需要降维到 1024 时，才在环境变量里设 `EMBEDDING_SEND_DIMENSIONS=true` 重新发送该参数。
