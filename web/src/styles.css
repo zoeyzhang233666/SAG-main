@@ -1177,3 +1177,109 @@ select {
 .react-flow__pane.dragging { cursor: grabbing !important; }
 .sag-graph-node { cursor: grab; }
 .sag-graph-node:active { cursor: grabbing; }
+
+/* Inline LaTeX-style formula rendering for imported SAG text fields.
+   This intentionally does not depend on a remote CDN, so right panels, asset cards,
+   citations, search results, and Markdown chat messages render formulas consistently. */
+.chem-formula {
+  font-family: "STIX Two Math", "Cambria Math", "Times New Roman", ui-serif, serif;
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.chem-formula-inline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.04em;
+  margin-inline: 0.08em;
+  padding-inline: 0.08em;
+  vertical-align: baseline;
+}
+
+.chem-formula-block {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.04em;
+  overflow-x: auto;
+  margin: 0.55rem auto;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-inset) 68%, transparent);
+  padding: 0.45rem 0.7rem;
+  line-height: 1.7;
+}
+
+.chem-formula-sup,
+.chem-formula-sub {
+  font-size: 0.72em;
+  line-height: 0;
+}
+
+.chem-formula-sup {
+  vertical-align: super;
+}
+
+.chem-formula-sub {
+  vertical-align: sub;
+}
+
+.chem-formula-thin-space {
+  display: inline-block;
+  width: 0.18em;
+}
+
+.chem-formula-symbol {
+  padding-inline: 0.05em;
+}
+
+.chem-formula-roman {
+  font-family: inherit;
+  font-style: normal;
+}
+
+.chem-formula-frac {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-items: center;
+  margin-inline: 0.12em;
+  vertical-align: middle;
+  line-height: 1.1;
+}
+
+.chem-formula-frac-num {
+  display: block;
+  min-width: 100%;
+  border-bottom: 1px solid currentColor;
+  padding: 0 0.16em 0.08em;
+  text-align: center;
+}
+
+.chem-formula-frac-den {
+  display: block;
+  padding: 0.08em 0.16em 0;
+  text-align: center;
+}
+
+.chem-formula-sqrt {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0.04em;
+}
+
+.chem-formula-sqrt > span {
+  border-top: 1px solid currentColor;
+  padding-inline: 0.12em;
+}
+
+.chem-message-user .chem-markdown .chem-formula {
+  color: #fff;
+}
+
+.chem-message-user .chem-markdown .chem-formula-block {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+}

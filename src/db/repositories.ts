@@ -1508,6 +1508,39 @@ export async function listEntitiesByDocument(input: {
   }));
 }
 
+
+export async function listEntitiesByProject(input: {
+  sourceId: string;
+  tenantId: string;
+  includeArchived?: boolean;
+}): Promise<EntityWithEventsRecord[]> {
+  const archiveSql = input.includeArchived ? "" : "and s.archived_at is null and d.archived_at is null";
+  const result = await pool.query(
+    `
+      select ent.id, ent.source_id, ent.type, ent.name, ent.normalized_name,
+             ent.description, ent.embedding::text as embedding_preview,
+             count(distinct ee.event_id)::int as event_count
+      from entities ent
+      join event_entities ee on ee.entity_id = ent.id
+      join events e on e.id = ee.event_id
+      join documents d on d.id = e.document_id
+      join sources s on s.id = e.source_id
+      where ent.source_id = $1
+        and s.tenant_id = $2
+        and e.deleted_at is null
+        ${archiveSql}
+      group by ent.id
+      order by event_count desc, ent.type, ent.name
+    `,
+    [input.sourceId, input.tenantId]
+  );
+  return result.rows.map((row) => ({
+    ...entityFromRow(row),
+    description: row.description == null ? null : String(row.description),
+    eventCount: Number(row.event_count ?? 0)
+  }));
+}
+
 export async function updateEntity(input: {
   entityId: string;
   tenantId: string;

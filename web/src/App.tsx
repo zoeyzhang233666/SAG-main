@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -30,7 +38,7 @@ import {
   Trash2,
   Upload,
   X,
-  Zap
+  Zap,
 } from "lucide-react";
 import { api } from "./lib/api";
 import { cn, formatDate, shortId } from "./lib/utils";
@@ -58,7 +66,7 @@ import type {
   SearchResult,
   SearchStreamEvent,
   SourceRecord,
-  UploadJobRecord
+  UploadJobRecord,
 } from "./types";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
@@ -67,13 +75,24 @@ import { Input } from "./components/ui/input";
 import { Textarea } from "./components/ui/textarea";
 import { ProjectGraphFlow } from "./components/ProjectGraphFlow";
 import { MarkdownMessage } from "./components/MarkdownMessage";
-import { ThemeToggleButton, ThemeSettingsCard } from "./components/ThemeControls";
-import { I18nProvider, useI18n, useLanguageController, type LanguagePreference, type SupportedLanguage } from "./i18n";
+import {
+  ThemeToggleButton,
+  ThemeSettingsCard,
+} from "./components/ThemeControls";
+import {
+  I18nProvider,
+  useI18n,
+  useLanguageController,
+  type LanguagePreference,
+  type SupportedLanguage,
+} from "./i18n";
 
 type WorkspaceView = "chat" | "documents" | "graph" | "mcp" | "settings";
 type ResultView = "overview" | "chunks" | "events" | "entities" | "search";
 type ExportSplitMode = "none" | "documents" | "size";
 type ExportProfile = "simple" | "full";
+type KnowledgeAssetEntityScope = "document" | "project";
+type KnowledgeAssetEntityExportFormat = "csv" | "markdown" | "json";
 type ContextPanelMode = "process" | "assets" | "logs";
 type ProcessStepStatus = "running" | "done" | "failed";
 type ProcessStep = {
@@ -104,9 +123,14 @@ type AnswerCitation = {
 };
 type DetailDrawer =
   | { type: "event"; detail: EventDetailRecord }
-  | { type: "entity"; detail: EntityDetailRecord }
+  | {
+      type: "entity";
+      detail: EntityDetailRecord;
+      sameNameDetails?: EntityDetailRecord[];
+    }
   | { type: "citation"; citation: AnswerCitation }
   | null;
+type ActiveDetailDrawer = Exclude<DetailDrawer, null>;
 type GraphFocus = {
   key: string;
   query: string;
@@ -147,53 +171,104 @@ export default function App() {
 }
 
 function AppShell() {
-  const { language, preference: languagePreference, setPreference: setLanguagePreference, t } = useI18n();
+  const {
+    language,
+    preference: languagePreference,
+    setPreference: setLanguagePreference,
+    t,
+  } = useI18n();
   const [projects, setProjects] = useState<SourceRecord[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
-  const [projectStats, setProjectStats] = useState<ProjectStatsRecord | null>(null);
-  const [projectGraph, setProjectGraph] = useState<ProjectGraphRecord | null>(null);
+  const [projectStats, setProjectStats] = useState<ProjectStatsRecord | null>(
+    null,
+  );
+  const [projectGraph, setProjectGraph] = useState<ProjectGraphRecord | null>(
+    null,
+  );
   const [graphFocus, setGraphFocus] = useState<GraphFocus | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
-  const [selectedDocument, setSelectedDocument] = useState<DocumentRecord | null>(null);
+  const [selectedDocument, setSelectedDocument] =
+    useState<DocumentRecord | null>(null);
   const [chunks, setChunks] = useState<ChunkRecord[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [entities, setEntities] = useState<EntityRecord[]>([]);
-  const [sessionsByProjectId, setSessionsByProjectId] = useState<Record<string, McpSessionRecord[]>>({});
-  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => new Set());
+  const [projectEntities, setProjectEntities] = useState<EntityRecord[]>([]);
+  const [sessionsByProjectId, setSessionsByProjectId] = useState<
+    Record<string, McpSessionRecord[]>
+  >({});
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [mcpDetail, setMcpDetail] = useState<McpSessionDetail | null>(null);
-  const [aiSettings, setAiSettings] = useState<PublicAiProviderSettings | null>(null);
-  const [mcpSettings, setMcpSettings] = useState<PublicMcpSettings | null>(null);
+  const [aiSettings, setAiSettings] = useState<PublicAiProviderSettings | null>(
+    null,
+  );
+  const [mcpSettings, setMcpSettings] = useState<PublicMcpSettings | null>(
+    null,
+  );
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("chat");
   const [resultView, setResultView] = useState<ResultView>("overview");
-  const [contextPanelMode, setContextPanelMode] = useState<ContextPanelMode>("process");
+  const [contextPanelMode, setContextPanelMode] =
+    useState<ContextPanelMode>("process");
   const [drawer, setDrawer] = useState<DetailDrawer>(null);
+  const [drawerHistory, setDrawerHistory] = useState<ActiveDetailDrawer[]>([]);
   const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const [showArchivedDocuments, setShowArchivedDocuments] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
-  const [status, setStatus] = useState(() => t("正在加载 SAG...", "Loading SAG..."));
+  const [status, setStatus] = useState(() =>
+    t("正在加载 SAG...", "Loading SAG..."),
+  );
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [uploadJobs, setUploadJobs] = useState<UploadJobRecord[]>([]);
   const [isUploadQueueExpanded, setIsUploadQueueExpanded] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(() => t(DEFAULT_SEARCH_QUERY_ZH, DEFAULT_SEARCH_QUERY_EN));
+  const [searchQuery, setSearchQuery] = useState(() =>
+    t(DEFAULT_SEARCH_QUERY_ZH, DEFAULT_SEARCH_QUERY_EN),
+  );
   const [searchMode, setSearchMode] = useState<SearchMode>("fast");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [processSteps, setProcessSteps] = useState<ProcessStep[]>([]);
-  const [modelLogs, setModelLogs] = useState<ModelCallLogRecord[]>(() => loadStoredModelLogs());
-  const [modelLogCursor, setModelLogCursor] = useState(() => loadStoredModelLogCursor());
+  const [modelLogs, setModelLogs] = useState<ModelCallLogRecord[]>(() =>
+    loadStoredModelLogs(),
+  );
+  const [modelLogCursor, setModelLogCursor] = useState(() =>
+    loadStoredModelLogCursor(),
+  );
   const [isSearching, setIsSearching] = useState(false);
   const [mcpInput, setMcpInput] = useState("");
   const [isMcpRunning, setIsMcpRunning] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState("");
   const [streamingAssistantText, setStreamingAssistantText] = useState("");
-  const [runningMcpSearches, setRunningMcpSearches] = useState<RunningMcpSearch[]>([]);
-  const [autoMermaid, setAutoMermaid] = useState(() => window.localStorage.getItem(AUTO_MERMAID_STORAGE_KEY) === "true");
-  const [leftRailWidth, setLeftRailWidth] = useState(() => loadStoredNumber(LEFT_RAIL_WIDTH_STORAGE_KEY, 280, LEFT_RAIL_MIN_WIDTH, LEFT_RAIL_MAX_WIDTH));
-  const [rightPanelWidth, setRightPanelWidth] = useState(() => loadStoredNumber(RIGHT_PANEL_WIDTH_STORAGE_KEY, 360, RIGHT_PANEL_MIN_WIDTH, RIGHT_PANEL_MAX_WIDTH));
-  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(() => loadStoredBoolean(LEFT_RAIL_COLLAPSED_STORAGE_KEY, false));
-  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(() => loadStoredBoolean(RIGHT_PANEL_COLLAPSED_STORAGE_KEY, false));
+  const [runningMcpSearches, setRunningMcpSearches] = useState<
+    RunningMcpSearch[]
+  >([]);
+  const [autoMermaid, setAutoMermaid] = useState(
+    () => window.localStorage.getItem(AUTO_MERMAID_STORAGE_KEY) === "true",
+  );
+  const [leftRailWidth, setLeftRailWidth] = useState(() =>
+    loadStoredNumber(
+      LEFT_RAIL_WIDTH_STORAGE_KEY,
+      280,
+      LEFT_RAIL_MIN_WIDTH,
+      LEFT_RAIL_MAX_WIDTH,
+    ),
+  );
+  const [rightPanelWidth, setRightPanelWidth] = useState(() =>
+    loadStoredNumber(
+      RIGHT_PANEL_WIDTH_STORAGE_KEY,
+      360,
+      RIGHT_PANEL_MIN_WIDTH,
+      RIGHT_PANEL_MAX_WIDTH,
+    ),
+  );
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(() =>
+    loadStoredBoolean(LEFT_RAIL_COLLAPSED_STORAGE_KEY, false),
+  );
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(() =>
+    loadStoredBoolean(RIGHT_PANEL_COLLAPSED_STORAGE_KEY, false),
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const searchStartedAtRef = useRef<number | null>(null);
   const refreshedUploadJobsRef = useRef<Set<string>>(new Set());
@@ -203,17 +278,23 @@ function AppShell() {
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId]
+    [projects, selectedProjectId],
   );
 
   const visibleDocuments = useMemo(
-    () => documents.filter((document) => showArchivedDocuments || !document.archivedAt),
-    [documents, showArchivedDocuments]
+    () =>
+      documents.filter(
+        (document) => showArchivedDocuments || !document.archivedAt,
+      ),
+    [documents, showArchivedDocuments],
   );
 
   const hasActiveUploads = useMemo(
-    () => uploadJobs.some((job) => job.status === "QUEUED" || job.status === "RUNNING"),
-    [uploadJobs]
+    () =>
+      uploadJobs.some(
+        (job) => job.status === "QUEUED" || job.status === "RUNNING",
+      ),
+    [uploadJobs],
   );
 
   useEffect(() => {
@@ -246,7 +327,10 @@ function AppShell() {
 
   useEffect(() => {
     setSearchQuery((current) => {
-      if (current === DEFAULT_SEARCH_QUERY_ZH || current === DEFAULT_SEARCH_QUERY_EN) {
+      if (
+        current === DEFAULT_SEARCH_QUERY_ZH ||
+        current === DEFAULT_SEARCH_QUERY_EN
+      ) {
         return t(DEFAULT_SEARCH_QUERY_ZH, DEFAULT_SEARCH_QUERY_EN);
       }
       return current;
@@ -272,7 +356,10 @@ function AppShell() {
 
   useEffect(() => {
     modelLogCursorRef.current = modelLogCursor;
-    window.localStorage.setItem(MODEL_LOG_CURSOR_STORAGE_KEY, String(modelLogCursor));
+    window.localStorage.setItem(
+      MODEL_LOG_CURSOR_STORAGE_KEY,
+      String(modelLogCursor),
+    );
   }, [modelLogCursor]);
 
   useEffect(() => {
@@ -284,19 +371,31 @@ function AppShell() {
   }, [autoMermaid]);
 
   useEffect(() => {
-    window.localStorage.setItem(LEFT_RAIL_WIDTH_STORAGE_KEY, String(leftRailWidth));
+    window.localStorage.setItem(
+      LEFT_RAIL_WIDTH_STORAGE_KEY,
+      String(leftRailWidth),
+    );
   }, [leftRailWidth]);
 
   useEffect(() => {
-    window.localStorage.setItem(RIGHT_PANEL_WIDTH_STORAGE_KEY, String(rightPanelWidth));
+    window.localStorage.setItem(
+      RIGHT_PANEL_WIDTH_STORAGE_KEY,
+      String(rightPanelWidth),
+    );
   }, [rightPanelWidth]);
 
   useEffect(() => {
-    window.localStorage.setItem(LEFT_RAIL_COLLAPSED_STORAGE_KEY, String(isLeftRailCollapsed));
+    window.localStorage.setItem(
+      LEFT_RAIL_COLLAPSED_STORAGE_KEY,
+      String(isLeftRailCollapsed),
+    );
   }, [isLeftRailCollapsed]);
 
   useEffect(() => {
-    window.localStorage.setItem(RIGHT_PANEL_COLLAPSED_STORAGE_KEY, String(isRightPanelCollapsed));
+    window.localStorage.setItem(
+      RIGHT_PANEL_COLLAPSED_STORAGE_KEY,
+      String(isRightPanelCollapsed),
+    );
   }, [isRightPanelCollapsed]);
 
   useEffect(() => {
@@ -310,6 +409,7 @@ function AppShell() {
       setSelectedDocument(null);
       setProjectStats(null);
       setProjectGraph(null);
+      setProjectEntities([]);
       setMcpDetail(null);
       return;
     }
@@ -328,7 +428,9 @@ function AppShell() {
   }, [selectedDocumentId]);
 
   useEffect(() => {
-    const activeJobs = uploadJobs.filter((job) => job.status === "QUEUED" || job.status === "RUNNING");
+    const activeJobs = uploadJobs.filter(
+      (job) => job.status === "QUEUED" || job.status === "RUNNING",
+    );
     if (activeJobs.length === 0) {
       return undefined;
     }
@@ -339,7 +441,12 @@ function AppShell() {
   }, [uploadJobs]);
 
   useEffect(() => {
-    if (contextPanelMode !== "logs" && !hasActiveUploads && !isSearching && !isMcpRunning) {
+    if (
+      contextPanelMode !== "logs" &&
+      !hasActiveUploads &&
+      !isSearching &&
+      !isMcpRunning
+    ) {
       return undefined;
     }
     const timer = window.setInterval(() => {
@@ -351,16 +458,21 @@ function AppShell() {
   async function bootstrap() {
     try {
       setError("");
-      const [projectsResponse, settingsResponse, mcpSettingsResponse] = await Promise.all([
-        api.listProjects(showArchivedProjects),
-        api.getAiSettings(),
-        api.getMcpSettings()
-      ]);
+      const [projectsResponse, settingsResponse, mcpSettingsResponse] =
+        await Promise.all([
+          api.listProjects(showArchivedProjects),
+          api.getAiSettings(),
+          api.getMcpSettings(),
+        ]);
       setProjects(projectsResponse.projects);
-      void refreshSessionsForProjects(projectsResponse.projects.map((project) => project.id));
+      void refreshSessionsForProjects(
+        projectsResponse.projects.map((project) => project.id),
+      );
       setAiSettings(settingsResponse.settings);
       setMcpSettings(mcpSettingsResponse.settings);
-      const firstActiveProject = projectsResponse.projects.find((project) => !project.archivedAt);
+      const firstActiveProject = projectsResponse.projects.find(
+        (project) => !project.archivedAt,
+      );
       if (firstActiveProject) {
         setSelectedProjectId(firstActiveProject.id);
       } else {
@@ -377,8 +489,13 @@ function AppShell() {
     try {
       const response = await api.listProjects(showArchivedProjects);
       setProjects(response.projects);
-      void refreshSessionsForProjects(response.projects.map((project) => project.id));
-      if (selectedProjectId && !response.projects.some((project) => project.id === selectedProjectId)) {
+      void refreshSessionsForProjects(
+        response.projects.map((project) => project.id),
+      );
+      if (
+        selectedProjectId &&
+        !response.projects.some((project) => project.id === selectedProjectId)
+      ) {
         setSelectedProjectId("");
       }
     } catch (err) {
@@ -389,29 +506,46 @@ function AppShell() {
   async function loadProjectWorkspace(projectId: string) {
     try {
       setError("");
-      const [documentsResponse, sessionsResponse, statsResponse, graphResponse] = await Promise.all([
+      const [
+        documentsResponse,
+        sessionsResponse,
+        statsResponse,
+        graphResponse,
+        projectEntitiesResponse,
+      ] = await Promise.all([
         api.listDocuments(projectId, showArchivedDocuments),
         api.listMcpSessions(projectId),
         api.getProjectStats(projectId),
-        api.getProjectGraph(projectId)
+        api.getProjectGraph(projectId),
+        api.listProjectEntities(projectId),
       ]);
       setDocuments(documentsResponse.documents);
       setSessionsByProjectId((current) => ({
         ...current,
-        [projectId]: sessionsResponse.sessions
+        [projectId]: sessionsResponse.sessions,
       }));
       setProjectStats(statsResponse.stats);
       setProjectGraph(graphResponse.graph);
-      if (documentsResponse.documents[0] && !documentsResponse.documents.some((item) => item.id === selectedDocumentId)) {
+      setProjectEntities(projectEntitiesResponse.entities);
+      if (
+        documentsResponse.documents[0] &&
+        !documentsResponse.documents.some(
+          (item) => item.id === selectedDocumentId,
+        )
+      ) {
         setSelectedDocumentId(documentsResponse.documents[0].id);
       }
       if (!documentsResponse.documents[0]) {
         setSelectedDocumentId("");
       }
       const preferredSessionId = pendingSessionIdRef.current;
-      const sessionToOpen = preferredSessionId && sessionsResponse.sessions.some((session) => session.id === preferredSessionId)
-        ? preferredSessionId
-        : sessionsResponse.sessions[0]?.id;
+      const sessionToOpen =
+        preferredSessionId &&
+        sessionsResponse.sessions.some(
+          (session) => session.id === preferredSessionId,
+        )
+          ? preferredSessionId
+          : sessionsResponse.sessions[0]?.id;
       pendingSessionIdRef.current = null;
       if (sessionToOpen) {
         await loadMcpSession(sessionToOpen);
@@ -427,11 +561,16 @@ function AppShell() {
   async function loadDocumentWorkspace(documentId: string) {
     try {
       setError("");
-      const [documentResponse, chunksResponse, eventsResponse, entitiesResponse] = await Promise.all([
+      const [
+        documentResponse,
+        chunksResponse,
+        eventsResponse,
+        entitiesResponse,
+      ] = await Promise.all([
         api.getDocument(documentId),
         api.listChunks(documentId),
         api.listEvents(documentId),
-        api.listEntities(documentId)
+        api.listEntities(documentId),
       ]);
       setSelectedDocument(documentResponse.document);
       setChunks(chunksResponse.chunks);
@@ -446,12 +585,15 @@ function AppShell() {
     const projectId = selectedProjectId;
     try {
       if (projectId) {
-        const [statsResponse, graphResponse] = await Promise.all([
-          api.getProjectStats(projectId),
-          api.getProjectGraph(projectId)
-        ]);
+        const [statsResponse, graphResponse, projectEntitiesResponse] =
+          await Promise.all([
+            api.getProjectStats(projectId),
+            api.getProjectGraph(projectId),
+            api.listProjectEntities(projectId),
+          ]);
         setProjectStats(statsResponse.stats);
         setProjectGraph(graphResponse.graph);
+        setProjectEntities(projectEntitiesResponse.entities);
       }
       if (documentId) {
         await loadDocumentWorkspace(documentId);
@@ -463,11 +605,19 @@ function AppShell() {
 
   async function pollUploadJobs(jobIds: string[]) {
     try {
-      const responses = await Promise.all(jobIds.map((jobId) => api.getUploadJob(jobId)));
+      const responses = await Promise.all(
+        jobIds.map((jobId) => api.getUploadJob(jobId)),
+      );
       const latestJobs = responses.map((response) => response.job);
-      setUploadJobs((current) => current.map((job) => latestJobs.find((latest) => latest.id === job.id) ?? job));
+      setUploadJobs((current) =>
+        current.map(
+          (job) => latestJobs.find((latest) => latest.id === job.id) ?? job,
+        ),
+      );
       await syncModelLogs();
-      const completedJobs = latestJobs.filter((job) => job.status === "COMPLETED" && job.documentId);
+      const completedJobs = latestJobs.filter(
+        (job) => job.status === "COMPLETED" && job.documentId,
+      );
       for (const job of completedJobs) {
         if (refreshedUploadJobsRef.current.has(job.id)) {
           continue;
@@ -530,7 +680,7 @@ function AppShell() {
       minWidth: LEFT_RAIL_MIN_WIDTH,
       maxWidth: LEFT_RAIL_MAX_WIDTH,
       getWidth: (startWidth, deltaX) => startWidth + deltaX,
-      onResize: setLeftRailWidth
+      onResize: setLeftRailWidth,
     });
   }
 
@@ -541,7 +691,7 @@ function AppShell() {
       minWidth: RIGHT_PANEL_MIN_WIDTH,
       maxWidth: RIGHT_PANEL_MAX_WIDTH,
       getWidth: (startWidth, deltaX) => startWidth - deltaX,
-      onResize: setRightPanelWidth
+      onResize: setRightPanelWidth,
     });
   }
 
@@ -552,10 +702,12 @@ function AppShell() {
       return;
     }
     try {
-      const entries = await Promise.all(uniqueProjectIds.map(async (projectId) => {
-        const response = await api.listMcpSessions(projectId);
-        return [projectId, response.sessions] as const;
-      }));
+      const entries = await Promise.all(
+        uniqueProjectIds.map(async (projectId) => {
+          const response = await api.listMcpSessions(projectId);
+          return [projectId, response.sessions] as const;
+        }),
+      );
       setSessionsByProjectId((current) => {
         const next = { ...current };
         for (const [projectId, projectSessions] of entries) {
@@ -580,8 +732,16 @@ function AppShell() {
     }
     setModelLogs([]);
     window.localStorage.removeItem(MODEL_LOGS_STORAGE_KEY);
-    window.localStorage.setItem(MODEL_LOG_CURSOR_STORAGE_KEY, String(modelLogCursorRef.current));
-    setStatus(t("已清空浏览器缓存中的原始日志", "Raw logs in browser cache have been cleared"));
+    window.localStorage.setItem(
+      MODEL_LOG_CURSOR_STORAGE_KEY,
+      String(modelLogCursorRef.current),
+    );
+    setStatus(
+      t(
+        "已清空浏览器缓存中的原始日志",
+        "Raw logs in browser cache have been cleared",
+      ),
+    );
   }
 
   async function createProject() {
@@ -608,7 +768,12 @@ function AppShell() {
     try {
       await api.updateProject(project.id, { name: nextName });
       await loadProjects();
-      setStatus(t(`已重命名项目为「${nextName}」。`, `Project renamed to "${nextName}".`));
+      setStatus(
+        t(
+          `已重命名项目为「${nextName}」。`,
+          `Project renamed to "${nextName}".`,
+        ),
+      );
       return true;
     } catch (err) {
       setError(getErrorMessage(err));
@@ -619,7 +784,10 @@ function AppShell() {
   async function archiveOrRestoreProject(project: SourceRecord) {
     const confirmText = project.archivedAt
       ? t(`恢复项目「${project.name}」？`, `Restore project "${project.name}"?`)
-      : t(`归档项目「${project.name}」？`, `Archive project "${project.name}"?`);
+      : t(
+          `归档项目「${project.name}」？`,
+          `Archive project "${project.name}"?`,
+        );
     if (!window.confirm(confirmText)) return;
     try {
       if (project.archivedAt) {
@@ -637,13 +805,17 @@ function AppShell() {
   }
 
   async function permanentlyDeleteProject(project: SourceRecord) {
-    const confirmed = window.confirm(t(
-      `永久删除项目「${project.name}」？\n\n这会级联删除该项目下的文档、切片、事件、实体和相关关系，且不可恢复。`,
-      `Permanently delete project "${project.name}"?\n\nThis will cascade delete documents, chunks, events, entities, and relations under this project. This action cannot be undone.`
-    ));
+    const confirmed = window.confirm(
+      t(
+        `永久删除项目「${project.name}」？\n\n这会级联删除该项目下的文档、切片、事件、实体和相关关系，且不可恢复。`,
+        `Permanently delete project "${project.name}"?\n\nThis will cascade delete documents, chunks, events, entities, and relations under this project. This action cannot be undone.`,
+      ),
+    );
     if (!confirmed) {
       setError("");
-      setStatus(t("已取消永久删除项目。", "Permanent project deletion canceled."));
+      setStatus(
+        t("已取消永久删除项目。", "Permanent project deletion canceled."),
+      );
       return;
     }
     try {
@@ -653,14 +825,24 @@ function AppShell() {
       if (selectedProjectId === project.id) {
         setSelectedProjectId("");
       }
-      setStatus(t(`已永久删除项目「${project.name}」。`, `Project "${project.name}" has been permanently deleted.`));
+      setStatus(
+        t(
+          `已永久删除项目「${project.name}」。`,
+          `Project "${project.name}" has been permanently deleted.`,
+        ),
+      );
     } catch (err) {
       setError(getErrorMessage(err));
     }
   }
 
   async function renameDocument(document: DocumentRecord) {
-    const title = window.prompt(t("请输入新的文档名称", "Enter a new document name"), document.title)?.trim();
+    const title = window
+      .prompt(
+        t("请输入新的文档名称", "Enter a new document name"),
+        document.title,
+      )
+      ?.trim();
     if (!title || title === document.title) return;
     try {
       await api.updateDocument(document.id, { title });
@@ -675,8 +857,14 @@ function AppShell() {
 
   async function archiveOrRestoreDocument(document: DocumentRecord) {
     const confirmText = document.archivedAt
-      ? t(`恢复文档「${document.title}」？`, `Restore document "${document.title}"?`)
-      : t(`归档文档「${document.title}」？`, `Archive document "${document.title}"?`);
+      ? t(
+          `恢复文档「${document.title}」？`,
+          `Restore document "${document.title}"?`,
+        )
+      : t(
+          `归档文档「${document.title}」？`,
+          `Archive document "${document.title}"?`,
+        );
     if (!window.confirm(confirmText)) return;
     try {
       if (document.archivedAt) {
@@ -694,13 +882,17 @@ function AppShell() {
   }
 
   async function permanentlyDeleteDocument(document: DocumentRecord) {
-    const confirmed = window.confirm(t(
-      `永久删除文档「${document.title}」？\n\n这会删除相关切片、事件、实体关系，且不可恢复。`,
-      `Permanently delete document "${document.title}"?\n\nThis will delete related chunks, event relations, and entity relations. This action cannot be undone.`
-    ));
+    const confirmed = window.confirm(
+      t(
+        `永久删除文档「${document.title}」？\n\n这会删除相关切片、事件、实体关系，且不可恢复。`,
+        `Permanently delete document "${document.title}"?\n\nThis will delete related chunks, event relations, and entity relations. This action cannot be undone.`,
+      ),
+    );
     if (!confirmed) {
       setError("");
-      setStatus(t("已取消永久删除文档。", "Permanent document deletion canceled."));
+      setStatus(
+        t("已取消永久删除文档。", "Permanent document deletion canceled."),
+      );
       return;
     }
     try {
@@ -710,7 +902,12 @@ function AppShell() {
       if (selectedDocumentId === document.id) {
         setSelectedDocumentId("");
       }
-      setStatus(t(`已永久删除文档「${document.title}」。`, `Document "${document.title}" has been permanently deleted.`));
+      setStatus(
+        t(
+          `已永久删除文档「${document.title}」。`,
+          `Document "${document.title}" has been permanently deleted.`,
+        ),
+      );
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -718,26 +915,44 @@ function AppShell() {
 
   async function handleUploadFiles(files: File[]) {
     if (!selectedProjectId) {
-      setError(t("请先创建或选择项目，再添加文档。", "Create or select a project before adding documents."));
+      setError(
+        t(
+          "请先创建或选择项目，再添加文档。",
+          "Create or select a project before adding documents.",
+        ),
+      );
       return;
     }
     if (files.length === 0) {
       return;
     }
     const invalidFile = files.find((file) => {
-      const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
-      return ![".md", ".txt"].includes(extension) || file.size === 0 || file.size > 5 * 1024 * 1024;
+      const extension = file.name.includes(".")
+        ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+        : "";
+      return (
+        ![".md", ".txt"].includes(extension) ||
+        file.size === 0 ||
+        file.size > 5 * 1024 * 1024
+      );
     });
     if (invalidFile) {
-      setError(t(
-        `文件「${invalidFile.name}」不符合要求：只支持非空 .md/.txt，单个文件不超过 5MB。`,
-        `File "${invalidFile.name}" is invalid: only non-empty .md/.txt files up to 5 MB are supported.`
-      ));
+      setError(
+        t(
+          `文件「${invalidFile.name}」不符合要求：只支持非空 .md/.txt，单个文件不超过 5MB。`,
+          `File "${invalidFile.name}" is invalid: only non-empty .md/.txt files up to 5 MB are supported.`,
+        ),
+      );
       return;
     }
     try {
       setError("");
-      setStatus(t(`已提交 ${files.length} 个文档处理任务`, `${files.length} document processing job(s) submitted`));
+      setStatus(
+        t(
+          `已提交 ${files.length} 个文档处理任务`,
+          `${files.length} document processing job(s) submitted`,
+        ),
+      );
       for (const file of files) {
         setStatus(t(`正在读取：${file.name}`, `Reading: ${file.name}`));
         const content = await file.text();
@@ -745,7 +960,7 @@ function AppShell() {
           sourceId: selectedProjectId,
           title: file.name.replace(/\.[^.]+$/, ""),
           fileName: file.name,
-          content
+          content,
         });
         refreshedUploadJobsRef.current.delete(response.job.id);
         setUploadJobs((current) => [response.job, ...current].slice(0, 20));
@@ -763,22 +978,28 @@ function AppShell() {
     content: string;
   }) {
     if (!selectedProjectId) {
-      throw new Error(t("请先创建或选择项目。", "Create or select a project first."));
+      throw new Error(
+        t("请先创建或选择项目。", "Create or select a project first."),
+      );
     }
     setError("");
-    setStatus(t("正在导入网页版 AI 表格数据...", "Importing structured AI data..."));
+    setStatus(
+      t("正在导入网页版 AI 表格数据...", "Importing structured AI data..."),
+    );
     try {
       const response = await api.importStructuredKnowledge({
         sourceId: selectedProjectId,
-        ...input
+        ...input,
       });
       await loadProjectWorkspace(selectedProjectId);
       setSelectedDocumentId(response.documentId);
       setResultView("overview");
-      setStatus(t(
-        `导入完成：${response.documentCount ?? 1} 个文档，${response.chunkCount} 个切片，${response.eventCount} 个事件`,
-        `Import complete: ${response.documentCount ?? 1} document(s), ${response.chunkCount} chunks and ${response.eventCount} events`
-      ));
+      setStatus(
+        t(
+          `导入完成：${response.documentCount ?? 1} 个文档，${response.chunkCount} 个切片，${response.eventCount} 个事件`,
+          `Import complete: ${response.documentCount ?? 1} document(s), ${response.chunkCount} chunks and ${response.eventCount} events`,
+        ),
+      );
     } catch (err) {
       const message = getErrorMessage(err);
       setError(message);
@@ -786,20 +1007,41 @@ function AppShell() {
     }
   }
 
-  async function exportProject(format: "csv" | "json", profile: ExportProfile = "simple", split: ExportSplitMode = "none", maxBytes?: number) {
+  async function exportProject(
+    format: "csv" | "json",
+    profile: ExportProfile = "simple",
+    split: ExportSplitMode = "none",
+    maxBytes?: number,
+  ) {
     if (!selectedProjectId) return;
     try {
       setError("");
-      setStatus(t(`正在导出 ${profile === "simple" ? "简化" : "完整"} ${format.toUpperCase()}...`, `Exporting ${profile} ${format.toUpperCase()}...`));
+      setStatus(
+        t(
+          `正在导出 ${profile === "simple" ? "简化" : "完整"} ${format.toUpperCase()}...`,
+          `Exporting ${profile} ${format.toUpperCase()}...`,
+        ),
+      );
       if (split === "none") {
         await api.downloadProjectExport(selectedProjectId, format, profile);
         setStatus(t("项目数据已导出", "Project data exported"));
       } else {
-        const result = await api.downloadProjectExportFiles(selectedProjectId, { format, profile, split, maxBytes });
-        setStatus(t(
-          result.fileCount > 1 ? `项目数据已打包导出：${result.fileCount} 个数据文件` : "项目数据已导出",
-          result.fileCount > 1 ? `Project data exported as one archive with ${result.fileCount} data files` : "Project data exported"
-        ));
+        const result = await api.downloadProjectExportFiles(selectedProjectId, {
+          format,
+          profile,
+          split,
+          maxBytes,
+        });
+        setStatus(
+          t(
+            result.fileCount > 1
+              ? `项目数据已打包导出：${result.fileCount} 个数据文件`
+              : "项目数据已导出",
+            result.fileCount > 1
+              ? `Project data exported as one archive with ${result.fileCount} data files`
+              : "Project data exported",
+          ),
+        );
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -808,23 +1050,28 @@ function AppShell() {
 
   function resetProcess(title: string, detail?: string) {
     setContextPanelMode("process");
-    setProcessSteps([{
-      id: makeStepId("start"),
-      title,
-      detail,
-      status: "running"
-    }]);
+    setProcessSteps([
+      {
+        id: makeStepId("start"),
+        title,
+        detail,
+        status: "running",
+      },
+    ]);
   }
 
   function addProcessStep(step: Omit<ProcessStep, "id"> & { id?: string }) {
-    setProcessSteps((current) => [...current, {
-      id: step.id ?? makeStepId("step"),
-      title: step.title,
-      detail: step.detail,
-      status: step.status,
-      payload: step.payload,
-      durationMs: step.durationMs
-    }]);
+    setProcessSteps((current) => [
+      ...current,
+      {
+        id: step.id ?? makeStepId("step"),
+        title: step.title,
+        detail: step.detail,
+        status: step.status,
+        payload: step.payload,
+        durationMs: step.durationMs,
+      },
+    ]);
   }
 
   function upsertProcessStep(step: ProcessStep) {
@@ -841,25 +1088,28 @@ function AppShell() {
           detail: step.detail,
           status: step.status,
           payload: step.payload ?? item.payload,
-          durationMs: step.durationMs ?? item.durationMs
+          durationMs: step.durationMs ?? item.durationMs,
         };
       });
     });
   }
 
   function finishRunningSteps() {
-    setProcessSteps((current) => current.map((step) => (
-      step.status === "running" ? { ...step, status: "done" } : step
-    )));
+    setProcessSteps((current) =>
+      current.map((step) =>
+        step.status === "running" ? { ...step, status: "done" } : step,
+      ),
+    );
   }
 
   function appendMessageToDetail(message: McpMessageRecord) {
     setMcpDetail((current) => {
       if (!current || current.session.id !== message.sessionId) return current;
-      if (current.messages.some((item) => item.id === message.id)) return current;
+      if (current.messages.some((item) => item.id === message.id))
+        return current;
       return {
         ...current,
-        messages: [...current.messages, message]
+        messages: [...current.messages, message],
       };
     });
   }
@@ -867,10 +1117,11 @@ function AppShell() {
   function appendToolCallToDetail(toolCall: McpToolCallRecord) {
     setMcpDetail((current) => {
       if (!current || current.session.id !== toolCall.sessionId) return current;
-      if (current.toolCalls.some((item) => item.id === toolCall.id)) return current;
+      if (current.toolCalls.some((item) => item.id === toolCall.id))
+        return current;
       return {
         ...current,
-        toolCalls: [...current.toolCalls, toolCall]
+        toolCalls: [...current.toolCalls, toolCall],
       };
     });
   }
@@ -898,18 +1149,21 @@ function AppShell() {
       if (event.toolName === "sag_search") {
         setRunningMcpSearches((current) => [
           ...current,
-          buildRunningMcpSearch(event.toolName, event.arguments, language)
+          buildRunningMcpSearch(event.toolName, event.arguments, language),
         ]);
-        resetProcess(t("MCP 搜索语句", "MCP search query"), getMcpSearchQuery(event.arguments, language));
+        resetProcess(
+          t("MCP 搜索语句", "MCP search query"),
+          getMcpSearchQuery(event.arguments, language),
+        );
         addProcessStep({
           id: "mcp-sag-search-running",
           title: t("SAG 检索执行中", "SAG retrieval is running"),
           detail: t(
             "MCP 工具已发起 sag_search，正在实时接收 SAG 内部检索阶段。",
-            "The MCP tool has started sag_search and is receiving SAG internal retrieval stages in real time."
+            "The MCP tool has started sag_search and is receiving SAG internal retrieval stages in real time.",
           ),
           status: "running",
-          payload: event.arguments
+          payload: event.arguments,
         });
       }
       return;
@@ -921,7 +1175,7 @@ function AppShell() {
         detail: event.event.detail,
         status: event.event.status,
         payload: event.event.payload,
-        durationMs: event.event.durationMs
+        durationMs: event.event.durationMs,
       });
       return;
     }
@@ -929,25 +1183,36 @@ function AppShell() {
       appendToolCallToDetail(event.toolCall);
       if (event.toolCall.toolName === "sag_search") {
         if (event.toolCall.status === "FAILED") {
-          setProcessSteps([{
-            id: makeStepId("sag-search-failed"),
-            title: t("SAG 检索失败", "SAG retrieval failed"),
-            detail: event.toolCall.error ?? t("工具返回失败", "Tool returned a failure"),
-            status: "failed"
-          }]);
+          setProcessSteps([
+            {
+              id: makeStepId("sag-search-failed"),
+              title: t("SAG 检索失败", "SAG retrieval failed"),
+              detail:
+                event.toolCall.error ??
+                t("工具返回失败", "Tool returned a failure"),
+              status: "failed",
+            },
+          ]);
           return;
         }
         const parsed = parseToolResponse(event.toolCall.result);
         const trace = extractSearchTrace(parsed);
-        const focus = buildGraphFocus(parsed, getRawMcpSearchQuery(event.toolCall.arguments));
+        const focus = buildGraphFocus(
+          parsed,
+          getRawMcpSearchQuery(event.toolCall.arguments),
+        );
         if (focus) {
           setGraphFocus(focus);
         }
         if (trace) {
           setProcessSteps([
             buildMcpSearchQueryStep(event.toolCall, language),
-            ...buildTraceProcessSteps(trace, t("SAG 检索链路", "SAG retrieval trace"), language),
-            ...buildMcpSearchResultSteps(parsed, language)
+            ...buildTraceProcessSteps(
+              trace,
+              t("SAG 检索链路", "SAG retrieval trace"),
+              language,
+            ),
+            ...buildMcpSearchResultSteps(parsed, language),
           ]);
         } else {
           setProcessSteps([
@@ -955,10 +1220,13 @@ function AppShell() {
             {
               id: makeStepId("sag-search-no-trace"),
               title: t("SAG 检索链路", "SAG retrieval trace"),
-              detail: t("工具返回了检索结果，但没有返回 trace 字段。", "The tool returned retrieval results but did not include a trace field."),
+              detail: t(
+                "工具返回了检索结果，但没有返回 trace 字段。",
+                "The tool returned retrieval results but did not include a trace field.",
+              ),
               status: "failed",
-              payload: parsed
-            }
+              payload: parsed,
+            },
           ]);
         }
       }
@@ -977,7 +1245,7 @@ function AppShell() {
       addProcessStep({
         title: t("执行失败", "Execution failed"),
         detail: event.message,
-        status: "failed"
+        status: "failed",
       });
       setError(event.message);
     }
@@ -991,7 +1259,7 @@ function AppShell() {
         detail: event.detail,
         status: event.status,
         payload: event.payload,
-        durationMs: event.durationMs
+        durationMs: event.durationMs,
       });
       return;
     }
@@ -1005,7 +1273,10 @@ function AppShell() {
       addProcessStep({
         id: "search-complete",
         title: t("检索完成", "Search complete"),
-        detail: t(`返回 ${event.result.sections.length} 个切片结果`, `${event.result.sections.length} chunk result(s) returned`),
+        detail: t(
+          `返回 ${event.result.sections.length} 个切片结果`,
+          `${event.result.sections.length} chunk result(s) returned`,
+        ),
         status: "done",
         payload: {
           traceId: event.result.traceId,
@@ -1013,12 +1284,13 @@ function AppShell() {
             heading: section.heading,
             contentPreview: section.content.slice(0, 160),
             score: section.score,
-            rank: section.rank
-          }))
+            rank: section.rank,
+          })),
         },
-        durationMs: searchStartedAtRef.current == null
-          ? undefined
-          : Math.round(performance.now() - searchStartedAtRef.current)
+        durationMs:
+          searchStartedAtRef.current == null
+            ? undefined
+            : Math.round(performance.now() - searchStartedAtRef.current),
       });
       setStatus(t("检索完成", "Search complete"));
       return;
@@ -1027,7 +1299,7 @@ function AppShell() {
       addProcessStep({
         title: t("检索失败", "Search failed"),
         detail: event.message,
-        status: "failed"
+        status: "failed",
       });
       setError(event.message);
     }
@@ -1048,11 +1320,14 @@ function AppShell() {
     resetProcess(t("开始检索", "Start search"), searchQuery.trim());
     try {
       setError("");
-      await api.streamSearch({
-        query: searchQuery.trim(),
-        sourceIds: [selectedProjectId],
-        searchMode
-      }, handleSearchStreamEvent);
+      await api.streamSearch(
+        {
+          query: searchQuery.trim(),
+          sourceIds: [selectedProjectId],
+          searchMode,
+        },
+        handleSearchStreamEvent,
+      );
       await syncModelLogs();
     } catch (err) {
       await syncModelLogs();
@@ -1060,7 +1335,7 @@ function AppShell() {
       addProcessStep({
         title: t("检索失败", "Search failed"),
         detail: getErrorMessage(err),
-        status: "failed"
+        status: "failed",
       });
     } finally {
       setIsSearching(false);
@@ -1072,11 +1347,13 @@ function AppShell() {
       setError(t("请先选择项目。", "Select a project first."));
       return;
     }
-    const response = await api.createMcpSession({ sourceIds: [selectedProjectId] });
+    const response = await api.createMcpSession({
+      sourceIds: [selectedProjectId],
+    });
     const sessionsResponse = await api.listMcpSessions(selectedProjectId);
     setSessionsByProjectId((current) => ({
       ...current,
-      [selectedProjectId]: sessionsResponse.sessions
+      [selectedProjectId]: sessionsResponse.sessions,
     }));
     await loadMcpSession(response.session.id);
     setWorkspaceView("chat");
@@ -1087,11 +1364,14 @@ function AppShell() {
     setMcpDetail(detail);
     const latestSearch = [...detail.toolCalls]
       .reverse()
-      .find((toolCall) => toolCall.toolName === "sag_search" && toolCall.status === "SUCCEEDED");
+      .find(
+        (toolCall) =>
+          toolCall.toolName === "sag_search" && toolCall.status === "SUCCEEDED",
+      );
     if (latestSearch) {
       const focus = buildGraphFocus(
         parseToolResponse(latestSearch.result),
-        getRawMcpSearchQuery(latestSearch.arguments)
+        getRawMcpSearchQuery(latestSearch.arguments),
       );
       if (focus) {
         setGraphFocus(focus);
@@ -1104,10 +1384,14 @@ function AppShell() {
       setError(t("请先选择对话。", "Select a conversation first."));
       return;
     }
-    if (!window.confirm(t(
-      "清空当前对话记录？\n\n这会删除该会话里的消息和工具调用记录，但会保留会话本身。",
-      "Clear the current conversation history?\n\nThis will delete messages and tool call records in this session, while keeping the session itself."
-    ))) {
+    if (
+      !window.confirm(
+        t(
+          "清空当前对话记录？\n\n这会删除该会话里的消息和工具调用记录，但会保留会话本身。",
+          "Clear the current conversation history?\n\nThis will delete messages and tool call records in this session, while keeping the session itself.",
+        ),
+      )
+    ) {
       return;
     }
     try {
@@ -1127,24 +1411,33 @@ function AppShell() {
       setError(t("请先选择对话。", "Select a conversation first."));
       return;
     }
-    if (!window.confirm(t(
-      `删除对话「${mcpDetail.session.title}」？\n\n这会永久删除该会话、消息和工具调用记录，且不可恢复。`,
-      `Delete conversation "${mcpDetail.session.title}"?\n\nThis will permanently delete the session, messages, and tool call records. This action cannot be undone.`
-    ))) {
+    if (
+      !window.confirm(
+        t(
+          `删除对话「${mcpDetail.session.title}」？\n\n这会永久删除该会话、消息和工具调用记录，且不可恢复。`,
+          `Delete conversation "${mcpDetail.session.title}"?\n\nThis will permanently delete the session, messages, and tool call records. This action cannot be undone.`,
+        ),
+      )
+    ) {
       return;
     }
     try {
       setError("");
       const deletedSessionId = mcpDetail.session.id;
       await api.deleteMcpSession(deletedSessionId);
-      const sessionsResponse = await api.listMcpSessions(selectedProjectId || undefined);
+      const sessionsResponse = await api.listMcpSessions(
+        selectedProjectId || undefined,
+      );
       if (selectedProjectId) {
         setSessionsByProjectId((current) => ({
           ...current,
-          [selectedProjectId]: sessionsResponse.sessions
+          [selectedProjectId]: sessionsResponse.sessions,
         }));
       }
-      const nextSession = sessionsResponse.sessions.find((session) => session.id !== deletedSessionId) ?? null;
+      const nextSession =
+        sessionsResponse.sessions.find(
+          (session) => session.id !== deletedSessionId,
+        ) ?? null;
       if (nextSession) {
         await loadMcpSession(nextSession.id);
       } else {
@@ -1174,18 +1467,20 @@ function AppShell() {
     try {
       setError("");
       if (!sessionId) {
-        const response = await api.createMcpSession({ sourceIds: [selectedProjectId] });
+        const response = await api.createMcpSession({
+          sourceIds: [selectedProjectId],
+        });
         sessionId = response.session.id;
         const sessionsResponse = await api.listMcpSessions(selectedProjectId);
         setSessionsByProjectId((current) => ({
           ...current,
-          [selectedProjectId]: sessionsResponse.sessions
+          [selectedProjectId]: sessionsResponse.sessions,
         }));
         await loadMcpSession(sessionId);
       }
       await api.streamMcpMessage(sessionId, content, handleMcpStreamEvent, {
         signal: abortController.signal,
-        autoMermaid
+        autoMermaid,
       });
       await syncModelLogs();
       await refreshSessionsForProjects([selectedProjectId]);
@@ -1199,8 +1494,11 @@ function AppShell() {
         }
         addProcessStep({
           title: t("已停止", "Stopped"),
-          detail: t("你手动停止了本轮 MCP 对话。", "You manually stopped this MCP conversation turn."),
-          status: "done"
+          detail: t(
+            "你手动停止了本轮 MCP 对话。",
+            "You manually stopped this MCP conversation turn.",
+          ),
+          status: "done",
         });
         return;
       }
@@ -1208,7 +1506,7 @@ function AppShell() {
       addProcessStep({
         title: t("对话失败", "Conversation failed"),
         detail: getErrorMessage(err),
-        status: "failed"
+        status: "failed",
       });
     } finally {
       if (mcpAbortControllerRef.current === abortController) {
@@ -1226,67 +1524,132 @@ function AppShell() {
     mcpAbortControllerRef.current?.abort();
   }
 
-  async function requestMermaidRedraw(input: { source: string; error?: string }) {
+  async function requestMermaidRedraw(input: {
+    source: string;
+    error?: string;
+  }) {
     if (isMcpRunning) return;
     const hasSyntaxError = Boolean(input.error?.trim());
     const prompt = hasSyntaxError
       ? [
-        "上一条回答中的 Mermaid 产业链图渲染失败。请根据下面的错误信息和原 Mermaid 代码，重新生成一份语法正确、保守兼容的 Mermaid flowchart/graph 代码。",
-        "",
-        "要求：",
-        "1. 不要使用 HTML、click、icon 或 Mermaid 不稳定语法。",
-        "2. 节点和边标签里不要使用 [1]、[2]、[网1]、URL 或脚注；如果需要引用，请放在 Mermaid 代码块外的普通文字里。",
-        "3. 每条节点定义、每条边、每个 classDef 都必须单独一行，避免把 end 和下一条边写在同一行。",
-        "4. 边标签只写关系名称，例如 进入、生成、副产、主要下游，不要写证据编号。",
-        "5. 只输出修复后的简短说明和一个完整闭合的 ```mermaid 代码块。",
-        "",
-        "Mermaid 报错：",
-        "```text",
-        input.error?.trim() ?? "",
-        "```",
-        "",
-        "原 Mermaid 代码：",
-        "```mermaid",
-        input.source,
-        "```"
-      ].join("\n")
+          "上一条回答中的 Mermaid 产业链图渲染失败。请根据下面的错误信息和原 Mermaid 代码，重新生成一份语法正确、保守兼容的 Mermaid flowchart/graph 代码。",
+          "",
+          "要求：",
+          "1. 不要使用 HTML、click、icon 或 Mermaid 不稳定语法。",
+          "2. 节点和边标签里不要使用 [1]、[2]、[网1]、URL 或脚注；如果需要引用，请放在 Mermaid 代码块外的普通文字里。",
+          "3. 每条节点定义、每条边、每个 classDef 都必须单独一行，避免把 end 和下一条边写在同一行。",
+          "4. 边标签只写关系名称，例如 进入、生成、副产、主要下游，不要写证据编号。",
+          "5. 只输出修复后的简短说明和一个完整闭合的 ```mermaid 代码块。",
+          "",
+          "Mermaid 报错：",
+          "```text",
+          input.error?.trim() ?? "",
+          "```",
+          "",
+          "原 Mermaid 代码：",
+          "```mermaid",
+          input.source,
+          "```",
+        ].join("\n")
       : [
-        "上一条回答中的 Mermaid 产业链图已经可以渲染，但我对这张图的表达效果不够满意。请在保持原有主题和证据含义的基础上，重新生成一份更清晰、更专业、更适合展示产业链关系的 Mermaid flowchart/graph 图。",
-        "",
-        "优化方向：",
-        "1. 结构层级更清楚，尽量体现上游、中游、下游、应用或企业关系。",
-        "2. 节点命名简洁，边关系清楚，每条边单独一行。",
-        "3. 不要使用 HTML、click、icon 或 Mermaid 不稳定语法。",
-        "4. 节点和边标签里不要放 [1]、[2]、[网1]、URL 或脚注；产业链关系图引用必须放在 Mermaid 代码块外，标题写“产业链关系图引用说明”，编号用 [1]、[2]。",
-        "5. 每条节点定义、每条边、每个 classDef 都必须单独一行。",
-        "6. 只输出简短说明和一个完整闭合的 ```mermaid 代码块。",
-        "",
-        "原 Mermaid 代码：",
-        "```mermaid",
-        input.source,
-        "```"
-      ].join("\n");
+          "上一条回答中的 Mermaid 产业链图已经可以渲染，但我对这张图的表达效果不够满意。请在保持原有主题和证据含义的基础上，重新生成一份更清晰、更专业、更适合展示产业链关系的 Mermaid flowchart/graph 图。",
+          "",
+          "优化方向：",
+          "1. 结构层级更清楚，尽量体现上游、中游、下游、应用或企业关系。",
+          "2. 节点命名简洁，边关系清楚，每条边单独一行。",
+          "3. 不要使用 HTML、click、icon 或 Mermaid 不稳定语法。",
+          "4. 节点和边标签里不要放 [1]、[2]、[网1]、URL 或脚注；产业链关系图引用必须放在 Mermaid 代码块外，标题写“产业链关系图引用说明”，编号用 [1]、[2]。",
+          "5. 每条节点定义、每条边、每个 classDef 都必须单独一行。",
+          "6. 只输出简短说明和一个完整闭合的 ```mermaid 代码块。",
+          "",
+          "原 Mermaid 代码：",
+          "```mermaid",
+          input.source,
+          "```",
+        ].join("\n");
     setMcpInput(prompt);
     await sendMcpMessage(prompt);
   }
 
-  async function openEventDetail(eventId: string) {
+  function rememberCurrentDrawerForBackNavigation(currentDrawer: DetailDrawer) {
+    if (!currentDrawer) return;
+    setDrawerHistory((history) => [...history, currentDrawer].slice(-20));
+  }
+
+  function closeDetailDrawer() {
+    setDrawer(null);
+    setDrawerHistory([]);
+  }
+
+  function goBackDetailDrawer() {
+    setDrawerHistory((history) => {
+      const previousDrawer = history.at(-1);
+      if (!previousDrawer) return history;
+      setDrawer(previousDrawer);
+      return history.slice(0, -1);
+    });
+  }
+
+  async function openEventDetail(
+    eventId: string,
+    options?: { pushHistory?: boolean },
+  ) {
+    const previousDrawer = drawer;
     try {
-      setDrawer({ type: "event", detail: await api.getEvent(eventId) });
+      const detail = await api.getEvent(eventId);
+      if (options?.pushHistory) {
+        rememberCurrentDrawerForBackNavigation(previousDrawer);
+      } else {
+        setDrawerHistory([]);
+      }
+      setDrawer({ type: "event", detail });
     } catch (err) {
       setError(getErrorMessage(err));
     }
   }
 
-  async function openEntityDetail(entityId: string) {
+  async function openEntityDetail(
+    entityId: string,
+    options?: { pushHistory?: boolean },
+  ) {
+    const previousDrawer = drawer;
     try {
-      setDrawer({ type: "entity", detail: await api.getEntity(entityId) });
+      const detail = await api.getEntity(entityId);
+      const sameNameEntitySource =
+        projectEntities.length > 0 ? projectEntities : entities;
+      const sameNameEntityIds = collectSameNameKnowledgeAssetEntityIds(
+        sameNameEntitySource,
+        detail.entity,
+      ).filter((id) => id !== detail.entity.id);
+      const sameNameDetails = (
+        await Promise.all(
+          sameNameEntityIds.map(async (sameNameEntityId) => {
+            try {
+              return await api.getEntity(sameNameEntityId);
+            } catch {
+              return null;
+            }
+          }),
+        )
+      ).filter((item): item is EntityDetailRecord => Boolean(item));
+      if (options?.pushHistory) {
+        rememberCurrentDrawerForBackNavigation(previousDrawer);
+      } else {
+        setDrawerHistory([]);
+      }
+      setDrawer({
+        type: "entity",
+        detail,
+        sameNameDetails:
+          sameNameDetails.length > 0 ? sameNameDetails : undefined,
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
   }
 
   async function openCitationDetail(citation: AnswerCitation) {
+    setDrawerHistory([]);
     setDrawer({ type: "citation", citation });
     if (citation.document) {
       return;
@@ -1302,19 +1665,28 @@ function AppShell() {
         document: chunk.document,
         documentId: citation.documentId ?? chunk.document.id,
         heading: citation.heading || chunk.heading || undefined,
-        content: citation.content || chunk.content
+        content: citation.content || chunk.content,
       };
-      setDrawer((current) => current?.type === "citation" &&
+      setDrawer((current) =>
+        current?.type === "citation" &&
         current.citation.chunkId === citation.chunkId &&
         current.citation.index === citation.index
-        ? { type: "citation", citation: enrichedCitation }
-        : current);
+          ? { type: "citation", citation: enrichedCitation }
+          : current,
+      );
     } catch (err) {
       setError(getErrorMessage(err));
     }
   }
 
-  async function updateChunkAsset(chunkId: string, input: { heading?: string | null; content?: string; rawContent?: string | null }) {
+  async function updateChunkAsset(
+    chunkId: string,
+    input: {
+      heading?: string | null;
+      content?: string;
+      rawContent?: string | null;
+    },
+  ) {
     try {
       setError("");
       await api.updateChunk(chunkId, input);
@@ -1336,13 +1708,18 @@ function AppShell() {
     }
   }
 
-  async function updateEventAsset(eventId: string, input: { title?: string; summary?: string; content?: string }) {
+  async function updateEventAsset(
+    eventId: string,
+    input: { title?: string; summary?: string; content?: string },
+  ) {
     try {
       setError("");
       const response = await api.updateEvent(eventId, input);
-      setDrawer((current) => current?.type === "event" && current.detail.event.id === eventId
-        ? { type: "event", detail: response.detail }
-        : current);
+      setDrawer((current) =>
+        current?.type === "event" && current.detail.event.id === eventId
+          ? { type: "event", detail: response.detail }
+          : current,
+      );
       await refreshKnowledgeWorkspace();
       setNotice(t("事件已保存", "Event saved"));
     } catch (err) {
@@ -1354,7 +1731,11 @@ function AppShell() {
     try {
       setError("");
       await api.deleteEvent(eventId);
-      setDrawer((current) => current?.type === "event" && current.detail.event.id === eventId ? null : current);
+      setDrawer((current) =>
+        current?.type === "event" && current.detail.event.id === eventId
+          ? null
+          : current,
+      );
       await refreshKnowledgeWorkspace();
       setNotice(t("事件已删除", "Event deleted"));
     } catch (err) {
@@ -1362,13 +1743,18 @@ function AppShell() {
     }
   }
 
-  async function updateEntityAsset(entityId: string, input: { type?: string; name?: string; description?: string | null }) {
+  async function updateEntityAsset(
+    entityId: string,
+    input: { type?: string; name?: string; description?: string | null },
+  ) {
     try {
       setError("");
       const response = await api.updateEntity(entityId, input);
-      setDrawer((current) => current?.type === "entity" && current.detail.entity.id === entityId
-        ? { type: "entity", detail: response.detail }
-        : current);
+      setDrawer((current) =>
+        current?.type === "entity" && current.detail.entity.id === entityId
+          ? { type: "entity", detail: response.detail }
+          : current,
+      );
       await refreshKnowledgeWorkspace();
       setNotice(t("实体已保存", "Entity saved"));
     } catch (err) {
@@ -1380,7 +1766,11 @@ function AppShell() {
     try {
       setError("");
       await api.deleteEntity(entityId);
-      setDrawer((current) => current?.type === "entity" && current.detail.entity.id === entityId ? null : current);
+      setDrawer((current) =>
+        current?.type === "entity" && current.detail.entity.id === entityId
+          ? null
+          : current,
+      );
       await refreshKnowledgeWorkspace();
       setNotice(t("实体已删除", "Entity deleted"));
     } catch (err) {
@@ -1405,7 +1795,9 @@ function AppShell() {
   }
 
   function toggleSettings() {
-    setWorkspaceView((current) => current === "settings" ? "chat" : "settings");
+    setWorkspaceView((current) =>
+      current === "settings" ? "chat" : "settings",
+    );
   }
 
   function toggleProjectExpanded(projectId: string) {
@@ -1438,13 +1830,24 @@ function AppShell() {
   }
 
   const showActivityPanel = workspaceView === "chat";
-  const leftRailEffectiveWidth = isLeftRailCollapsed ? LEFT_RAIL_COLLAPSED_WIDTH : leftRailWidth;
-  const rightPanelEffectiveWidth = isRightPanelCollapsed ? RIGHT_PANEL_COLLAPSED_WIDTH : rightPanelWidth;
+  const leftRailEffectiveWidth = isLeftRailCollapsed
+    ? LEFT_RAIL_COLLAPSED_WIDTH
+    : leftRailWidth;
+  const rightPanelEffectiveWidth = isRightPanelCollapsed
+    ? RIGHT_PANEL_COLLAPSED_WIDTH
+    : rightPanelWidth;
 
   return (
-    <div className={cn(
-      "chem-app-shell grid h-dvh min-h-0 overflow-hidden text-foreground"
-    )} style={{ "--chem-left-rail-width": `${leftRailEffectiveWidth}px` } as CSSProperties}>
+    <div
+      className={cn(
+        "chem-app-shell grid h-dvh min-h-0 overflow-hidden text-foreground",
+      )}
+      style={
+        {
+          "--chem-left-rail-width": `${leftRailEffectiveWidth}px`,
+        } as CSSProperties
+      }
+    >
       <ProjectRail
         projects={projects}
         selectedProjectId={selectedProjectId}
@@ -1468,12 +1871,16 @@ function AppShell() {
         }}
         onToggleProjectExpanded={toggleProjectExpanded}
         onRenameProject={renameProject}
-        onArchiveOrRestoreProject={(project) => void archiveOrRestoreProject(project)}
+        onArchiveOrRestoreProject={(project) =>
+          void archiveOrRestoreProject(project)
+        }
         onDeleteProject={(project) => void permanentlyDeleteProject(project)}
         onToggleArchived={setShowArchivedProjects}
         onOpenSettings={toggleSettings}
         onCreateSession={() => void createMcpSession()}
-        onSelectProjectSession={(projectId, sessionId) => void selectProjectSession(projectId, sessionId)}
+        onSelectProjectSession={(projectId, sessionId) =>
+          void selectProjectSession(projectId, sessionId)
+        }
       />
 
       <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
@@ -1482,11 +1889,17 @@ function AppShell() {
             <>
               <div className="hidden min-w-0 flex-1 lg:block">
                 <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-                  {t("CHEMCLOUD KNOWLEDGE ENGINE", "CHEMCLOUD KNOWLEDGE ENGINE")}
+                  {t(
+                    "CHEMCLOUD KNOWLEDGE ENGINE",
+                    "CHEMCLOUD KNOWLEDGE ENGINE",
+                  )}
                 </div>
                 <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-semibold">
                   <Building2 className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="truncate">{selectedProject?.name ?? t("请选择知识空间", "Select a knowledge space")}</span>
+                  <span className="truncate">
+                    {selectedProject?.name ??
+                      t("请选择知识空间", "Select a knowledge space")}
+                  </span>
                 </div>
               </div>
               <MainWorkspaceTabs
@@ -1496,7 +1909,12 @@ function AppShell() {
               <div className="flex flex-1 items-center justify-end gap-3">
                 <div className="chem-system-status hidden xl:inline-flex">
                   <span className="chem-status-dot" />
-                  <span>{t("产业链知识引擎在线", "Industry knowledge engine online")}</span>
+                  <span>
+                    {t(
+                      "产业链知识引擎在线",
+                      "Industry knowledge engine online",
+                    )}
+                  </span>
                 </div>
                 <ThemeToggleButton />
               </div>
@@ -1505,8 +1923,12 @@ function AppShell() {
           {workspaceView === "settings" ? (
             <div className="flex w-full items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">CHEMCLOUD SYSTEM</div>
-                <div className="mt-1 text-sm font-semibold">{t("系统与模型设置", "System and model settings")}</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                  CHEMCLOUD SYSTEM
+                </div>
+                <div className="mt-1 text-sm font-semibold">
+                  {t("系统与模型设置", "System and model settings")}
+                </div>
               </div>
               <ThemeToggleButton />
             </div>
@@ -1543,7 +1965,11 @@ function AppShell() {
         <div
           className="chem-content-grid min-h-0 flex-1"
           data-activity-panel={showActivityPanel ? "true" : "false"}
-          style={{ "--chem-right-panel-width": `${rightPanelEffectiveWidth}px` } as CSSProperties}
+          style={
+            {
+              "--chem-right-panel-width": `${rightPanelEffectiveWidth}px`,
+            } as CSSProperties
+          }
         >
           <main className="chem-main-workspace flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border">
             {workspaceView === "settings" ? (
@@ -1567,6 +1993,7 @@ function AppShell() {
                 chunks={chunks}
                 events={events}
                 entities={entities}
+                projectEntities={projectEntities}
                 projectStats={projectStats}
                 resultView={resultView}
                 showArchivedDocuments={showArchivedDocuments}
@@ -1580,12 +2007,20 @@ function AppShell() {
                 fileInputRef={fileInputRef}
                 onUploadFiles={(files) => void handleUploadFiles(files)}
                 onImportStructured={handleStructuredImport}
-                onExportProject={(format, profile, split, maxBytes) => void exportProject(format, profile, split, maxBytes)}
-                onToggleUploadQueue={() => setIsUploadQueueExpanded((current) => !current)}
+                onExportProject={(format, profile, split, maxBytes) =>
+                  void exportProject(format, profile, split, maxBytes)
+                }
+                onToggleUploadQueue={() =>
+                  setIsUploadQueueExpanded((current) => !current)
+                }
                 onSelectDocument={setSelectedDocumentId}
                 onRenameDocument={(document) => void renameDocument(document)}
-                onArchiveOrRestoreDocument={(document) => void archiveOrRestoreDocument(document)}
-                onDeleteDocument={(document) => void permanentlyDeleteDocument(document)}
+                onArchiveOrRestoreDocument={(document) =>
+                  void archiveOrRestoreDocument(document)
+                }
+                onDeleteDocument={(document) =>
+                  void permanentlyDeleteDocument(document)
+                }
                 onSetResultView={setResultView}
                 onToggleArchivedDocuments={setShowArchivedDocuments}
                 onSearchQueryChange={setSearchQuery}
@@ -1593,11 +2028,17 @@ function AppShell() {
                 onSearch={() => void runSearch()}
                 onOpenEvent={(eventId) => void openEventDetail(eventId)}
                 onOpenEntity={(entityId) => void openEntityDetail(entityId)}
-                onUpdateChunk={(chunkId, input) => void updateChunkAsset(chunkId, input)}
+                onUpdateChunk={(chunkId, input) =>
+                  void updateChunkAsset(chunkId, input)
+                }
                 onDeleteChunk={(chunkId) => void deleteChunkAsset(chunkId)}
-                onUpdateEvent={(eventId, input) => void updateEventAsset(eventId, input)}
+                onUpdateEvent={(eventId, input) =>
+                  void updateEventAsset(eventId, input)
+                }
                 onDeleteEvent={(eventId) => void deleteEventAsset(eventId)}
-                onUpdateEntity={(entityId, input) => void updateEntityAsset(entityId, input)}
+                onUpdateEntity={(entityId, input) =>
+                  void updateEntityAsset(entityId, input)
+                }
                 onDeleteEntity={(entityId) => void deleteEntityAsset(entityId)}
               />
             ) : workspaceView === "graph" ? (
@@ -1627,7 +2068,9 @@ function AppShell() {
                 runningMcpSearches={runningMcpSearches}
                 autoMermaid={autoMermaid}
                 mermaidPendingText={aiSettings?.mermaidPendingText}
-                onRequestMermaidRedraw={(input) => void requestMermaidRedraw(input)}
+                onRequestMermaidRedraw={(input) =>
+                  void requestMermaidRedraw(input)
+                }
                 onInputChange={setMcpInput}
                 onAutoMermaidChange={setAutoMermaid}
                 onCreateSession={() => void createMcpSession()}
@@ -1653,7 +2096,9 @@ function AppShell() {
               modelLogs={modelLogs}
               isCollapsed={isRightPanelCollapsed}
               onSetMode={setActivityPanelMode}
-              onToggleCollapsed={() => setIsRightPanelCollapsed((current) => !current)}
+              onToggleCollapsed={() =>
+                setIsRightPanelCollapsed((current) => !current)
+              }
               onResizeStart={startRightPanelResize}
               onRefreshModelLogs={() => void syncModelLogs()}
               onClearModelLogs={() => void clearModelLogs()}
@@ -1665,9 +2110,15 @@ function AppShell() {
       {drawer ? (
         <DetailDrawer
           drawer={drawer}
-          onClose={() => setDrawer(null)}
-          onOpenEvent={(eventId) => void openEventDetail(eventId)}
-          onOpenEntity={(entityId) => void openEntityDetail(entityId)}
+          canGoBack={drawerHistory.length > 0}
+          onBack={goBackDetailDrawer}
+          onClose={closeDetailDrawer}
+          onOpenEvent={(eventId) =>
+            void openEventDetail(eventId, { pushHistory: true })
+          }
+          onOpenEntity={(entityId) =>
+            void openEntityDetail(entityId, { pushHistory: true })
+          }
         />
       ) : null}
     </div>
@@ -1700,17 +2151,22 @@ function ProjectRail(props: {
   onSelectProjectSession: (projectId: string, sessionId: string) => void;
 }) {
   const { t } = useI18n();
-  const [openProjectMenuId, setOpenProjectMenuId] = useState<string | null>(null);
+  const [openProjectMenuId, setOpenProjectMenuId] = useState<string | null>(
+    null,
+  );
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const [renameProjectTarget, setRenameProjectTarget] = useState<SourceRecord | null>(null);
+  const [renameProjectTarget, setRenameProjectTarget] =
+    useState<SourceRecord | null>(null);
   const [renameProjectName, setRenameProjectName] = useState("");
   const [isRenamingProject, setIsRenamingProject] = useState(false);
-  const canCreateProject = props.newProjectName.trim().length > 0 && !isCreatingProject;
-  const canRenameProject = Boolean(renameProjectTarget)
-    && renameProjectName.trim().length > 0
-    && renameProjectName.trim() !== renameProjectTarget?.name
-    && !isRenamingProject;
+  const canCreateProject =
+    props.newProjectName.trim().length > 0 && !isCreatingProject;
+  const canRenameProject =
+    Boolean(renameProjectTarget) &&
+    renameProjectName.trim().length > 0 &&
+    renameProjectName.trim() !== renameProjectTarget?.name &&
+    !isRenamingProject;
 
   function openCreateProjectDialog() {
     props.onNewProjectNameChange("");
@@ -1752,7 +2208,10 @@ function ProjectRail(props: {
     if (!renameProjectTarget || !canRenameProject) return;
     setIsRenamingProject(true);
     try {
-      const renamed = await props.onRenameProject(renameProjectTarget, renameProjectName);
+      const renamed = await props.onRenameProject(
+        renameProjectTarget,
+        renameProjectName,
+      );
       if (renamed) {
         setRenameProjectTarget(null);
         setRenameProjectName("");
@@ -1764,7 +2223,12 @@ function ProjectRail(props: {
 
   return (
     <>
-      <aside className={cn("chem-sidebar relative z-10 flex min-h-0 flex-col overflow-hidden border-r border-border", props.isCollapsed && "chem-sidebar-collapsed")}>
+      <aside
+        className={cn(
+          "chem-sidebar relative z-10 flex min-h-0 flex-col overflow-hidden border-r border-border",
+          props.isCollapsed && "chem-sidebar-collapsed",
+        )}
+      >
         {props.isCollapsed ? (
           <div className="chem-sidebar-compact-content flex min-h-0 flex-1 flex-col items-center gap-2 px-2 py-4">
             <ChemCloudMark className="h-10 w-10 shrink-0" />
@@ -1811,13 +2275,17 @@ function ProjectRail(props: {
                     type="button"
                     className={cn(
                       "flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-background hover:text-foreground",
-                      selected && "bg-background text-primary shadow-sm"
+                      selected && "bg-background text-primary shadow-sm",
                     )}
                     title={project.name}
                     aria-label={project.name}
                     onClick={() => props.onSelectProject(project.id)}
                   >
-                    {expanded || selected ? <FolderOpen className="h-4 w-4" /> : <Folder className="h-4 w-4" />}
+                    {expanded || selected ? (
+                      <FolderOpen className="h-4 w-4" />
+                    ) : (
+                      <Folder className="h-4 w-4" />
+                    )}
                   </button>
                 );
               })}
@@ -1825,188 +2293,266 @@ function ProjectRail(props: {
           </div>
         ) : null}
         <div className="chem-sidebar-full-content flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="border-b border-border px-4 py-5">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-3">
-              <ChemCloudMark className="h-10 w-10" />
-              <div className="min-w-0">
-                <div className="whitespace-nowrap text-base font-bold tracking-tight">ChemClaw</div>
-                <div className="truncate text-[11px] text-muted-foreground">{t("芯化和云 · 化工产业链智能体", "ChemCloud · Chemical industry agent")}</div>
-              </div>
-            </div>
-            <Button
-              variant={props.isSettingsOpen ? "secondary" : "ghost"}
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              title={t("全局设置", "Global settings")}
-              aria-label={t("全局设置", "Global settings")}
-              onClick={props.onOpenSettings}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between px-4 pb-2 pt-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{t("知识空间", "Knowledge spaces")}</div>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <input type="checkbox" checked={props.showArchived} onChange={(event) => props.onToggleArchived(event.target.checked)} />
-            {t("归档", "Archived")}
-          </label>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3 scrollbar-thin">
-          <button
-            type="button"
-            className="chem-new-space mb-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-left text-sm font-medium text-muted-foreground"
-            onClick={openCreateProjectDialog}
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            {t("新建项目", "New project")}
-          </button>
-          {props.projects.length === 0 ? (
-            <EmptyLine text={t("暂无项目，请先新建项目。", "No projects yet. Create a project first.")} />
-          ) : props.projects.map((project) => {
-          const selected = project.id === props.selectedProjectId;
-          const menuOpen = openProjectMenuId === project.id;
-          const expanded = props.expandedProjectIds.has(project.id);
-          const projectSessions = props.sessionsByProjectId[project.id] ?? [];
-          const closeMenu = () => setOpenProjectMenuId(null);
-          return (
-            <div key={project.id} className={cn("group relative rounded-xl", selected && "chem-project-active")}>
-              <div className="flex items-start gap-1">
-                <button
-                  type="button"
-                  className="ml-1 mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground"
-                  title={expanded ? t("收起项目对话", "Collapse project conversations") : t("展开项目对话", "Expand project conversations")}
-                  aria-label={expanded
-                    ? t(`收起项目对话：${project.name}`, `Collapse project conversations: ${project.name}`)
-                    : t(`展开项目对话：${project.name}`, `Expand project conversations: ${project.name}`)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    closeMenu();
-                    props.onToggleProjectExpanded(project.id);
-                  }}
-                >
-                  <ChevronRight className={cn("h-4 w-4 transition-transform", expanded && "rotate-90")} />
-                </button>
-                <button
-                  className="flex min-w-0 flex-1 items-start gap-2 rounded-lg py-2 pr-1 text-left text-sm hover:bg-accent/70"
-                  onClick={() => {
-                    closeMenu();
-                    props.onSelectProject(project.id);
-                  }}
-                >
-                  {expanded || selected ? (
-                    <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  ) : (
-                    <Folder className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{project.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {project.archivedAt ? t("已归档", "Archived") : shortId(project.id)}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "mr-2 mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground focus:bg-background focus:text-foreground",
-                    menuOpen || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                  )}
-                  title={t("项目操作", "Project actions")}
-                  aria-label={t(`项目操作：${project.name}`, `Project actions: ${project.name}`)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setOpenProjectMenuId((current) => current === project.id ? null : project.id);
-                  }}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-              </div>
-              {menuOpen ? (
-                <div
-                  className="absolute right-2 top-9 z-50 w-28 rounded-md border border-border bg-background p-1 shadow-sm"
-                  role="menu"
-                >
-                  <ProjectMenuItem
-                    onClick={() => {
-                      closeMenu();
-                      openRenameProjectDialog(project);
-                    }}
-                  >
-                    {t("重命名", "Rename")}
-                  </ProjectMenuItem>
-                  <ProjectMenuItem
-                    onClick={() => {
-                      closeMenu();
-                      props.onArchiveOrRestoreProject(project);
-                    }}
-                  >
-                    {project.archivedAt ? t("恢复", "Restore") : t("归档", "Archive")}
-                  </ProjectMenuItem>
-                  <ProjectMenuItem
-                    danger
-                    onClick={() => {
-                      closeMenu();
-                      props.onDeleteProject(project);
-                    }}
-                  >
-                    {t("永久删除", "Delete forever")}
-                  </ProjectMenuItem>
+          <div className="border-b border-border px-4 py-5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <ChemCloudMark className="h-10 w-10" />
+                <div className="min-w-0">
+                  <div className="whitespace-nowrap text-base font-bold tracking-tight">
+                    ChemClaw
+                  </div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {t(
+                      "芯化和云 · 化工产业链智能体",
+                      "ChemCloud · Chemical industry agent",
+                    )}
+                  </div>
                 </div>
-              ) : null}
-              {expanded && !props.isSettingsOpen ? (
-                <div className="space-y-1 pb-2 pl-9 pr-2">
-                  {selected ? (
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={props.onCreateSession}
-                      disabled={props.isSessionBusy}
-                    >
-                      <Plus className="h-3.5 w-3.5 shrink-0" />
-                      {t("新建对话", "New chat")}
-                    </button>
-                  ) : null}
-                  {projectSessions.length === 0 ? (
-                    <div className="px-2 py-1.5 text-xs text-muted-foreground">{t("暂无对话", "No chats")}</div>
-                  ) : projectSessions.map((session) => {
-                    const sessionSelected = session.id === props.selectedSessionId;
-                    return (
+              </div>
+              <Button
+                variant={props.isSettingsOpen ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                title={t("全局设置", "Global settings")}
+                aria-label={t("全局设置", "Global settings")}
+                onClick={props.onOpenSettings}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between px-4 pb-2 pt-4">
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              {t("知识空间", "Knowledge spaces")}
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={props.showArchived}
+                onChange={(event) =>
+                  props.onToggleArchived(event.target.checked)
+                }
+              />
+              {t("归档", "Archived")}
+            </label>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3 scrollbar-thin">
+            <button
+              type="button"
+              className="chem-new-space mb-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-left text-sm font-medium text-muted-foreground"
+              onClick={openCreateProjectDialog}
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              {t("新建项目", "New project")}
+            </button>
+            {props.projects.length === 0 ? (
+              <EmptyLine
+                text={t(
+                  "暂无项目，请先新建项目。",
+                  "No projects yet. Create a project first.",
+                )}
+              />
+            ) : (
+              props.projects.map((project) => {
+                const selected = project.id === props.selectedProjectId;
+                const menuOpen = openProjectMenuId === project.id;
+                const expanded = props.expandedProjectIds.has(project.id);
+                const projectSessions =
+                  props.sessionsByProjectId[project.id] ?? [];
+                const closeMenu = () => setOpenProjectMenuId(null);
+                return (
+                  <div
+                    key={project.id}
+                    className={cn(
+                      "group relative rounded-xl",
+                      selected && "chem-project-active",
+                    )}
+                  >
+                    <div className="flex items-start gap-1">
                       <button
-                        key={session.id}
                         type="button"
-                        className={cn(
-                          "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60",
-                          sessionSelected && "bg-background text-foreground shadow-sm"
-                        )}
-                        onClick={() => props.onSelectProjectSession(project.id, session.id)}
-                        disabled={props.isSessionBusy}
-                        title={session.title}
+                        className="ml-1 mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground"
+                        title={
+                          expanded
+                            ? t(
+                                "收起项目对话",
+                                "Collapse project conversations",
+                              )
+                            : t("展开项目对话", "Expand project conversations")
+                        }
+                        aria-label={
+                          expanded
+                            ? t(
+                                `收起项目对话：${project.name}`,
+                                `Collapse project conversations: ${project.name}`,
+                              )
+                            : t(
+                                `展开项目对话：${project.name}`,
+                                `Expand project conversations: ${project.name}`,
+                              )
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          closeMenu();
+                          props.onToggleProjectExpanded(project.id);
+                        }}
                       >
+                        <ChevronRight
+                          className={cn(
+                            "h-4 w-4 transition-transform",
+                            expanded && "rotate-90",
+                          )}
+                        />
+                      </button>
+                      <button
+                        className="flex min-w-0 flex-1 items-start gap-2 rounded-lg py-2 pr-1 text-left text-sm hover:bg-accent/70"
+                        onClick={() => {
+                          closeMenu();
+                          props.onSelectProject(project.id);
+                        }}
+                      >
+                        {expanded || selected ? (
+                          <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        ) : (
+                          <Folder className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate">{session.title}</span>
+                          <span className="block truncate font-medium">
+                            {project.name}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {project.archivedAt
+                              ? t("已归档", "Archived")
+                              : shortId(project.id)}
+                          </span>
                         </span>
                       </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          );
-          })} 
-        </div>
-        <div className="m-3 mt-0 rounded-xl border border-primary/15 bg-primary/[0.06] p-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-            <CircleCheck className="h-4 w-4 text-primary" />
-            {t("ChemClaw 集成就绪", "ChemClaw integration ready")}
+                      <button
+                        type="button"
+                        className={cn(
+                          "mr-2 mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground focus:bg-background focus:text-foreground",
+                          menuOpen || selected
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100",
+                        )}
+                        title={t("项目操作", "Project actions")}
+                        aria-label={t(
+                          `项目操作：${project.name}`,
+                          `Project actions: ${project.name}`,
+                        )}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenProjectMenuId((current) =>
+                            current === project.id ? null : project.id,
+                          );
+                        }}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {menuOpen ? (
+                      <div
+                        className="absolute right-2 top-9 z-50 w-28 rounded-md border border-border bg-background p-1 shadow-sm"
+                        role="menu"
+                      >
+                        <ProjectMenuItem
+                          onClick={() => {
+                            closeMenu();
+                            openRenameProjectDialog(project);
+                          }}
+                        >
+                          {t("重命名", "Rename")}
+                        </ProjectMenuItem>
+                        <ProjectMenuItem
+                          onClick={() => {
+                            closeMenu();
+                            props.onArchiveOrRestoreProject(project);
+                          }}
+                        >
+                          {project.archivedAt
+                            ? t("恢复", "Restore")
+                            : t("归档", "Archive")}
+                        </ProjectMenuItem>
+                        <ProjectMenuItem
+                          danger
+                          onClick={() => {
+                            closeMenu();
+                            props.onDeleteProject(project);
+                          }}
+                        >
+                          {t("永久删除", "Delete forever")}
+                        </ProjectMenuItem>
+                      </div>
+                    ) : null}
+                    {expanded && !props.isSettingsOpen ? (
+                      <div className="space-y-1 pb-2 pl-9 pr-2">
+                        {selected ? (
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={props.onCreateSession}
+                            disabled={props.isSessionBusy}
+                          >
+                            <Plus className="h-3.5 w-3.5 shrink-0" />
+                            {t("新建对话", "New chat")}
+                          </button>
+                        ) : null}
+                        {projectSessions.length === 0 ? (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                            {t("暂无对话", "No chats")}
+                          </div>
+                        ) : (
+                          projectSessions.map((session) => {
+                            const sessionSelected =
+                              session.id === props.selectedSessionId;
+                            return (
+                              <button
+                                key={session.id}
+                                type="button"
+                                className={cn(
+                                  "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60",
+                                  sessionSelected &&
+                                    "bg-background text-foreground shadow-sm",
+                                )}
+                                onClick={() =>
+                                  props.onSelectProjectSession(
+                                    project.id,
+                                    session.id,
+                                  )
+                                }
+                                disabled={props.isSessionBusy}
+                                title={session.title}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate">
+                                    {session.title}
+                                  </span>
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
           </div>
-          <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
-            {t("知识问答、超图检索与 MCP 能力可嵌入公司统一智能入口。", "Q&A, hypergraph retrieval, and MCP are ready for the unified intelligence portal.")}
-          </p>
-        </div>
+          <div className="m-3 mt-0 rounded-xl border border-primary/15 bg-primary/[0.06] p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+              <CircleCheck className="h-4 w-4 text-primary" />
+              {t("ChemClaw 集成就绪", "ChemClaw integration ready")}
+            </div>
+            <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
+              {t(
+                "知识问答、超图检索与 MCP 能力可嵌入公司统一智能入口。",
+                "Q&A, hypergraph retrieval, and MCP are ready for the unified intelligence portal.",
+              )}
+            </p>
+          </div>
         </div>
         {!props.isCollapsed ? (
           <>
@@ -2031,15 +2577,32 @@ function ProjectRail(props: {
       </aside>
 
       {createProjectDialogOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="presentation">
-          <div className="w-full max-w-sm rounded-lg border border-border bg-background p-4 shadow-lg" role="dialog" aria-modal="true" aria-labelledby="create-project-title">
-            <div id="create-project-title" className="text-sm font-semibold">{t("新建项目", "New project")}</div>
-            <p className="mt-1 text-xs text-muted-foreground">{t("输入项目名称后创建，文档和对话都会归属到这个项目。", "Enter a project name. Documents and chats will belong to this project.")}</p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm rounded-lg border border-border bg-background p-4 shadow-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-project-title"
+          >
+            <div id="create-project-title" className="text-sm font-semibold">
+              {t("新建项目", "New project")}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t(
+                "输入项目名称后创建，文档和对话都会归属到这个项目。",
+                "Enter a project name. Documents and chats will belong to this project.",
+              )}
+            </p>
             <Input
               autoFocus
               className="mt-4"
               value={props.newProjectName}
-              onChange={(event) => props.onNewProjectNameChange(event.target.value)}
+              onChange={(event) =>
+                props.onNewProjectNameChange(event.target.value)
+              }
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   closeCreateProjectDialog();
@@ -2053,11 +2616,22 @@ function ProjectRail(props: {
               disabled={isCreatingProject}
             />
             <div className="mt-4 flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={closeCreateProjectDialog} disabled={isCreatingProject}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeCreateProjectDialog}
+                disabled={isCreatingProject}
+              >
                 {t("取消", "Cancel")}
               </Button>
-              <Button size="sm" onClick={() => void submitCreateProject()} disabled={!canCreateProject}>
-                {isCreatingProject ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <Button
+                size="sm"
+                onClick={() => void submitCreateProject()}
+                disabled={!canCreateProject}
+              >
+                {isCreatingProject ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
                 {t("确定", "Confirm")}
               </Button>
             </div>
@@ -2066,10 +2640,22 @@ function ProjectRail(props: {
       ) : null}
 
       {renameProjectTarget ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="presentation">
-          <div className="w-full max-w-sm rounded-lg border border-border bg-background p-4 shadow-lg" role="dialog" aria-modal="true" aria-labelledby="rename-project-title">
-            <div id="rename-project-title" className="text-sm font-semibold">{t("重命名项目", "Rename project")}</div>
-            <p className="mt-1 text-xs text-muted-foreground">{t("输入新的项目名称。", "Enter a new project name.")}</p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm rounded-lg border border-border bg-background p-4 shadow-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rename-project-title"
+          >
+            <div id="rename-project-title" className="text-sm font-semibold">
+              {t("重命名项目", "Rename project")}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("输入新的项目名称。", "Enter a new project name.")}
+            </p>
             <Input
               autoFocus
               className="mt-4"
@@ -2088,11 +2674,22 @@ function ProjectRail(props: {
               disabled={isRenamingProject}
             />
             <div className="mt-4 flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={closeRenameProjectDialog} disabled={isRenamingProject}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeRenameProjectDialog}
+                disabled={isRenamingProject}
+              >
                 {t("取消", "Cancel")}
               </Button>
-              <Button size="sm" onClick={() => void submitRenameProject()} disabled={!canRenameProject}>
-                {isRenamingProject ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <Button
+                size="sm"
+                onClick={() => void submitRenameProject()}
+                disabled={!canRenameProject}
+              >
+                {isRenamingProject ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
                 {t("确定", "Confirm")}
               </Button>
             </div>
@@ -2103,13 +2700,21 @@ function ProjectRail(props: {
   );
 }
 
-function ProjectMenuItem({ children, danger, onClick }: { children: ReactNode; danger?: boolean; onClick: () => void }) {
+function ProjectMenuItem({
+  children,
+  danger,
+  onClick,
+}: {
+  children: ReactNode;
+  danger?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       className={cn(
         "block w-full rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground",
-        danger && "text-red-600 hover:text-red-700"
+        danger && "text-red-600 hover:text-red-700",
       )}
       role="menuitem"
       onClick={onClick}
@@ -2124,40 +2729,57 @@ function MainWorkspaceTabs(props: {
   onChange: (view: Exclude<WorkspaceView, "settings">) => void;
 }) {
   const { t } = useI18n();
-  const tabs: Array<{ value: Exclude<WorkspaceView, "settings">; label: string; icon: typeof Sparkles }> = [
+  const tabs: Array<{
+    value: Exclude<WorkspaceView, "settings">;
+    label: string;
+    icon: typeof Sparkles;
+  }> = [
     { value: "chat", label: t("智能问答", "Q&A"), icon: Sparkles },
     { value: "documents", label: t("知识资产", "Assets"), icon: Database },
     { value: "graph", label: t("知识超图", "Hypergraph"), icon: Network },
-    { value: "mcp", label: t("ChemClaw 接入", "ChemClaw"), icon: Plug }
+    { value: "mcp", label: t("ChemClaw 接入", "ChemClaw"), icon: Plug },
   ];
   return (
     <div className="chem-workspace-tabs grid w-full min-w-0 max-w-[560px] grid-cols-4 rounded-xl border border-border p-1 sm:w-auto sm:min-w-[440px]">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         return (
-        <button
-          key={tab.value}
-          type="button"
-          className={cn(
-            "flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
-            props.view === tab.value && "chem-tab-active text-foreground"
-          )}
-          onClick={() => props.onChange(tab.value)}
-        >
-          <Icon className="hidden h-3.5 w-3.5 sm:block" />
-          {tab.label}
-        </button>
-      )})}
+          <button
+            key={tab.value}
+            type="button"
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
+              props.view === tab.value && "chem-tab-active text-foreground",
+            )}
+            onClick={() => props.onChange(tab.value)}
+          >
+            <Icon className="hidden h-3.5 w-3.5 sm:block" />
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 function ChemCloudMark({ className }: { className?: string }) {
   return (
-    <div className={cn("chemcloud-mark shrink-0", className)} aria-hidden="true">
+    <div
+      className={cn("chemcloud-mark shrink-0", className)}
+      aria-hidden="true"
+    >
       <svg viewBox="0 0 40 40" fill="none">
-        <path d="M10.5 14.5 20 9l9.5 5.5v11L20 31l-9.5-5.5v-11Z" stroke="currentColor" strokeWidth="2.2" />
-        <path d="m11 15 9 5 9-5M20 20v10" stroke="currentColor" strokeWidth="1.8" opacity=".88" />
+        <path
+          d="M10.5 14.5 20 9l9.5 5.5v11L20 31l-9.5-5.5v-11Z"
+          stroke="currentColor"
+          strokeWidth="2.2"
+        />
+        <path
+          d="m11 15 9 5 9-5M20 20v10"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          opacity=".88"
+        />
         <circle cx="20" cy="9" r="2.5" fill="currentColor" />
         <circle cx="10.5" cy="25.5" r="2.5" fill="currentColor" />
         <circle cx="29.5" cy="25.5" r="2.5" fill="currentColor" />
@@ -2174,13 +2796,14 @@ function ConversationWelcome(props: {
 }) {
   const { t } = useI18n();
   const prompts = useMemo(
-    () => buildWelcomePrompts({
-      projectName: props.projectName,
-      graph: props.graph,
-      promptTemplates: props.promptTemplates,
-      t
-    }),
-    [props.graph, props.projectName, props.promptTemplates, t]
+    () =>
+      buildWelcomePrompts({
+        projectName: props.projectName,
+        graph: props.graph,
+        promptTemplates: props.promptTemplates,
+        t,
+      }),
+    [props.graph, props.projectName, props.promptTemplates, t],
   );
   return (
     <div className="chem-welcome mx-auto my-auto w-full max-w-3xl rounded-[28px] border border-border p-6 md:p-8">
@@ -2196,12 +2819,15 @@ function ConversationWelcome(props: {
           {props.projectName}
         </div>
         <h2 className="mt-4 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-          {t("化工产业链知识超图问答", "Chemical Industry Knowledge Hypergraph Q&A")}
+          {t(
+            "化工产业链知识超图问答",
+            "Chemical Industry Knowledge Hypergraph Q&A",
+          )}
         </h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
           {t(
             "融合项目文档、产业事件、企业实体与上下游关系，为研发、市场、采购和战略分析提供可追溯的知识答案。",
-            "Combining project documents, industry events, company entities, and value-chain relationships to provide traceable answers for R&D, market, sourcing, and strategy."
+            "Combining project documents, industry events, company entities, and value-chain relationships to provide traceable answers for R&D, market, sourcing, and strategy.",
           )}
         </p>
       </div>
@@ -2231,40 +2857,63 @@ function buildWelcomePrompts(input: {
   t: (zh: string, en: string) => string;
 }) {
   const topEntities = [...(input.graph?.entities ?? [])]
-    .sort((left, right) => (right.eventCount ?? 0) - (left.eventCount ?? 0) || left.name.localeCompare(right.name))
+    .sort(
+      (left, right) =>
+        (right.eventCount ?? 0) - (left.eventCount ?? 0) ||
+        left.name.localeCompare(right.name),
+    )
     .slice(0, 6);
-  const productLike = topEntities.find((entity) => /product|产品|化学品|品类/i.test(entity.type)) ?? topEntities[0];
-  const secondEntity = topEntities.find((entity) => entity.id !== productLike?.id) ?? topEntities[1] ?? productLike;
-  const focus = productLike?.name || input.projectName || input.t("当前数据库", "the current database");
-  const secondary = secondEntity?.name || input.t("相关实体", "related entities");
+  const productLike =
+    topEntities.find((entity) =>
+      /product|产品|化学品|品类/i.test(entity.type),
+    ) ?? topEntities[0];
+  const secondEntity =
+    topEntities.find((entity) => entity.id !== productLike?.id) ??
+    topEntities[1] ??
+    productLike;
+  const focus =
+    productLike?.name ||
+    input.projectName ||
+    input.t("当前数据库", "the current database");
+  const secondary =
+    secondEntity?.name || input.t("相关实体", "related entities");
   const defaultPrompts = [
     input.t(
       `请用表格整理「${focus}」相关的产业链关系：上游原料、工艺/事件、相关企业、下游应用和证据来源。`,
-      `Build a table for "${focus}" covering upstream feedstocks, processes/events, related companies, downstream applications, and evidence.`
+      `Build a table for "${focus}" covering upstream feedstocks, processes/events, related companies, downstream applications, and evidence.`,
     ),
     input.t(
       `基于当前项目内容，为「${focus}」生成一份 Markdown 大纲式思维导图，按原料、工艺、中间体、产品、下游应用、终端行业分层展开。`,
-      `Generate a Markdown outline mind map for "${focus}", organized by feedstocks, processes, intermediates, products, downstream applications, and end-use industries.`
+      `Generate a Markdown outline mind map for "${focus}", organized by feedstocks, processes, intermediates, products, downstream applications, and end-use industries.`,
     ),
     input.t(
       `写一份研究报告风格的「${input.projectName}」产业链分析，包含核心关系、关键企业、机会、风险和证据缺口。`,
-      `Write a research-report style industry-chain analysis for "${input.projectName}", covering key relationships, companies, opportunities, risks, and evidence gaps.`
+      `Write a research-report style industry-chain analysis for "${input.projectName}", covering key relationships, companies, opportunities, risks, and evidence gaps.`,
     ),
     input.t(
       `用通俗易懂的方式解释「${focus}」和「${secondary}」的关系。多用短句，少用长句，语气轻松一点，可以适当吐槽，不要说无关话。`,
-      `Explain the relationship between "${focus}" and "${secondary}" in plain language. Use short sentences, keep it relaxed, add mild critique when useful, and answer directly.`
-    )
+      `Explain the relationship between "${focus}" and "${secondary}" in plain language. Use short sentences, keep it relaxed, add mild critique when useful, and answer directly.`,
+    ),
   ];
-  return (input.promptTemplates && input.promptTemplates.length > 0 ? input.promptTemplates : defaultPrompts)
-    .map((prompt) => applyPromptTemplate(prompt, {
-      projectName: input.projectName,
-      focus,
-      secondary
-    }))
+  return (
+    input.promptTemplates && input.promptTemplates.length > 0
+      ? input.promptTemplates
+      : defaultPrompts
+  )
+    .map((prompt) =>
+      applyPromptTemplate(prompt, {
+        projectName: input.projectName,
+        focus,
+        secondary,
+      }),
+    )
     .slice(0, 8);
 }
 
-function applyPromptTemplate(template: string, values: { projectName: string; focus: string; secondary: string }) {
+function applyPromptTemplate(
+  template: string,
+  values: { projectName: string; focus: string; secondary: string },
+) {
   return template
     .replaceAll("{projectName}", values.projectName)
     .replaceAll("{focus}", values.focus)
@@ -2282,7 +2931,10 @@ function buildFollowUpQuestions(input: {
   const scored = (input.graph?.entities ?? [])
     .map((entity) => entity.name?.trim() ?? "")
     .filter((name) => name.length >= 2)
-    .map((name) => ({ name, mentioned: haystack.includes(name.toLocaleLowerCase()) }))
+    .map((name) => ({
+      name,
+      mentioned: haystack.includes(name.toLocaleLowerCase()),
+    }))
     .filter((item) => item.mentioned);
   // 去重并保留出现顺序
   const seen = new Set<string>();
@@ -2296,28 +2948,43 @@ function buildFollowUpQuestions(input: {
 
   const questions: string[] = [];
   if (mentioned[0]) {
-    questions.push(t(
-      `${mentioned[0]} 的上游原料与下游应用分别有哪些？`,
-      `What are the upstream feedstocks and downstream applications of ${mentioned[0]}?`
-    ));
+    questions.push(
+      t(
+        `${mentioned[0]} 的上游原料与下游应用分别有哪些？`,
+        `What are the upstream feedstocks and downstream applications of ${mentioned[0]}?`,
+      ),
+    );
   }
   if (mentioned[1]) {
-    questions.push(t(
-      `${mentioned[1]} 近期有哪些重要进展或产能变化？`,
-      `What recent developments or capacity changes are there for ${mentioned[1]}?`
-    ));
+    questions.push(
+      t(
+        `${mentioned[1]} 近期有哪些重要进展或产能变化？`,
+        `What recent developments or capacity changes are there for ${mentioned[1]}?`,
+      ),
+    );
   }
   if (mentioned[0] && mentioned[1]) {
-    questions.push(t(
-      `${mentioned[0]} 与 ${mentioned[1]} 在产业链上是什么关系？`,
-      `How are ${mentioned[0]} and ${mentioned[1]} related in the industry chain?`
-    ));
+    questions.push(
+      t(
+        `${mentioned[0]} 与 ${mentioned[1]} 在产业链上是什么关系？`,
+        `How are ${mentioned[0]} and ${mentioned[1]} related in the industry chain?`,
+      ),
+    );
   }
 
   const fallbacks = [
-    t("这个结论背后的关键风险与不确定性是什么？", "What are the key risks and uncertainties behind this conclusion?"),
-    t("能否补充相关的时间线或最新市场进展？", "Can you add a related timeline or the latest market developments?"),
-    t("还有哪些关键企业、产能或政策值得关注？", "Which other key companies, capacities, or policies are worth watching?")
+    t(
+      "这个结论背后的关键风险与不确定性是什么？",
+      "What are the key risks and uncertainties behind this conclusion?",
+    ),
+    t(
+      "能否补充相关的时间线或最新市场进展？",
+      "Can you add a related timeline or the latest market developments?",
+    ),
+    t(
+      "还有哪些关键企业、产能或政策值得关注？",
+      "Which other key companies, capacities, or policies are worth watching?",
+    ),
   ];
   for (const fallback of fallbacks) {
     if (questions.length >= 3) break;
@@ -2361,12 +3028,19 @@ function ConversationWorkspace(props: {
     if (shouldAutoScrollRef.current) {
       scrollAnchorRef.current?.scrollIntoView({ block: "end" });
     }
-  }, [props.detail?.messages.length, props.pendingUserMessage, props.streamingAssistantText, props.isRunning, props.runningMcpSearches.length]);
+  }, [
+    props.detail?.messages.length,
+    props.pendingUserMessage,
+    props.streamingAssistantText,
+    props.isRunning,
+    props.runningMcpSearches.length,
+  ]);
 
   function handleConversationScroll() {
     const element = scrollContainerRef.current;
     if (!element) return;
-    const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    const distanceToBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
     shouldAutoScrollRef.current = distanceToBottom < 96;
   }
 
@@ -2375,20 +3049,40 @@ function ConversationWorkspace(props: {
     const messages = props.detail?.messages ?? [];
     const last = messages[messages.length - 1];
     if (!last || last.role !== "assistant") return [] as string[];
-    if (props.isRunning || props.streamingAssistantText || props.pendingUserMessage) return [] as string[];
-    const lastUser = [...messages].reverse().find((message) => message.role === "user");
+    if (
+      props.isRunning ||
+      props.streamingAssistantText ||
+      props.pendingUserMessage
+    )
+      return [] as string[];
+    const lastUser = [...messages]
+      .reverse()
+      .find((message) => message.role === "user");
     return buildFollowUpQuestions({
       question: lastUser?.content ?? "",
       answer: last.content,
       graph: props.graph,
-      t
+      t,
     });
-  }, [props.detail?.messages, props.isRunning, props.streamingAssistantText, props.pendingUserMessage, props.graph, t]);
+  }, [
+    props.detail?.messages,
+    props.isRunning,
+    props.streamingAssistantText,
+    props.pendingUserMessage,
+    props.graph,
+    t,
+  ]);
 
   if (!props.project) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center px-6">
-        <EmptyState title={t("先创建项目", "Create a project first")} description={t("项目是文档、切片、事件、实体和 MCP 对话的共同归属。", "A project contains documents, chunks, events, entities, and MCP chats.")} />
+        <EmptyState
+          title={t("先创建项目", "Create a project first")}
+          description={t(
+            "项目是文档、切片、事件、实体和 MCP 对话的共同归属。",
+            "A project contains documents, chunks, events, entities, and MCP chats.",
+          )}
+        />
       </section>
     );
   }
@@ -2401,21 +3095,50 @@ function ConversationWorkspace(props: {
             <Sparkles className="h-3 w-3" />
             {t("化工产业链智能问答", "CHEMICAL INDUSTRY Q&A")}
           </div>
-          <h1 className="truncate text-base font-semibold" title={props.detail?.session.title ?? t("新建产业链问答", "New industry-chain inquiry")}>{props.detail?.session.title ?? t("新建产业链问答", "New industry-chain inquiry")}</h1>
+          <h1
+            className="truncate text-base font-semibold"
+            title={
+              props.detail?.session.title ??
+              t("新建产业链问答", "New industry-chain inquiry")
+            }
+          >
+            {props.detail?.session.title ??
+              t("新建产业链问答", "New industry-chain inquiry")}
+          </h1>
           <p className="truncate text-xs text-muted-foreground">
-            {props.detail ? `${formatModelName(props.detail.session.model, t)} · ${shortId(props.detail.session.id)}` : t("新建会话后开始测试 MCP 工具", "Create a chat to test MCP tools")}
+            {props.detail
+              ? `${formatModelName(props.detail.session.model, t)} · ${shortId(props.detail.session.id)}`
+              : t(
+                  "新建会话后开始测试 MCP 工具",
+                  "Create a chat to test MCP tools",
+                )}
           </p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={props.onCreateSession} disabled={props.isRunning}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={props.onCreateSession}
+            disabled={props.isRunning}
+          >
             <Plus className="h-4 w-4" />
             {t("新对话", "New chat")}
           </Button>
-          <Button variant="outline" size="sm" onClick={props.onClearSession} disabled={!props.detail || props.isRunning}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={props.onClearSession}
+            disabled={!props.detail || props.isRunning}
+          >
             <RotateCcw className="h-4 w-4" />
             {t("清空记录", "Clear history")}
           </Button>
-          <Button variant="outline" size="sm" onClick={props.onDeleteSession} disabled={!props.detail || props.isRunning}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={props.onDeleteSession}
+            disabled={!props.detail || props.isRunning}
+          >
             <Trash2 className="h-4 w-4" />
             {t("删除对话", "Delete chat")}
           </Button>
@@ -2435,39 +3158,65 @@ function ConversationWorkspace(props: {
               promptTemplates={props.welcomePromptTemplates}
               onSelectPrompt={props.onInputChange}
             />
-          ) : props.detail.messages.map((message) => {
-            const citations = getMessageCitations(message);
-            return (
-              <div key={message.id} className={cn("flex items-start gap-2.5", message.role === "user" ? "justify-end" : "justify-start")}>
-                {message.role === "user" ? null : <ChemCloudMark className="mt-0.5 h-8 w-8" />}
-                <div className={cn(
-                  "chem-message max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-6",
-                  message.role === "user" ? "chem-message-user bg-primary text-primary-foreground" : "chem-message-assistant border border-border"
-                )}>
-                  <div className="mb-1 flex items-center gap-2 text-xs opacity-70">
-                    {formatMessageRole(message.role, t)}
-                    <span>{formatDate(message.createdAt)}</span>
+          ) : (
+            props.detail.messages.map((message) => {
+              const citations = getMessageCitations(message);
+              return (
+                <div
+                  key={message.id}
+                  className={cn(
+                    "flex items-start gap-2.5",
+                    message.role === "user" ? "justify-end" : "justify-start",
+                  )}
+                >
+                  {message.role === "user" ? null : (
+                    <ChemCloudMark className="mt-0.5 h-8 w-8" />
+                  )}
+                  <div
+                    className={cn(
+                      "chem-message max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-6",
+                      message.role === "user"
+                        ? "chem-message-user bg-primary text-primary-foreground"
+                        : "chem-message-assistant border border-border",
+                    )}
+                  >
+                    <div className="mb-1 flex items-center gap-2 text-xs opacity-70">
+                      {formatMessageRole(message.role, t)}
+                      <span>{formatDate(message.createdAt)}</span>
+                    </div>
+                    <MarkdownMessage
+                      content={formatMessageContent(message.content, t)}
+                      citations={citations}
+                      mermaidPendingText={props.mermaidPendingText}
+                      onOpenCitation={props.onOpenCitation}
+                      onRequestMermaidRedraw={
+                        message.role === "assistant"
+                          ? props.onRequestMermaidRedraw
+                          : undefined
+                      }
+                    />
+                    {message.role === "assistant" && citations.length > 0 ? (
+                      <CitationStrip
+                        citations={citations}
+                        onOpenCitation={props.onOpenCitation}
+                      />
+                    ) : null}
                   </div>
-                  <MarkdownMessage
-                    content={formatMessageContent(message.content, t)}
-                    citations={citations}
-                    mermaidPendingText={props.mermaidPendingText}
-                    onOpenCitation={props.onOpenCitation}
-                    onRequestMermaidRedraw={message.role === "assistant" ? props.onRequestMermaidRedraw : undefined}
-                  />
-                  {message.role === "assistant" && citations.length > 0 ? (
-                    <CitationStrip citations={citations} onOpenCitation={props.onOpenCitation} />
-                  ) : null}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
 
           {props.pendingUserMessage ? (
             <div className="flex justify-end">
               <div className="chem-message chem-message-user max-w-[86%] rounded-2xl bg-primary px-4 py-3 text-sm leading-6 text-primary-foreground">
-                <div className="mb-1 flex items-center gap-2 text-xs opacity-70">{t("用户", "User")}</div>
-                <MarkdownMessage content={props.pendingUserMessage} mermaidPendingText={props.mermaidPendingText} />
+                <div className="mb-1 flex items-center gap-2 text-xs opacity-70">
+                  {t("用户", "User")}
+                </div>
+                <MarkdownMessage
+                  content={props.pendingUserMessage}
+                  mermaidPendingText={props.mermaidPendingText}
+                />
               </div>
             </div>
           ) : null}
@@ -2482,9 +3231,14 @@ function ConversationWorkspace(props: {
             <div className="flex items-start gap-2.5 justify-start">
               <ChemCloudMark className="mt-0.5 h-8 w-8" />
               <div className="chem-message chem-message-assistant max-w-[86%] rounded-2xl border border-border px-4 py-3 text-sm leading-6">
-                <div className="mb-1 flex items-center gap-2 text-xs opacity-70">{t("助手", "Assistant")}</div>
+                <div className="mb-1 flex items-center gap-2 text-xs opacity-70">
+                  {t("助手", "Assistant")}
+                </div>
                 <MarkdownMessage
-                  content={formatMessageContent(props.streamingAssistantText, t)}
+                  content={formatMessageContent(
+                    props.streamingAssistantText,
+                    t,
+                  )}
                   mermaidPendingText={props.mermaidPendingText}
                   isStreaming
                   onRequestMermaidRedraw={props.onRequestMermaidRedraw}
@@ -2529,14 +3283,21 @@ function ConversationWorkspace(props: {
             value={props.input}
             onChange={(event) => props.onInputChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
                 event.preventDefault();
                 if (!props.isRunning && props.input.trim()) {
                   props.onSend();
                 }
               }
             }}
-            placeholder={t("询问产品、原料、工艺、企业、产能或产业链关系…", "Ask about products, feedstocks, processes, companies, capacity, or industry-chain relations…")}
+            placeholder={t(
+              "询问产品、原料、工艺、企业、产能或产业链关系…",
+              "Ask about products, feedstocks, processes, companies, capacity, or industry-chain relations…",
+            )}
           />
           <Button
             className="h-11 self-end rounded-xl px-4"
@@ -2544,7 +3305,11 @@ function ConversationWorkspace(props: {
             onClick={props.isRunning ? props.onStop : props.onSend}
             disabled={!props.isRunning && !props.input.trim()}
           >
-            {props.isRunning ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+            {props.isRunning ? (
+              <Square className="h-4 w-4" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
             {props.isRunning ? t("停止", "Stop") : t("发送", "Send")}
           </Button>
         </div>
@@ -2552,15 +3317,20 @@ function ConversationWorkspace(props: {
           <input
             type="checkbox"
             checked={props.autoMermaid}
-            onChange={(event) => props.onAutoMermaidChange(event.target.checked)}
+            onChange={(event) =>
+              props.onAutoMermaidChange(event.target.checked)
+            }
           />
           {t(
             "自动在回答底部生成美化的 Mermaid 产业链图（仅在检索证据支持时生成）",
-            "Append a styled Mermaid industry-chain diagram when supported by retrieved evidence"
+            "Append a styled Mermaid industry-chain diagram when supported by retrieved evidence",
           )}
         </label>
         <div className="mx-auto mt-1.5 max-w-4xl text-center text-[10px] text-muted-foreground">
-          {t("回答由项目知识资产与知识超图共同提供依据，请核验关键业务结论。", "Answers are grounded in project assets and the knowledge hypergraph; verify critical business conclusions.")}
+          {t(
+            "回答由项目知识资产与知识超图共同提供依据，请核验关键业务结论。",
+            "Answers are grounded in project assets and the knowledge hypergraph; verify critical business conclusions.",
+          )}
         </div>
       </div>
     </section>
@@ -2574,15 +3344,27 @@ function RunningMcpSearchPanel(props: { searches: RunningMcpSearch[] }) {
     <div className="max-w-[86%] rounded-lg border border-border bg-muted/35 px-3 py-2 text-sm leading-6">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-muted-foreground">
         <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-        <span className="font-medium text-foreground">{t("正在使用 MCP 检索", "Using MCP retrieval")}</span>
-        <Badge className="border-border bg-background text-muted-foreground">{t(`${searchCount} 次搜索`, `${searchCount} search(es)`)}</Badge>
+        <span className="font-medium text-foreground">
+          {t("正在使用 MCP 检索", "Using MCP retrieval")}
+        </span>
+        <Badge className="border-border bg-background text-muted-foreground">
+          {t(`${searchCount} 次搜索`, `${searchCount} search(es)`)}
+        </Badge>
       </div>
       {searchCount === 0 ? (
-        <div className="text-sm text-muted-foreground">{t("正在分析问题，等待 MCP 搜索语句...", "Analyzing the question and waiting for MCP search queries...")}</div>
+        <div className="text-sm text-muted-foreground">
+          {t(
+            "正在分析问题，等待 MCP 搜索语句...",
+            "Analyzing the question and waiting for MCP search queries...",
+          )}
+        </div>
       ) : (
         <div className="space-y-1.5">
           {props.searches.map((search, index) => (
-            <div key={search.id} className="rounded-md border border-border bg-background/70 px-2.5 py-1.5">
+            <div
+              key={search.id}
+              className="rounded-md border border-border bg-background/70 px-2.5 py-1.5"
+            >
               <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
                 <span className="shrink-0 text-xs font-medium text-muted-foreground">
                   {t(`搜索 ${index + 1}：`, `Search ${index + 1}:`)}
@@ -2592,7 +3374,9 @@ function RunningMcpSearchPanel(props: { searches: RunningMcpSearch[] }) {
                 </span>
               </div>
               {search.searchMode ? (
-                <div className="mt-1 text-xs text-muted-foreground">{t("模式", "Mode")}：{search.searchMode}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {t("模式", "Mode")}：{search.searchMode}
+                </div>
               ) : null}
             </div>
           ))}
@@ -2602,11 +3386,16 @@ function RunningMcpSearchPanel(props: { searches: RunningMcpSearch[] }) {
   );
 }
 
-function CitationStrip(props: { citations: AnswerCitation[]; onOpenCitation: (citation: AnswerCitation) => void }) {
+function CitationStrip(props: {
+  citations: AnswerCitation[];
+  onOpenCitation: (citation: AnswerCitation) => void;
+}) {
   const { t } = useI18n();
   return (
     <div className="mt-3 border-t border-border pt-2">
-      <div className="mb-1 text-xs font-medium text-muted-foreground">{t("引用原文", "Source citations")}</div>
+      <div className="mb-1 text-xs font-medium text-muted-foreground">
+        {t("引用原文", "Source citations")}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {props.citations.map((citation) => (
           <button
@@ -2632,6 +3421,7 @@ function ProjectDocumentsWorkspace(props: {
   chunks: ChunkRecord[];
   events: EventRecord[];
   entities: EntityRecord[];
+  projectEntities: EntityRecord[];
   projectStats: ProjectStatsRecord | null;
   resultView: ResultView;
   showArchivedDocuments: boolean;
@@ -2650,7 +3440,12 @@ function ProjectDocumentsWorkspace(props: {
     format: ManualImportFormat;
     content: string;
   }) => Promise<void>;
-  onExportProject: (format: "csv" | "json", profile: ExportProfile, split: ExportSplitMode, maxBytes?: number) => void;
+  onExportProject: (
+    format: "csv" | "json",
+    profile: ExportProfile,
+    split: ExportSplitMode,
+    maxBytes?: number,
+  ) => void;
   onToggleUploadQueue: () => void;
   onSelectDocument: (documentId: string) => void;
   onRenameDocument: (document: DocumentRecord) => void;
@@ -2663,11 +3458,24 @@ function ProjectDocumentsWorkspace(props: {
   onSearch: () => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
-  onUpdateChunk: (chunkId: string, input: { heading?: string | null; content?: string; rawContent?: string | null }) => void;
+  onUpdateChunk: (
+    chunkId: string,
+    input: {
+      heading?: string | null;
+      content?: string;
+      rawContent?: string | null;
+    },
+  ) => void;
   onDeleteChunk: (chunkId: string) => void;
-  onUpdateEvent: (eventId: string, input: { title?: string; summary?: string; content?: string }) => void;
+  onUpdateEvent: (
+    eventId: string,
+    input: { title?: string; summary?: string; content?: string },
+  ) => void;
   onDeleteEvent: (eventId: string) => void;
-  onUpdateEntity: (entityId: string, input: { type?: string; name?: string; description?: string | null }) => void;
+  onUpdateEntity: (
+    entityId: string,
+    input: { type?: string; name?: string; description?: string | null },
+  ) => void;
   onDeleteEntity: (entityId: string) => void;
 }) {
   const { language, t } = useI18n();
@@ -2677,19 +3485,43 @@ function ProjectDocumentsWorkspace(props: {
   const [manualImportContent, setManualImportContent] = useState("");
   const [manualImportTitle, setManualImportTitle] = useState("");
   const [manualImportFileName, setManualImportFileName] = useState("");
-  const [manualImportFiles, setManualImportFiles] = useState<Array<{ fileName: string; content: string }>>([]);
-  const [manualImportFormat, setManualImportFormat] = useState<ManualImportFormat>("auto");
+  const [manualImportFiles, setManualImportFiles] = useState<
+    Array<{ fileName: string; content: string }>
+  >([]);
+  const [manualImportFormat, setManualImportFormat] =
+    useState<ManualImportFormat>("auto");
   const [manualImportError, setManualImportError] = useState("");
   const [isManualImporting, setIsManualImporting] = useState(false);
   const [exportSplit, setExportSplit] = useState<ExportSplitMode>("none");
   const [exportMaxMb, setExportMaxMb] = useState(50);
-  const [exportChoice, setExportChoice] = useState<"simple:json" | "simple:csv" | "full:json" | "full:csv">("simple:json");
-  const [docRailWidth, setDocRailWidth] = useState(() => loadStoredNumber(DOC_RAIL_WIDTH_STORAGE_KEY, 340, DOC_RAIL_MIN_WIDTH, DOC_RAIL_MAX_WIDTH));
+  const [exportChoice, setExportChoice] = useState<
+    "simple:json" | "simple:csv" | "full:json" | "full:csv"
+  >("simple:json");
+  const [selectedEntityTypeFilters, setSelectedEntityTypeFilters] = useState<
+    Set<string>
+  >(() => new Set());
+  const [entityTypeFilterQuery, setEntityTypeFilterQuery] = useState("");
+  const [entityScope, setEntityScope] =
+    useState<KnowledgeAssetEntityScope>("document");
+  const [entityExportFormat, setEntityExportFormat] =
+    useState<KnowledgeAssetEntityExportFormat>("csv");
+  const [isEntityExporting, setIsEntityExporting] = useState(false);
+  const [docRailWidth, setDocRailWidth] = useState(() =>
+    loadStoredNumber(
+      DOC_RAIL_WIDTH_STORAGE_KEY,
+      340,
+      DOC_RAIL_MIN_WIDTH,
+      DOC_RAIL_MAX_WIDTH,
+    ),
+  );
   const manualImportFileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(DOC_RAIL_WIDTH_STORAGE_KEY, String(docRailWidth));
+      window.localStorage.setItem(
+        DOC_RAIL_WIDTH_STORAGE_KEY,
+        String(docRailWidth),
+      );
     } catch {
       // 忽略 localStorage 不可用的情况
     }
@@ -2701,55 +3533,121 @@ function ProjectDocumentsWorkspace(props: {
       minWidth: DOC_RAIL_MIN_WIDTH,
       maxWidth: DOC_RAIL_MAX_WIDTH,
       getWidth: (startWidth, deltaX) => startWidth + deltaX,
-      onResize: setDocRailWidth
+      onResize: setDocRailWidth,
     });
   }
-  const searchableResultView = props.resultView === "chunks" || props.resultView === "events" || props.resultView === "entities";
+  const searchableResultView =
+    props.resultView === "chunks" ||
+    props.resultView === "events" ||
+    props.resultView === "entities";
   const normalizedResultTitleQuery = normalizeKeyword(resultTitleQuery);
   const filteredChunks = useMemo(
-    () => filterByKeyword(props.chunks, normalizedResultTitleQuery, (chunk) => chunk.heading || t("未命名切片", "Untitled chunk")),
-    [normalizedResultTitleQuery, props.chunks]
+    () =>
+      filterByKeyword(
+        props.chunks,
+        normalizedResultTitleQuery,
+        (chunk) => chunk.heading || t("未命名切片", "Untitled chunk"),
+      ),
+    [normalizedResultTitleQuery, props.chunks],
   );
   const filteredEvents = useMemo(
-    () => filterByKeyword(props.events, normalizedResultTitleQuery, (event) => event.title),
-    [normalizedResultTitleQuery, props.events]
+    () =>
+      filterByKeyword(
+        props.events,
+        normalizedResultTitleQuery,
+        (event) => event.title,
+      ),
+    [normalizedResultTitleQuery, props.events],
+  );
+  const scopedEntities =
+    entityScope === "project" ? props.projectEntities : props.entities;
+  const entityTypeOptions = useMemo(
+    () => buildKnowledgeAssetEntityTypeOptions(scopedEntities, language),
+    [language, scopedEntities],
+  );
+  const filteredEntityTypeOptions = useMemo(
+    () =>
+      filterKnowledgeAssetEntityTypeOptions(
+        entityTypeOptions,
+        entityTypeFilterQuery,
+      ),
+    [entityTypeFilterQuery, entityTypeOptions],
+  );
+  const filteredEntityRows = useMemo(
+    () =>
+      filterKnowledgeAssetEntities(
+        scopedEntities,
+        resultTitleQuery,
+        selectedEntityTypeFilters,
+      ),
+    [scopedEntities, resultTitleQuery, selectedEntityTypeFilters],
   );
   const filteredEntities = useMemo(
-    () => filterByKeyword(props.entities, normalizedResultTitleQuery, (entity) => entity.name),
-    [normalizedResultTitleQuery, props.entities]
+    () => dedupeKnowledgeAssetEntities(filteredEntityRows),
+    [filteredEntityRows],
   );
-  const activeResultCount = props.resultView === "chunks"
-    ? filteredChunks.length
-    : props.resultView === "events"
-      ? filteredEvents.length
-      : props.resultView === "entities"
-        ? filteredEntities.length
-        : 0;
-  const activeTotalCount = props.resultView === "chunks"
-    ? props.chunks.length
-    : props.resultView === "events"
-      ? props.events.length
-      : props.resultView === "entities"
-        ? props.entities.length
-        : 0;
-  const resultPageCount = Math.max(1, Math.ceil(activeResultCount / DOCUMENT_RESULT_PAGE_SIZE));
+  const dedupedEntities = useMemo(
+    () => dedupeKnowledgeAssetEntities(scopedEntities),
+    [scopedEntities],
+  );
+  const activeResultCount =
+    props.resultView === "chunks"
+      ? filteredChunks.length
+      : props.resultView === "events"
+        ? filteredEvents.length
+        : props.resultView === "entities"
+          ? filteredEntities.length
+          : 0;
+  const activeTotalCount =
+    props.resultView === "chunks"
+      ? props.chunks.length
+      : props.resultView === "events"
+        ? props.events.length
+        : props.resultView === "entities"
+          ? dedupedEntities.length
+          : 0;
+  const resultPageCount = Math.max(
+    1,
+    Math.ceil(activeResultCount / DOCUMENT_RESULT_PAGE_SIZE),
+  );
   const currentResultPage = Math.min(resultPage, resultPageCount);
   const paginatedChunks = useMemo(
-    () => paginateItems(filteredChunks, currentResultPage, DOCUMENT_RESULT_PAGE_SIZE),
-    [currentResultPage, filteredChunks]
+    () =>
+      paginateItems(
+        filteredChunks,
+        currentResultPage,
+        DOCUMENT_RESULT_PAGE_SIZE,
+      ),
+    [currentResultPage, filteredChunks],
   );
   const paginatedEvents = useMemo(
-    () => paginateItems(filteredEvents, currentResultPage, DOCUMENT_RESULT_PAGE_SIZE),
-    [currentResultPage, filteredEvents]
+    () =>
+      paginateItems(
+        filteredEvents,
+        currentResultPage,
+        DOCUMENT_RESULT_PAGE_SIZE,
+      ),
+    [currentResultPage, filteredEvents],
   );
   const paginatedEntities = useMemo(
-    () => paginateItems(filteredEntities, currentResultPage, DOCUMENT_RESULT_PAGE_SIZE),
-    [currentResultPage, filteredEntities]
+    () =>
+      paginateItems(
+        filteredEntities,
+        currentResultPage,
+        DOCUMENT_RESULT_PAGE_SIZE,
+      ),
+    [currentResultPage, filteredEntities],
   );
 
   useEffect(() => {
     setResultPage(1);
-  }, [normalizedResultTitleQuery, props.resultView, props.selectedDocumentId]);
+  }, [
+    normalizedResultTitleQuery,
+    selectedEntityTypeFilters,
+    entityScope,
+    props.resultView,
+    props.selectedDocumentId,
+  ]);
 
   useEffect(() => {
     if (resultPage > resultPageCount) {
@@ -2764,22 +3662,126 @@ function ProjectDocumentsWorkspace(props: {
   }
 
   function exportSelectedProject() {
-    const [profile, format] = exportChoice.split(":") as [ExportProfile, "csv" | "json"];
-    props.onExportProject(format, profile, exportSplit, exportSplit === "size" ? Math.round(exportMaxMb * 1024 * 1024) : undefined);
+    const [profile, format] = exportChoice.split(":") as [
+      ExportProfile,
+      "csv" | "json",
+    ];
+    props.onExportProject(
+      format,
+      profile,
+      exportSplit,
+      exportSplit === "size"
+        ? Math.round(exportMaxMb * 1024 * 1024)
+        : undefined,
+    );
+  }
+
+  function toggleEntityTypeFilter(type: string) {
+    setSelectedEntityTypeFilters((current) => {
+      const next = new Set(current);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  }
+
+  function selectEntityTypeFilters(types: string[]) {
+    setSelectedEntityTypeFilters(new Set(types));
+  }
+
+  function clearEntityTypeFilters() {
+    setSelectedEntityTypeFilters(new Set());
+    setEntityTypeFilterQuery("");
+  }
+
+  function changeEntityScope(scope: KnowledgeAssetEntityScope) {
+    setEntityScope(scope);
+    setResultPage(1);
+  }
+
+  async function exportFilteredEntities() {
+    if (isEntityExporting) return;
+    setIsEntityExporting(true);
+    try {
+      const exportGroups = await buildKnowledgeAssetEntityExportGroups(
+        filteredEntities,
+      );
+      const selectedTypeLabels = entityTypeOptions
+        .filter((option) => selectedEntityTypeFilters.has(option.type))
+        .map((option) => option.label);
+      const metadata = {
+        scope: entityScope,
+        project: props.project?.name ?? "",
+        document: props.selectedDocument?.title ?? "",
+        keyword: resultTitleQuery.trim(),
+        selectedTypes: selectedTypeLabels,
+        matchedEntityNames: filteredEntities.length,
+        matchedEntityRows: filteredEntityRows.length,
+        totalEntityNames: dedupedEntities.length,
+        totalEntityRows: scopedEntities.length,
+        exportedAt: new Date().toISOString(),
+      };
+      const filenameBase = buildKnowledgeAssetEntityExportFilenameBase({
+        projectName: props.project?.name,
+        documentTitle: props.selectedDocument?.title,
+        scope: entityScope,
+      });
+      if (entityExportFormat === "csv") {
+        downloadTextFile(
+          `${filenameBase}.csv`,
+          formatKnowledgeAssetEntitiesCsv(exportGroups, metadata, language),
+          "text/csv",
+        );
+        return;
+      }
+      if (entityExportFormat === "markdown") {
+        downloadTextFile(
+          `${filenameBase}.md`,
+          formatKnowledgeAssetEntitiesMarkdown(exportGroups, metadata, language),
+          "text/markdown",
+        );
+        return;
+      }
+      downloadTextFile(
+        `${filenameBase}.json`,
+        formatKnowledgeAssetEntitiesJson(exportGroups, metadata),
+        "application/json",
+      );
+    } catch (err) {
+      console.error(err);
+      window.alert(
+        t(
+          "实体导出失败，请稍后重试。",
+          "Failed to export entities. Please try again.",
+        ),
+      );
+    } finally {
+      setIsEntityExporting(false);
+    }
   }
 
   async function submitManualImport() {
-    if ((!manualImportContent.trim() && manualImportFiles.length === 0) || isManualImporting) return;
+    if (
+      (!manualImportContent.trim() && manualImportFiles.length === 0) ||
+      isManualImporting
+    )
+      return;
     setIsManualImporting(true);
     setManualImportError("");
     try {
       if (manualImportFiles.length > 0) {
         for (const file of manualImportFiles) {
           await props.onImportStructured({
-            title: manualImportFiles.length === 1 ? manualImportTitle.trim() || undefined : undefined,
+            title:
+              manualImportFiles.length === 1
+                ? manualImportTitle.trim() || undefined
+                : undefined,
             fileName: file.fileName,
             format: manualImportFormat,
-            content: file.content
+            content: file.content,
           });
         }
       } else {
@@ -2787,7 +3789,7 @@ function ProjectDocumentsWorkspace(props: {
           title: manualImportTitle.trim() || undefined,
           fileName: manualImportFileName.trim() || undefined,
           format: manualImportFormat,
-          content: manualImportContent
+          content: manualImportContent,
         });
       }
       setManualImportOpen(false);
@@ -2807,8 +3809,12 @@ function ProjectDocumentsWorkspace(props: {
     <section className="chem-documents flex min-h-0 flex-1 flex-col">
       <div className="chem-section-header flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-6">
         <div className="min-w-0">
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">{t("KNOWLEDGE ASSETS", "KNOWLEDGE ASSETS")}</div>
-          <h2 className="truncate text-base font-semibold">{t("产业链知识资产中心", "Industry-chain knowledge assets")}</h2>
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+            {t("KNOWLEDGE ASSETS", "KNOWLEDGE ASSETS")}
+          </div>
+          <h2 className="truncate text-base font-semibold">
+            {t("产业链知识资产中心", "Industry-chain knowledge assets")}
+          </h2>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {props.project?.name ?? t("请选择项目", "Select a project")}
             {props.selectedDocument ? ` · ${props.selectedDocument.title}` : ""}
@@ -2819,7 +3825,9 @@ function ProjectDocumentsWorkspace(props: {
             <select
               className="h-9 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={exportSplit}
-              onChange={(event) => setExportSplit(event.target.value as ExportSplitMode)}
+              onChange={(event) =>
+                setExportSplit(event.target.value as ExportSplitMode)
+              }
               title={t("导出拆分方式", "Export split mode")}
             >
               <option value="none">{t("不拆分", "No split")}</option>
@@ -2834,7 +3842,9 @@ function ProjectDocumentsWorkspace(props: {
                   min={1}
                   max={1024}
                   value={exportMaxMb}
-                  onChange={(event) => setExportMaxMb(Math.max(1, Number(event.target.value) || 1))}
+                  onChange={(event) =>
+                    setExportMaxMb(Math.max(1, Number(event.target.value) || 1))
+                  }
                 />
                 MB
               </label>
@@ -2842,10 +3852,20 @@ function ProjectDocumentsWorkspace(props: {
             <select
               className="h-9 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={exportChoice}
-              onChange={(event) => setExportChoice(event.target.value as "simple:json" | "simple:csv" | "full:json" | "full:csv")}
-              title={t("导出类型和格式，默认使用简化 JSON。", "Export type and format. Simple JSON is the default.")}
+              onChange={(event) =>
+                setExportChoice(
+                  event.target.value as
+                    "simple:json" | "simple:csv" | "full:json" | "full:csv",
+                )
+              }
+              title={t(
+                "导出类型和格式，默认使用简化 JSON。",
+                "Export type and format. Simple JSON is the default.",
+              )}
             >
-              <option value="simple:json">{t("简化 JSON", "Simple JSON")}</option>
+              <option value="simple:json">
+                {t("简化 JSON", "Simple JSON")}
+              </option>
               <option value="simple:csv">{t("简化 CSV", "Simple CSV")}</option>
               <option value="full:json">{t("完整 JSON", "Full JSON")}</option>
               <option value="full:csv">{t("完整 CSV", "Full CSV")}</option>
@@ -2854,18 +3874,32 @@ function ProjectDocumentsWorkspace(props: {
               variant="outline"
               size="sm"
               onClick={exportSelectedProject}
-              title={t("导出选中的格式。简化导出适合拼接后重新导入新库；完整导出适合完整知识备份或排查。", "Export the selected format. Simple export is for stitching and re-import; full export is for full backups or debugging.")}
+              title={t(
+                "导出选中的格式。简化导出适合拼接后重新导入新库；完整导出适合完整知识备份或排查。",
+                "Export the selected format. Simple export is for stitching and re-import; full export is for full backups or debugging.",
+              )}
             >
               <Download className="h-4 w-4" />
               {t("下载", "Download")}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => props.fileInputRef.current?.click()}>
-              {props.hasActiveUploads ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => props.fileInputRef.current?.click()}
+            >
+              {props.hasActiveUploads ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
               {t("添加文档", "Add document")}
             </Button>
             <Button size="sm" onClick={() => setManualImportOpen(true)}>
               <Plus className="h-4 w-4" />
-              {t("导入 JSON / CSV / MD 结构化数据", "Import JSON / CSV / MD structured data")}
+              {t(
+                "导入 JSON / CSV / MD 结构化数据",
+                "Import JSON / CSV / MD structured data",
+              )}
             </Button>
           </div>
         ) : null}
@@ -2886,7 +3920,13 @@ function ProjectDocumentsWorkspace(props: {
 
       {!props.project ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-          <EmptyState title={t("没有项目", "No project")} description={t("创建项目后，才能上传文档并查看处理结果。", "Create a project before uploading documents and viewing processing results.")} />
+          <EmptyState
+            title={t("没有项目", "No project")}
+            description={t(
+              "创建项目后，才能上传文档并查看处理结果。",
+              "Create a project before uploading documents and viewing processing results.",
+            )}
+          />
         </div>
       ) : (
         <div
@@ -2897,16 +3937,33 @@ function ProjectDocumentsWorkspace(props: {
             className="chem-doc-rail-resize-handle hidden lg:block"
             role="separator"
             aria-orientation="vertical"
-            title={t("拖拽调整文档栏宽度", "Drag to resize the document column")}
+            title={t(
+              "拖拽调整文档栏宽度",
+              "Drag to resize the document column",
+            )}
             style={{ left: `calc(var(--chem-doc-rail-width) - 5px)` }}
             onPointerDown={startDocRailResize}
           />
           <div className="chem-assets-rail min-h-0 overflow-y-auto border-r border-border p-4 scrollbar-thin">
             <div className="mb-4 grid grid-cols-2 gap-2">
-              <Metric label={t("文档", "Documents")} value={props.projectStats?.documentCount ?? props.documents.length} />
-              <Metric label={t("切片", "Chunks")} value={props.projectStats?.chunkCount ?? props.chunks.length} />
-              <Metric label={t("事件", "Events")} value={props.projectStats?.eventCount ?? props.events.length} />
-              <Metric label={t("实体", "Entities")} value={props.projectStats?.entityCount ?? props.entities.length} />
+              <Metric
+                label={t("文档", "Documents")}
+                value={
+                  props.projectStats?.documentCount ?? props.documents.length
+                }
+              />
+              <Metric
+                label={t("切片", "Chunks")}
+                value={props.projectStats?.chunkCount ?? props.chunks.length}
+              />
+              <Metric
+                label={t("事件", "Events")}
+                value={props.projectStats?.eventCount ?? props.events.length}
+              />
+              <Metric
+                label={t("实体", "Entities")}
+                value={props.projectStats?.entityCount ?? props.entities.length}
+              />
             </div>
 
             {props.uploadJobs.length > 0 ? (
@@ -2919,56 +3976,100 @@ function ProjectDocumentsWorkspace(props: {
 
             <PanelSection
               title={t("文档", "Documents")}
-              action={(
+              action={
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
                     checked={props.showArchivedDocuments}
-                    onChange={(event) => props.onToggleArchivedDocuments(event.target.checked)}
+                    onChange={(event) =>
+                      props.onToggleArchivedDocuments(event.target.checked)
+                    }
                   />
                   {t("归档", "Archived")}
                 </label>
-              )}
+              }
             >
               {props.documents.length === 0 ? (
-                <EmptyLine text={t("当前项目还没有文档。", "The current project has no documents yet.")} />
-              ) : props.documents.map((document) => (
-                <div key={document.id} className={cn("rounded-xl border border-border bg-background/80", document.id === props.selectedDocumentId && "border-primary/30 bg-primary/[0.06]")}>
-                  <button
-                    className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm"
-                    onClick={() => props.onSelectDocument(document.id)}
+                <EmptyLine
+                  text={t(
+                    "当前项目还没有文档。",
+                    "The current project has no documents yet.",
+                  )}
+                />
+              ) : (
+                props.documents.map((document) => (
+                  <div
+                    key={document.id}
+                    className={cn(
+                      "rounded-xl border border-border bg-background/80",
+                      document.id === props.selectedDocumentId &&
+                        "border-primary/30 bg-primary/[0.06]",
+                    )}
                   >
-                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block break-words font-medium leading-snug">{document.title}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {document.archivedAt ? t("已归档", "Archived") : `${document.parseStatus} · ${formatDate(document.createdAt)}`}
+                    <button
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm"
+                      onClick={() => props.onSelectDocument(document.id)}
+                    >
+                      <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block break-words font-medium leading-snug">
+                          {document.title}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {document.archivedAt
+                            ? t("已归档", "Archived")
+                            : `${document.parseStatus} · ${formatDate(document.createdAt)}`}
+                        </span>
+                        <DocumentSourceSummary document={document} compact />
                       </span>
-                      <DocumentSourceSummary document={document} compact />
-                    </span>
-                  </button>
-                  {document.id === props.selectedDocumentId ? (
-                    <div className="flex flex-wrap gap-1 px-3 pb-2">
-                      <MiniButton onClick={() => props.onRenameDocument(document)}>{t("重命名", "Rename")}</MiniButton>
-                      <MiniButton onClick={() => props.onArchiveOrRestoreDocument(document)}>
-                        {document.archivedAt ? t("恢复", "Restore") : t("归档", "Archive")}
-                      </MiniButton>
-                      <MiniButton danger onClick={() => props.onDeleteDocument(document)}>{t("永久删除", "Delete forever")}</MiniButton>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+                    </button>
+                    {document.id === props.selectedDocumentId ? (
+                      <div className="flex flex-wrap gap-1 px-3 pb-2">
+                        <MiniButton
+                          onClick={() => props.onRenameDocument(document)}
+                        >
+                          {t("重命名", "Rename")}
+                        </MiniButton>
+                        <MiniButton
+                          onClick={() =>
+                            props.onArchiveOrRestoreDocument(document)
+                          }
+                        >
+                          {document.archivedAt
+                            ? t("恢复", "Restore")
+                            : t("归档", "Archive")}
+                        </MiniButton>
+                        <MiniButton
+                          danger
+                          onClick={() => props.onDeleteDocument(document)}
+                        >
+                          {t("永久删除", "Delete forever")}
+                        </MiniButton>
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              )}
             </PanelSection>
           </div>
 
           <div className="min-h-0 overflow-y-auto p-4 scrollbar-thin md:p-6">
             <div className="chem-result-tabs flex flex-wrap gap-1 rounded-xl border border-border bg-background/80 p-1">
-              {(["overview", "chunks", "events", "entities", "search"] as ResultView[]).map((view) => (
+              {(
+                [
+                  "overview",
+                  "chunks",
+                  "events",
+                  "entities",
+                  "search",
+                ] as ResultView[]
+              ).map((view) => (
                 <button
                   key={view}
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground",
-                    props.resultView === view && "chem-tab-active text-foreground"
+                    props.resultView === view &&
+                      "chem-tab-active text-foreground",
                   )}
                   onClick={() => props.onSetResultView(view)}
                 >
@@ -2988,8 +4089,35 @@ function ProjectDocumentsWorkspace(props: {
                   onClear={() => setResultTitleQuery("")}
                 />
               ) : null}
+              {props.resultView === "entities" ? (
+                <EntityAssetTypeFilter
+                  allOptions={entityTypeOptions}
+                  options={filteredEntityTypeOptions}
+                  selectedTypes={selectedEntityTypeFilters}
+                  query={entityTypeFilterQuery}
+                  scope={entityScope}
+                  exportFormat={entityExportFormat}
+                  isExporting={isEntityExporting}
+                  matchedEntityCount={activeResultCount}
+                  totalEntityCount={activeTotalCount}
+                  matchedEntityRowCount={filteredEntityRows.length}
+                  totalEntityRowCount={scopedEntities.length}
+                  onScopeChange={changeEntityScope}
+                  onExportFormatChange={setEntityExportFormat}
+                  onExport={exportFilteredEntities}
+                  onQueryChange={setEntityTypeFilterQuery}
+                  onToggleType={toggleEntityTypeFilter}
+                  onSelectTypes={selectEntityTypeFilters}
+                  onClear={clearEntityTypeFilters}
+                />
+              ) : null}
               {props.resultView === "overview" ? (
-                <OverviewPanel document={props.selectedDocument} chunks={props.chunks} events={props.events} entities={props.entities} />
+                <OverviewPanel
+                  document={props.selectedDocument}
+                  chunks={props.chunks}
+                  events={props.events}
+                  entities={props.entities}
+                />
               ) : null}
               {props.resultView === "chunks" ? (
                 <ChunksPanel
@@ -3012,13 +4140,17 @@ function ProjectDocumentsWorkspace(props: {
               {props.resultView === "entities" ? (
                 <EntitiesPanel
                   entities={paginatedEntities}
-                  hasFilter={Boolean(normalizedResultTitleQuery)}
+                  hasFilter={Boolean(
+                    normalizedResultTitleQuery ||
+                    selectedEntityTypeFilters.size > 0,
+                  )}
                   onOpenEntity={props.onOpenEntity}
                   onUpdateEntity={props.onUpdateEntity}
                   onDeleteEntity={props.onDeleteEntity}
                 />
               ) : null}
-              {searchableResultView && activeResultCount > DOCUMENT_RESULT_PAGE_SIZE ? (
+              {searchableResultView &&
+              activeResultCount > DOCUMENT_RESULT_PAGE_SIZE ? (
                 <PaginationControls
                   className="mt-4"
                   page={currentResultPage}
@@ -3044,29 +4176,59 @@ function ProjectDocumentsWorkspace(props: {
       )}
 
       {manualImportOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="presentation">
-          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-lg border border-border bg-background shadow-lg" role="dialog" aria-modal="true" aria-labelledby="manual-import-title">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          role="presentation"
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-lg border border-border bg-background shadow-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-import-title"
+          >
             <div className="border-b border-border px-5 py-4">
-              <div id="manual-import-title" className="text-sm font-semibold">{t("粘贴或上传网页版 AI 的数据", "Paste or upload AI-generated data")}</div>
+              <div id="manual-import-title" className="text-sm font-semibold">
+                {t(
+                  "粘贴或上传网页版 AI 的数据",
+                  "Paste or upload AI-generated data",
+                )}
+              </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {t(
                   "默认自动识别简化 JSON v2、18 列 CSV、Markdown 表格，也兼容完整备份 JSON / CSV。简化格式包含来源字段和关系说明，但不包含数据库 ID 和 embedding；重新导入时系统会重新生成这些字段。相同“切片编号”的多行会合并为一个事件和多个实体。此导入过程不会调用远程 API。",
-                  "The default is auto detect for simple JSON v2, 18-column CSV, Markdown tables, and full backup JSON / CSV. Simple files include source fields and relation notes, but not database IDs or embeddings; those are regenerated on import. Rows with the same chunk ID are merged into one event with multiple entities. No remote API is called."
+                  "The default is auto detect for simple JSON v2, 18-column CSV, Markdown tables, and full backup JSON / CSV. Simple files include source fields and relation notes, but not database IDs or embeddings; those are regenerated on import. Rows with the same chunk ID are merged into one event with multiple entities. No remote API is called.",
                 )}
               </p>
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
               <div className="grid gap-3 md:grid-cols-[1fr_180px]">
                 <div>
-                  <div className="mb-1 text-xs font-medium text-muted-foreground">{t("文档标题（可选）", "Document title (optional)")}</div>
-                  <Input value={manualImportTitle} onChange={(event) => setManualImportTitle(event.target.value)} placeholder={t("表格中有“文档标题”列时可留空", "May be blank when the table has a document title column")} />
+                  <div className="mb-1 text-xs font-medium text-muted-foreground">
+                    {t("文档标题（可选）", "Document title (optional)")}
+                  </div>
+                  <Input
+                    value={manualImportTitle}
+                    onChange={(event) =>
+                      setManualImportTitle(event.target.value)
+                    }
+                    placeholder={t(
+                      "表格中有“文档标题”列时可留空",
+                      "May be blank when the table has a document title column",
+                    )}
+                  />
                 </div>
                 <div>
-                  <div className="mb-1 text-xs font-medium text-muted-foreground">{t("格式", "Format")}</div>
+                  <div className="mb-1 text-xs font-medium text-muted-foreground">
+                    {t("格式", "Format")}
+                  </div>
                   <select
                     className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     value={manualImportFormat}
-                    onChange={(event) => setManualImportFormat(event.target.value as ManualImportFormat)}
+                    onChange={(event) =>
+                      setManualImportFormat(
+                        event.target.value as ManualImportFormat,
+                      )
+                    }
                   >
                     <option value="auto">{t("自动识别", "Auto detect")}</option>
                     <option value="csv">CSV</option>
@@ -3079,7 +4241,7 @@ function ProjectDocumentsWorkspace(props: {
               <div className="rounded-md border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
                 {t(
                   "推荐使用“简化 JSON v2”或 18 列 CSV：文档标题、来源名称、来源类型、来源日期、来源作者、来源链接、切片编号、切片标题、原文切片、事件标题、事件摘要、事件内容、事件分类、关键词、实体类型、实体名称、实体说明、关系说明。完整备份格式只适合系统迁移保留参考字段。",
-                  "Recommended: simple JSON v2 or the 18-column CSV: document_title, source_name, source_type, source_date, source_author, source_url, chunk_id, chunk_heading, chunk_content, event_title, event_summary, event_content, event_category, keywords, entity_type, entity_name, entity_description, relation_description. Full backup format is only for system migration/reference fields."
+                  "Recommended: simple JSON v2 or the 18-column CSV: document_title, source_name, source_type, source_date, source_author, source_url, chunk_id, chunk_heading, chunk_content, event_title, event_summary, event_content, event_category, keywords, entity_type, entity_name, entity_description, relation_description. Full backup format is only for system migration/reference fields.",
                 )}
               </div>
 
@@ -3094,44 +4256,67 @@ function ProjectDocumentsWorkspace(props: {
                     const files = Array.from(event.target.files ?? []);
                     event.currentTarget.value = "";
                     if (files.length === 0) return;
-                    void Promise.all(files.map(async (file) => ({
-                      fileName: file.name,
-                      content: await file.text()
-                    }))).then((items) => {
+                    void Promise.all(
+                      files.map(async (file) => ({
+                        fileName: file.name,
+                        content: await file.text(),
+                      })),
+                    ).then((items) => {
                       setManualImportFiles(items);
-                      setManualImportFileName(items.map((item) => item.fileName).join(", "));
-                      setManualImportContent(items.length === 1 ? items[0].content : "");
+                      setManualImportFileName(
+                        items.map((item) => item.fileName).join(", "),
+                      );
+                      setManualImportContent(
+                        items.length === 1 ? items[0].content : "",
+                      );
                       setManualImportFormat("auto");
                       setManualImportError("");
                     });
                   }}
                 />
-                <Button type="button" variant="outline" size="sm" onClick={() => manualImportFileRef.current?.click()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => manualImportFileRef.current?.click()}
+                >
                   <Upload className="h-4 w-4" />
                   {t("选择 CSV / MD / JSON 文件", "Choose CSV / MD / JSON")}
                 </Button>
-                <span className="text-xs text-muted-foreground">{t("下载模板：", "Templates:")}</span>
-                {(["json", "csv", "markdown"] as ImportDocFormat[]).map((format) => (
-                  <Button
-                    key={format}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => downloadTextFile(
-                      importTemplateFilename(format),
-                      importTemplateContent(format, language),
-                      importTemplateMime(format)
-                    )}
-                    title={t(`下载 ${importFormatLabel(format)} 导入模板`, `Download ${importFormatLabel(format)} import template`)}
-                  >
-                    <Download className="h-4 w-4" />
-                    {importFormatLabel(format)}
-                  </Button>
-                ))}
+                <span className="text-xs text-muted-foreground">
+                  {t("下载模板：", "Templates:")}
+                </span>
+                {(["json", "csv", "markdown"] as ImportDocFormat[]).map(
+                  (format) => (
+                    <Button
+                      key={format}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        downloadTextFile(
+                          importTemplateFilename(format),
+                          importTemplateContent(format, language),
+                          importTemplateMime(format),
+                        )
+                      }
+                      title={t(
+                        `下载 ${importFormatLabel(format)} 导入模板`,
+                        `Download ${importFormatLabel(format)} import template`,
+                      )}
+                    >
+                      <Download className="h-4 w-4" />
+                      {importFormatLabel(format)}
+                    </Button>
+                  ),
+                )}
                 {manualImportFileName ? (
                   <span className="max-w-full truncate text-xs text-muted-foreground">
                     {manualImportFiles.length > 1
-                      ? t(`已选择 ${manualImportFiles.length} 个文件`, `${manualImportFiles.length} files selected`)
+                      ? t(
+                          `已选择 ${manualImportFiles.length} 个文件`,
+                          `${manualImportFiles.length} files selected`,
+                        )
                       : manualImportFileName}
                   </span>
                 ) : null}
@@ -3140,7 +4325,9 @@ function ProjectDocumentsWorkspace(props: {
               <AiImportPromptTools />
 
               <div>
-                <div className="mb-1 text-xs font-medium text-muted-foreground">{t("直接粘贴数据", "Paste data directly")}</div>
+                <div className="mb-1 text-xs font-medium text-muted-foreground">
+                  {t("直接粘贴数据", "Paste data directly")}
+                </div>
                 <Textarea
                   className="min-h-72 resize-y font-mono text-xs leading-5"
                   value={manualImportContent}
@@ -3152,16 +4339,37 @@ function ProjectDocumentsWorkspace(props: {
                   }}
                   placeholder={t(
                     "文档标题,来源名称,来源类型,来源日期,来源作者,来源链接,切片编号,切片标题,原文切片,事件标题,事件摘要,事件内容,事件分类,关键词,实体类型,实体名称,实体说明,关系说明",
-                    "document_title,source_name,source_type,source_date,source_author,source_url,chunk_id,chunk_heading,chunk_content,event_title,event_summary,event_content,event_category,keywords,entity_type,entity_name,entity_description,relation_description"
+                    "document_title,source_name,source_type,source_date,source_author,source_url,chunk_id,chunk_heading,chunk_content,event_title,event_summary,event_content,event_category,keywords,entity_type,entity_name,entity_description,relation_description",
                   )}
                 />
               </div>
-              {manualImportError ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{manualImportError}</div> : null}
+              {manualImportError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {manualImportError}
+                </div>
+              ) : null}
             </div>
             <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
-              <Button variant="ghost" size="sm" onClick={closeManualImport} disabled={isManualImporting}>{t("取消", "Cancel")}</Button>
-              <Button size="sm" onClick={() => void submitManualImport()} disabled={(!manualImportContent.trim() && manualImportFiles.length === 0) || isManualImporting}>
-                {isManualImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeManualImport}
+                disabled={isManualImporting}
+              >
+                {t("取消", "Cancel")}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void submitManualImport()}
+                disabled={
+                  (!manualImportContent.trim() &&
+                    manualImportFiles.length === 0) ||
+                  isManualImporting
+                }
+              >
+                {isManualImporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
                 {t("导入项目", "Import into project")}
               </Button>
             </div>
@@ -3199,25 +4407,143 @@ function importTemplateFilename(format: ImportDocFormat): string {
 }
 
 function importTemplateMime(format: ImportDocFormat): string {
-  return format === "csv" ? "text/csv" : format === "markdown" ? "text/markdown" : "application/json";
+  return format === "csv"
+    ? "text/csv"
+    : format === "markdown"
+      ? "text/markdown"
+      : "application/json";
 }
 
 // 导入模板用到的列（中英两套；解析器对两者都识别）
-const IMPORT_HEADERS_ZH = ["文档标题", "来源名称", "来源类型", "来源日期", "来源作者", "来源链接", "切片编号", "切片标题", "原文切片", "事件标题", "事件摘要", "事件内容", "事件分类", "关键词", "实体类型", "实体名称", "实体说明", "关系说明"];
-const IMPORT_HEADERS_EN = ["document_title", "source_name", "source_type", "source_date", "source_author", "source_url", "chunk_id", "chunk_heading", "chunk_content", "event_title", "event_summary", "event_content", "event_category", "keywords", "entity_type", "entity_name", "entity_description", "relation_description"];
+const IMPORT_HEADERS_ZH = [
+  "文档标题",
+  "来源名称",
+  "来源类型",
+  "来源日期",
+  "来源作者",
+  "来源链接",
+  "切片编号",
+  "切片标题",
+  "原文切片",
+  "事件标题",
+  "事件摘要",
+  "事件内容",
+  "事件分类",
+  "关键词",
+  "实体类型",
+  "实体名称",
+  "实体说明",
+  "关系说明",
+];
+const IMPORT_HEADERS_EN = [
+  "document_title",
+  "source_name",
+  "source_type",
+  "source_date",
+  "source_author",
+  "source_url",
+  "chunk_id",
+  "chunk_heading",
+  "chunk_content",
+  "event_title",
+  "event_summary",
+  "event_content",
+  "event_category",
+  "keywords",
+  "entity_type",
+  "entity_name",
+  "entity_description",
+  "relation_description",
+];
 const IMPORT_JSON_KEYS = IMPORT_HEADERS_EN;
 
 function importSampleRows(language: SupportedLanguage): string[][] {
   // 两行共用相同“切片编号”，演示「同一事件、多个实体」会被合并
   if (language === "en") {
     return [
-      ["Sample document", "Sample report", "report", "2025-03", "Sample Research Institute", "", "1", "Industry overview", "Paste the matching source passage here; it can be long.", "Product X capacity expansion", "One-line event summary.", "Detailed description of the event...", "Industry update", "keywordA;keywordB", "company", "Sample Chemical Co.", "Chemical company mentioned in the source", "Role of this company in the event"],
-      ["Sample document", "Sample report", "report", "2025-03", "Sample Research Institute", "", "1", "Industry overview", "Paste the matching source passage here; it can be long.", "Product X capacity expansion", "One-line event summary.", "Detailed description of the event...", "Industry update", "keywordA;keywordB", "product", "Sample product", "Chemical product mentioned in the source", "Role of this product in the event"]
+      [
+        "Sample document",
+        "Sample report",
+        "report",
+        "2025-03",
+        "Sample Research Institute",
+        "",
+        "1",
+        "Industry overview",
+        "Paste the matching source passage here; it can be long.",
+        "Product X capacity expansion",
+        "One-line event summary.",
+        "Detailed description of the event...",
+        "Industry update",
+        "keywordA;keywordB",
+        "company",
+        "Sample Chemical Co.",
+        "Chemical company mentioned in the source",
+        "Role of this company in the event",
+      ],
+      [
+        "Sample document",
+        "Sample report",
+        "report",
+        "2025-03",
+        "Sample Research Institute",
+        "",
+        "1",
+        "Industry overview",
+        "Paste the matching source passage here; it can be long.",
+        "Product X capacity expansion",
+        "One-line event summary.",
+        "Detailed description of the event...",
+        "Industry update",
+        "keywordA;keywordB",
+        "product",
+        "Sample product",
+        "Chemical product mentioned in the source",
+        "Role of this product in the event",
+      ],
     ];
   }
   return [
-    ["示例文档", "示例研究报告", "report", "2025-03", "示例研究机构", "", "1", "行业概述", "这里粘贴该事件对应的原文片段，可以较长。", "某产品扩产事件", "一句话事件摘要。", "事件的详细描述……", "行业动态", "关键词A;关键词B", "企业", "示例化工企业", "原文提到的化工企业", "该企业在事件中的角色说明"],
-    ["示例文档", "示例研究报告", "report", "2025-03", "示例研究机构", "", "1", "行业概述", "这里粘贴该事件对应的原文片段，可以较长。", "某产品扩产事件", "一句话事件摘要。", "事件的详细描述……", "行业动态", "关键词A;关键词B", "产品", "示例产品", "原文提到的化工产品", "该产品在事件中的角色说明"]
+    [
+      "示例文档",
+      "示例研究报告",
+      "report",
+      "2025-03",
+      "示例研究机构",
+      "",
+      "1",
+      "行业概述",
+      "这里粘贴该事件对应的原文片段，可以较长。",
+      "某产品扩产事件",
+      "一句话事件摘要。",
+      "事件的详细描述……",
+      "行业动态",
+      "关键词A;关键词B",
+      "企业",
+      "示例化工企业",
+      "原文提到的化工企业",
+      "该企业在事件中的角色说明",
+    ],
+    [
+      "示例文档",
+      "示例研究报告",
+      "report",
+      "2025-03",
+      "示例研究机构",
+      "",
+      "1",
+      "行业概述",
+      "这里粘贴该事件对应的原文片段，可以较长。",
+      "某产品扩产事件",
+      "一句话事件摘要。",
+      "事件的详细描述……",
+      "行业动态",
+      "关键词A;关键词B",
+      "产品",
+      "示例产品",
+      "原文提到的化工产品",
+      "该产品在事件中的角色说明",
+    ],
   ];
 }
 
@@ -3225,60 +4551,103 @@ function csvEscape(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-function importTemplateContent(format: ImportDocFormat, language: SupportedLanguage): string {
+function importTemplateContent(
+  format: ImportDocFormat,
+  language: SupportedLanguage,
+): string {
   const headers = language === "en" ? IMPORT_HEADERS_EN : IMPORT_HEADERS_ZH;
   const rows = importSampleRows(language);
   if (format === "csv") {
-    return [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
+    return [headers, ...rows]
+      .map((row) => row.map(csvEscape).join(","))
+      .join("\n");
   }
   if (format === "markdown") {
     const headerLine = `| ${headers.join(" | ")} |`;
     const separator = `| ${headers.map(() => "---").join(" | ")} |`;
-    const bodyLines = rows.map((row) => `| ${row.map((cell) => cell.replace(/\|/g, "\\|")).join(" | ")} |`);
+    const bodyLines = rows.map(
+      (row) =>
+        `| ${row.map((cell) => cell.replace(/\|/g, "\\|")).join(" | ")} |`,
+    );
     return [headerLine, separator, ...bodyLines].join("\n");
   }
-  return JSON.stringify({
-    documents: [
-      {
-        title: language === "en" ? "Sample document" : "示例文档",
-        source: {
-          name: language === "en" ? "Sample report" : "示例研究报告",
-          type: "report",
-          date: "2025-03",
-          author: language === "en" ? "Sample Research Institute" : "示例研究机构",
-          url: ""
+  return JSON.stringify(
+    {
+      documents: [
+        {
+          title: language === "en" ? "Sample document" : "示例文档",
+          source: {
+            name: language === "en" ? "Sample report" : "示例研究报告",
+            type: "report",
+            date: "2025-03",
+            author:
+              language === "en" ? "Sample Research Institute" : "示例研究机构",
+            url: "",
+          },
+          chunks: [
+            {
+              key: "1",
+              heading: language === "en" ? "Industry overview" : "行业概述",
+              content:
+                language === "en"
+                  ? "Paste the matching source passage here; it can be long."
+                  : "这里粘贴该事件对应的原文片段，可以较长。",
+              event: {
+                title:
+                  language === "en"
+                    ? "Product X capacity expansion"
+                    : "某产品扩产事件",
+                summary:
+                  language === "en"
+                    ? "One-line event summary."
+                    : "一句话事件摘要。",
+                content:
+                  language === "en"
+                    ? "Detailed description of the event..."
+                    : "事件的详细描述……",
+                category: language === "en" ? "Industry update" : "行业动态",
+                keywords:
+                  language === "en"
+                    ? ["keywordA", "keywordB"]
+                    : ["关键词A", "关键词B"],
+                entities: [
+                  {
+                    type: language === "en" ? "company" : "企业",
+                    name:
+                      language === "en"
+                        ? "Sample Chemical Co."
+                        : "示例化工企业",
+                    description:
+                      language === "en"
+                        ? "Chemical company mentioned in the source"
+                        : "原文提到的化工企业",
+                    relation:
+                      language === "en"
+                        ? "Role of this company in the event"
+                        : "该企业在事件中的角色说明",
+                  },
+                  {
+                    type: language === "en" ? "product" : "产品",
+                    name: language === "en" ? "Sample product" : "示例产品",
+                    description:
+                      language === "en"
+                        ? "Chemical product mentioned in the source"
+                        : "原文提到的化工产品",
+                    relation:
+                      language === "en"
+                        ? "Role of this product in the event"
+                        : "该产品在事件中的角色说明",
+                  },
+                ],
+              },
+            },
+          ],
         },
-        chunks: [
-          {
-            key: "1",
-            heading: language === "en" ? "Industry overview" : "行业概述",
-            content: language === "en" ? "Paste the matching source passage here; it can be long." : "这里粘贴该事件对应的原文片段，可以较长。",
-            event: {
-              title: language === "en" ? "Product X capacity expansion" : "某产品扩产事件",
-              summary: language === "en" ? "One-line event summary." : "一句话事件摘要。",
-              content: language === "en" ? "Detailed description of the event..." : "事件的详细描述……",
-              category: language === "en" ? "Industry update" : "行业动态",
-              keywords: language === "en" ? ["keywordA", "keywordB"] : ["关键词A", "关键词B"],
-              entities: [
-                {
-                  type: language === "en" ? "company" : "企业",
-                  name: language === "en" ? "Sample Chemical Co." : "示例化工企业",
-                  description: language === "en" ? "Chemical company mentioned in the source" : "原文提到的化工企业",
-                  relation: language === "en" ? "Role of this company in the event" : "该企业在事件中的角色说明"
-                },
-                {
-                  type: language === "en" ? "product" : "产品",
-                  name: language === "en" ? "Sample product" : "示例产品",
-                  description: language === "en" ? "Chemical product mentioned in the source" : "原文提到的化工产品",
-                  relation: language === "en" ? "Role of this product in the event" : "该产品在事件中的角色说明"
-                }
-              ]
-            }
-          }
-        ]
-      }
-    ]
-  }, null, 2);
+      ],
+    },
+    null,
+    2,
+  );
 }
 
 const CHEMICAL_JSON_IMPORT_PROMPT_ZH = String.raw`你是一名化工产业链和期货知识抽取专家。请把我上传的资料整理成可以导入 SAG 的标准 JSON。
@@ -4049,7 +5418,10 @@ SAG 以事件为中心。事件类似知识超图中的“超边”，用于连�
 
 现在开始处理我上传的文档，只输出 Markdown 表格。`;
 
-function defaultImportPrompt(format: ImportDocFormat, language: SupportedLanguage): string {
+function defaultImportPrompt(
+  format: ImportDocFormat,
+  language: SupportedLanguage,
+): string {
   const headersEn = IMPORT_HEADERS_EN.join(", ");
   if (language === "en") {
     if (format === "json") {
@@ -4063,10 +5435,11 @@ function defaultImportPrompt(format: ImportDocFormat, language: SupportedLanguag
         "Do not fabricate source metadata. If unknown, leave source.name/date/author/url empty and set source.type to unknown.",
         "Do NOT output database/runtime fields: id, documentId, chunkId, eventId, entityId, systemChunkId, schemaVersion, exportedAt, project, metadata, embedding, createdAt, updatedAt, status, parseStatus, rank, format, version, note.",
         "Source text:",
-        "<paste the source text here>"
+        "<paste the source text here>",
       ].join("\n");
     }
-    const shape = format === "csv" ? "standard CSV" : "a standard Markdown table";
+    const shape =
+      format === "csv" ? "standard CSV" : "a standard Markdown table";
     return [
       `You are a chemical industry-chain and futures knowledge extraction expert. Convert the uploaded source material into ${shape} that can be imported into SAG.`,
       `Use exactly these 18 columns in this order: ${headersEn}.`,
@@ -4076,7 +5449,7 @@ function defaultImportPrompt(format: ImportDocFormat, language: SupportedLanguag
       "Do not extract time, numbers, units, indicator names, price/capacity/inventory/profit values, market state, action verbs, or analytical judgments as entities; preserve them in event_content.",
       "Do not fabricate source metadata. Leave unknown fields empty and set source_type to unknown if needed.",
       "Source text:",
-      "<paste the source text here>"
+      "<paste the source text here>",
     ].join("\n");
   }
   if (format === "json") return CHEMICAL_JSON_IMPORT_PROMPT_ZH;
@@ -4098,17 +5471,24 @@ function loadCustomImportPrompts(): Partial<Record<ImportDocFormat, string>> {
 function AiImportPromptTools() {
   const { t, language } = useI18n();
   const [promptFormat, setPromptFormat] = useState<ImportDocFormat>("json");
-  const [customPrompts, setCustomPrompts] = useState<Partial<Record<ImportDocFormat, string>>>(() => loadCustomImportPrompts());
+  const [customPrompts, setCustomPrompts] = useState<
+    Partial<Record<ImportDocFormat, string>>
+  >(() => loadCustomImportPrompts());
   const [editorOpen, setEditorOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const defaultPrompt = defaultImportPrompt(promptFormat, language);
   const promptValue = customPrompts[promptFormat] ?? defaultPrompt;
-  const isCustom = customPrompts[promptFormat] != null && customPrompts[promptFormat] !== defaultPrompt;
+  const isCustom =
+    customPrompts[promptFormat] != null &&
+    customPrompts[promptFormat] !== defaultPrompt;
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(AI_IMPORT_PROMPT_STORAGE_KEY, JSON.stringify(customPrompts));
+      window.localStorage.setItem(
+        AI_IMPORT_PROMPT_STORAGE_KEY,
+        JSON.stringify(customPrompts),
+      );
     } catch {
       // 忽略 localStorage 不可用
     }
@@ -4130,7 +5510,12 @@ function AiImportPromptTools() {
       textarea.value = promptValue;
       document.body.appendChild(textarea);
       textarea.select();
-      try { document.execCommand("copy"); setCopied(true); } catch { /* ignore */ }
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+      } catch {
+        /* ignore */
+      }
       textarea.remove();
     }
   }
@@ -4150,7 +5535,12 @@ function AiImportPromptTools() {
   return (
     <div className="rounded-md border border-border bg-muted/30 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-foreground">{t("用 AI 生成可导入文件的提示词", "AI prompt to generate an importable file")}</span>
+        <span className="text-xs font-medium text-foreground">
+          {t(
+            "用 AI 生成可导入文件的提示词",
+            "AI prompt to generate an importable file",
+          )}
+        </span>
         <div className="flex overflow-hidden rounded-md border border-border">
           {(["json", "csv", "markdown"] as ImportDocFormat[]).map((format) => (
             <button
@@ -4159,7 +5549,8 @@ function AiImportPromptTools() {
               onClick={() => setPromptFormat(format)}
               className={cn(
                 "px-2.5 py-1 text-xs text-muted-foreground transition hover:text-foreground",
-                promptFormat === format && "bg-primary text-primary-foreground hover:text-primary-foreground"
+                promptFormat === format &&
+                  "bg-primary text-primary-foreground hover:text-primary-foreground",
               )}
             >
               {importFormatLabel(format)}
@@ -4167,15 +5558,28 @@ function AiImportPromptTools() {
           ))}
         </div>
         <Button type="button" size="sm" onClick={() => void copyPrompt()}>
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          {copied ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <Copy className="h-4 w-4" />
+          )}
           {copied ? t("已复制", "Copied") : t("复制提示词", "Copy prompt")}
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setEditorOpen((value) => !value)}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setEditorOpen((value) => !value)}
+        >
           <Pencil className="h-4 w-4" />
-          {editorOpen ? t("收起自定义", "Hide editor") : t("自定义提示词", "Customize")}
+          {editorOpen
+            ? t("收起自定义", "Hide editor")
+            : t("自定义提示词", "Customize")}
         </Button>
         {isCustom ? (
-          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{t("已自定义", "Customized")}</span>
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+            {t("已自定义", "Customized")}
+          </span>
         ) : null}
       </div>
       {editorOpen ? (
@@ -4186,12 +5590,21 @@ function AiImportPromptTools() {
             onChange={(event) => updateCustom(event.target.value)}
           />
           <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={resetCustom} disabled={!isCustom}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={resetCustom}
+              disabled={!isCustom}
+            >
               <RotateCcw className="h-4 w-4" />
               {t("恢复默认", "Reset to default")}
             </Button>
             <span className="self-center text-[11px] text-muted-foreground">
-              {t("修改会自动保存到本浏览器。", "Edits are saved automatically in this browser.")}
+              {t(
+                "修改会自动保存到本浏览器。",
+                "Edits are saved automatically in this browser.",
+              )}
             </span>
           </div>
         </div>
@@ -4214,7 +5627,13 @@ function ProjectGraphWorkspace(props: {
   if (!props.project) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center px-6">
-        <EmptyState title={t("先创建项目", "Create a project first")} description={t("项目里有文档、事件和实体后，图谱会在这里显示。", "The graph appears after the project has documents, events, and entities.")} />
+        <EmptyState
+          title={t("先创建项目", "Create a project first")}
+          description={t(
+            "项目里有文档、事件和实体后，图谱会在这里显示。",
+            "The graph appears after the project has documents, events, and entities.",
+          )}
+        />
       </section>
     );
   }
@@ -4222,7 +5641,13 @@ function ProjectGraphWorkspace(props: {
   if (!graph || graph.entities.length === 0 || graph.events.length === 0) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center px-6">
-        <EmptyState title={t("暂无图谱数据", "No graph data yet")} description={t("上传并完成提取后，可以查看实体、事件和关系。", "Upload documents and finish extraction to view entities, events, and relations.")} />
+        <EmptyState
+          title={t("暂无图谱数据", "No graph data yet")}
+          description={t(
+            "上传并完成提取后，可以查看实体、事件和关系。",
+            "Upload documents and finish extraction to view entities, events, and relations.",
+          )}
+        />
       </section>
     );
   }
@@ -4231,11 +5656,22 @@ function ProjectGraphWorkspace(props: {
     <section className="chem-graph-workspace flex min-h-0 flex-1 flex-col p-3 md:p-5">
       <div className="mb-3 flex shrink-0 items-center justify-between gap-4">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">KNOWLEDGE HYPERGRAPH</div>
-          <h2 className="mt-1 text-base font-semibold">{t("化工产业链知识超图", "Chemical industry knowledge hypergraph")}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{t("探索企业、产品、原料、工艺与产业事件之间的多跳关联。", "Explore multi-hop links across companies, products, feedstocks, processes, and industry events.")}</p>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+            KNOWLEDGE HYPERGRAPH
+          </div>
+          <h2 className="mt-1 text-base font-semibold">
+            {t("化工产业链知识超图", "Chemical industry knowledge hypergraph")}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t(
+              "探索企业、产品、原料、工艺与产业事件之间的多跳关联。",
+              "Explore multi-hop links across companies, products, feedstocks, processes, and industry events.",
+            )}
+          </p>
         </div>
-        <Badge className="border-primary/20 bg-primary/[0.07] text-primary">{props.project.name}</Badge>
+        <Badge className="border-primary/20 bg-primary/[0.07] text-primary">
+          {props.project.name}
+        </Badge>
       </div>
       <div className="min-h-0 flex-1 rounded-2xl border border-border bg-background/90 p-1 shadow-sm">
         <ProjectGraphFlow
@@ -4267,7 +5703,12 @@ function ActivityPanel(props: {
   const { t } = useI18n();
   if (props.isCollapsed) {
     return (
-      <aside className={cn("chem-activity-panel chem-activity-panel-collapsed hidden min-h-0 flex-col items-center border-l border-border", props.className)}>
+      <aside
+        className={cn(
+          "chem-activity-panel chem-activity-panel-collapsed hidden min-h-0 flex-col items-center border-l border-border",
+          props.className,
+        )}
+      >
         <Button
           type="button"
           variant="ghost"
@@ -4280,13 +5721,20 @@ function ActivityPanel(props: {
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div className="mt-4 flex flex-1 items-center justify-center">
-          <div className="chem-activity-collapsed-label">{contextPanelModeLabel(props.mode, t)}</div>
+          <div className="chem-activity-collapsed-label">
+            {contextPanelModeLabel(props.mode, t)}
+          </div>
         </div>
       </aside>
     );
   }
   return (
-    <aside className={cn("chem-activity-panel relative flex min-h-0 flex-col", props.className)}>
+    <aside
+      className={cn(
+        "chem-activity-panel relative flex min-h-0 flex-col",
+        props.className,
+      )}
+    >
       <div
         className="chem-activity-resize-handle"
         role="separator"
@@ -4297,9 +5745,16 @@ function ActivityPanel(props: {
       <div className="border-b border-border p-4">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">{contextPanelModeLabel(props.mode, t)}</h2>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{t("知识检索路径与模型调用依据", "Knowledge retrieval path and model evidence")}</p>
-        </div>
+            <h2 className="truncate text-sm font-semibold">
+              {contextPanelModeLabel(props.mode, t)}
+            </h2>
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {t(
+                "知识检索路径与模型调用依据",
+                "Knowledge retrieval path and model evidence",
+              )}
+            </p>
+          </div>
           <Button
             type="button"
             variant="ghost"
@@ -4319,7 +5774,7 @@ function ActivityPanel(props: {
               type="button"
               className={cn(
                 "rounded px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground",
-                props.mode === mode && "bg-accent text-foreground"
+                props.mode === mode && "bg-accent text-foreground",
               )}
               onClick={() => props.onSetMode(mode)}
             >
@@ -4348,8 +5803,21 @@ function ActivityPanel(props: {
 
 type KnowledgeAssetOverview = {
   citations: AnswerCitation[];
-  events: Array<{ id: string; title: string; summary?: string; score?: number; rank?: number }>;
-  entities: Array<{ id: string; name: string; type?: string; description?: string; score?: number; eventCount?: number }>;
+  events: Array<{
+    id: string;
+    title: string;
+    summary?: string;
+    score?: number;
+    rank?: number;
+  }>;
+  entities: Array<{
+    id: string;
+    name: string;
+    type?: string;
+    description?: string;
+    score?: number;
+    eventCount?: number;
+  }>;
   searchCount: number;
 };
 
@@ -4363,8 +5831,18 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
   const { t } = useI18n();
   const [chunkAssets, setChunkAssets] = useState<ChunkAssetLookup | null>(null);
   const [isLoadingChunkAssets, setIsLoadingChunkAssets] = useState(false);
-  const baseOverview = useMemo(() => buildKnowledgeAssetOverview(detail), [detail]);
-  const chunkAssetKey = useMemo(() => baseOverview.citations.map((citation) => citation.chunkId).sort().join("|"), [baseOverview.citations]);
+  const baseOverview = useMemo(
+    () => buildKnowledgeAssetOverview(detail),
+    [detail],
+  );
+  const chunkAssetKey = useMemo(
+    () =>
+      baseOverview.citations
+        .map((citation) => citation.chunkId)
+        .sort()
+        .join("|"),
+    [baseOverview.citations],
+  );
   useEffect(() => {
     const chunkIds = baseOverview.citations.map((citation) => citation.chunkId);
     if (chunkIds.length === 0) {
@@ -4373,7 +5851,8 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
     }
     let active = true;
     setIsLoadingChunkAssets(true);
-    void api.getChunkAssets(chunkIds)
+    void api
+      .getChunkAssets(chunkIds)
       .then((result) => {
         if (active) setChunkAssets(result);
       })
@@ -4387,12 +5866,23 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
       active = false;
     };
   }, [chunkAssetKey]);
-  const overview = useMemo(() => mergeKnowledgeAssetOverview(baseOverview, chunkAssets), [baseOverview, chunkAssets]);
-  if (!detail || (overview.citations.length === 0 && overview.events.length === 0 && overview.entities.length === 0)) {
+  const overview = useMemo(
+    () => mergeKnowledgeAssetOverview(baseOverview, chunkAssets),
+    [baseOverview, chunkAssets],
+  );
+  if (
+    !detail ||
+    (overview.citations.length === 0 &&
+      overview.events.length === 0 &&
+      overview.entities.length === 0)
+  ) {
     return (
       <EmptyState
         title={t("暂无引用资产", "No cited assets yet")}
-        description={t("智能问答完成后，这里会汇总本对话引用过的切片、事件和实体。", "After Q&A completes, cited chunks, events, and entities appear here.")}
+        description={t(
+          "智能问答完成后，这里会汇总本对话引用过的切片、事件和实体。",
+          "After Q&A completes, cited chunks, events, and entities appear here.",
+        )}
       />
     );
   }
@@ -4402,35 +5892,65 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
       <div className="rounded-lg border border-border bg-background/80 p-3 shadow-sm">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-primary">KNOWLEDGE ASSETS</div>
-            <div className="mt-1 text-sm font-semibold">{t("本对话引用概览", "Conversation asset overview")}</div>
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+              KNOWLEDGE ASSETS
+            </div>
+            <div className="mt-1 text-sm font-semibold">
+              {t("本对话引用概览", "Conversation asset overview")}
+            </div>
           </div>
           <Badge className="border-border bg-muted text-muted-foreground">
-            {isLoadingChunkAssets ? t("同步中", "Syncing") : `${overview.searchCount} SAG`}
+            {isLoadingChunkAssets
+              ? t("同步中", "Syncing")
+              : `${overview.searchCount} SAG`}
           </Badge>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <MiniMetric label={t("切片", "Chunks")} value={overview.citations.length} />
-          <MiniMetric label={t("事件", "Events")} value={overview.events.length} />
-          <MiniMetric label={t("实体", "Entities")} value={overview.entities.length} />
+          <MiniMetric
+            label={t("切片", "Chunks")}
+            value={overview.citations.length}
+          />
+          <MiniMetric
+            label={t("事件", "Events")}
+            value={overview.events.length}
+          />
+          <MiniMetric
+            label={t("实体", "Entities")}
+            value={overview.entities.length}
+          />
         </div>
       </div>
 
       <PanelSection title={t("引用切片", "Cited chunks")}>
-        {overview.citations.length === 0 ? <EmptyLine text={t("暂无切片引用。", "No chunk citations yet.")} /> : (
+        {overview.citations.length === 0 ? (
+          <EmptyLine text={t("暂无切片引用。", "No chunk citations yet.")} />
+        ) : (
           <div className="space-y-2">
             {overview.citations.map((citation) => (
-              <div key={`${citation.index}-${citation.chunkId}`} className="rounded-lg border border-border bg-background/75 p-3">
+              <div
+                key={`${citation.index}-${citation.chunkId}`}
+                className="rounded-lg border border-border bg-background/75 p-3"
+              >
                 <div className="mb-1 flex items-start justify-between gap-2">
-                  <div className="min-w-0 truncate text-sm font-semibold">{citation.heading || t("未命名切片", "Untitled chunk")}</div>
-                  <Badge className="shrink-0 border-border bg-muted text-muted-foreground">[{citation.index}]</Badge>
+                  <div className="min-w-0 truncate text-sm font-semibold">
+                    {citation.heading || t("未命名切片", "Untitled chunk")}
+                  </div>
+                  <Badge className="shrink-0 border-border bg-muted text-muted-foreground">
+                    [{citation.index}]
+                  </Badge>
                 </div>
                 <div className="mb-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                  {citation.rank != null ? <span>Rank {citation.rank}</span> : null}
-                  {citation.score != null ? <span>Score {citation.score.toFixed(3)}</span> : null}
+                  {citation.rank != null ? (
+                    <span>Rank {citation.rank}</span>
+                  ) : null}
+                  {citation.score != null ? (
+                    <span>Score {citation.score.toFixed(3)}</span>
+                  ) : null}
                 </div>
                 <DocumentSourceSummary document={citation.document} compact />
-                <p className="mt-2 line-clamp-4 text-xs leading-5 text-muted-foreground">{citation.content}</p>
+                <p className="mt-2 line-clamp-4 text-xs leading-5 text-muted-foreground">
+                  {citation.content}
+                </p>
               </div>
             ))}
           </div>
@@ -4438,15 +5958,39 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
       </PanelSection>
 
       <PanelSection title={t("事件概览", "Event overview")}>
-        {overview.events.length === 0 ? <EmptyLine text={t("当前 trace 未返回事件快照。", "The current trace did not return event snapshots.")} /> : (
+        {overview.events.length === 0 ? (
+          <EmptyLine
+            text={t(
+              "当前 trace 未返回事件快照。",
+              "The current trace did not return event snapshots.",
+            )}
+          />
+        ) : (
           <div className="space-y-2">
             {overview.events.slice(0, 8).map((event) => (
-              <div key={event.id} className="rounded-lg border border-border bg-background/75 p-3">
-                <div className="text-sm font-semibold leading-5">{event.title}</div>
-                {event.summary ? <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">{event.summary}</p> : null}
+              <div
+                key={event.id}
+                className="rounded-lg border border-border bg-background/75 p-3"
+              >
+                <div className="text-sm font-semibold leading-5">
+                  {event.title}
+                </div>
+                {event.summary ? (
+                  <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">
+                    {event.summary}
+                  </p>
+                ) : null}
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {event.rank != null ? <Badge className="border-border bg-muted text-muted-foreground">Rank {event.rank}</Badge> : null}
-                  {event.score != null ? <Badge className="border-border bg-muted text-muted-foreground">Score {event.score.toFixed(3)}</Badge> : null}
+                  {event.rank != null ? (
+                    <Badge className="border-border bg-muted text-muted-foreground">
+                      Rank {event.rank}
+                    </Badge>
+                  ) : null}
+                  {event.score != null ? (
+                    <Badge className="border-border bg-muted text-muted-foreground">
+                      Score {event.score.toFixed(3)}
+                    </Badge>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -4455,13 +5999,29 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
       </PanelSection>
 
       <PanelSection title={t("实体概览", "Entity overview")}>
-        {overview.entities.length === 0 ? <EmptyLine text={t("当前 trace 未返回实体快照。", "The current trace did not return entity snapshots.")} /> : (
+        {overview.entities.length === 0 ? (
+          <EmptyLine
+            text={t(
+              "当前 trace 未返回实体快照。",
+              "The current trace did not return entity snapshots.",
+            )}
+          />
+        ) : (
           <div className="flex flex-wrap gap-2">
             {overview.entities.slice(0, 18).map((entity) => (
-              <div key={entity.id} className="min-w-0 max-w-full rounded-full border border-border bg-background/85 px-3 py-1.5 shadow-sm">
+              <div
+                key={entity.id}
+                className="min-w-0 max-w-full rounded-full border border-border bg-background/85 px-3 py-1.5 shadow-sm"
+              >
                 <div className="flex items-center gap-1.5">
-                  <span className="max-w-[180px] truncate text-xs font-semibold">{entity.name}</span>
-                  {entity.type ? <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{entity.type}</span> : null}
+                  <span className="max-w-[180px] truncate text-xs font-semibold">
+                    {entity.name}
+                  </span>
+                  {entity.type ? (
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {entity.type}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -4484,13 +6044,26 @@ function MiniMetric({ label, value }: { label: string; value: number }) {
 function ProcessPanel({ steps }: { steps: ProcessStep[] }) {
   const { t } = useI18n();
   if (steps.length === 0) {
-    return <EmptyState title={t("还没有搜索过程", "No search trace yet")} description={t("每次对话或检索都会清空这里，并展示新的执行链路。", "Each chat or search clears this panel and shows the latest execution trace.")} />;
+    return (
+      <EmptyState
+        title={t("还没有搜索过程", "No search trace yet")}
+        description={t(
+          "每次对话或检索都会清空这里，并展示新的执行链路。",
+          "Each chat or search clears this panel and shows the latest execution trace.",
+        )}
+      />
+    );
   }
 
   return (
     <div className="space-y-2">
       {steps.map((step, index) => (
-        <Card key={step.id} className={cn(step.status === "failed" && "border-red-200 bg-red-50/60")}>
+        <Card
+          key={step.id}
+          className={cn(
+            step.status === "failed" && "border-red-200 bg-red-50/60",
+          )}
+        >
           <CardContent className="space-y-2">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -4498,23 +6071,38 @@ function ProcessPanel({ steps }: { steps: ProcessStep[] }) {
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] text-muted-foreground">
                     {index + 1}
                   </span>
-                  <div className="truncate text-sm font-semibold">{step.title}</div>
+                  <div className="truncate text-sm font-semibold">
+                    {step.title}
+                  </div>
                 </div>
                 {step.detail ? (
-                  <div className="mt-1 pl-7 text-xs leading-5 text-muted-foreground">{step.detail}</div>
+                  <div className="mt-1 pl-7 text-xs leading-5 text-muted-foreground">
+                    {step.detail}
+                  </div>
                 ) : null}
               </div>
               <Badge className={processStatusClassName(step.status)}>
-                {step.status === "running" ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                {step.status === "running" ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : null}
                 {processStatusLabel(step.status, t)}
               </Badge>
             </div>
             {step.durationMs != null ? (
-              <div className="pl-7 text-xs text-muted-foreground">{t(`耗时：${step.durationMs} 毫秒`, `Duration: ${step.durationMs} ms`)}</div>
+              <div className="pl-7 text-xs text-muted-foreground">
+                {t(
+                  `耗时：${step.durationMs} 毫秒`,
+                  `Duration: ${step.durationMs} ms`,
+                )}
+              </div>
             ) : null}
             {step.payload !== undefined ? (
               <div className="pl-7">
-                <JsonBlock title={t("数据", "Data")} value={step.payload} compact />
+                <JsonBlock
+                  title={t("数据", "Data")}
+                  value={step.payload}
+                  compact
+                />
               </div>
             ) : null}
           </CardContent>
@@ -4532,66 +6120,128 @@ function RawLogsPanel(props: {
   const { t } = useI18n();
   const latestLogs = [...props.logs].sort((a, b) => b.sequence - a.sequence);
   const llmLogCount = props.logs.filter((log) => log.kind === "llm").length;
-  const embeddingLogCount = props.logs.filter((log) => log.kind === "embedding").length;
+  const embeddingLogCount = props.logs.filter(
+    (log) => log.kind === "embedding",
+  ).length;
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 text-xs text-muted-foreground">
-          <div>{t(`浏览器缓存 ${props.logs.length} 条`, `Browser cache: ${props.logs.length} item(s)`)}</div>
+          <div>
+            {t(
+              `浏览器缓存 ${props.logs.length} 条`,
+              `Browser cache: ${props.logs.length} item(s)`,
+            )}
+          </div>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            <Badge className="border-border bg-muted text-muted-foreground">LLM {llmLogCount}</Badge>
-            <Badge className="border-border bg-muted text-muted-foreground">Embedding {embeddingLogCount}</Badge>
+            <Badge className="border-border bg-muted text-muted-foreground">
+              LLM {llmLogCount}
+            </Badge>
+            <Badge className="border-border bg-muted text-muted-foreground">
+              Embedding {embeddingLogCount}
+            </Badge>
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={props.onRefresh}>
             {t("同步日志", "Sync logs")}
           </Button>
-          <Button variant="outline" size="sm" onClick={props.onClear} disabled={props.logs.length === 0}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={props.onClear}
+            disabled={props.logs.length === 0}
+          >
             <Trash2 className="h-4 w-4" />
             {t("删除日志", "Delete logs")}
           </Button>
         </div>
       </div>
       {latestLogs.length === 0 ? (
-        <EmptyState title={t("暂无原始日志", "No raw logs yet")} description={t("上传、检索或对话触发 LLM / Embedding 后会显示原始请求和返回。", "Raw requests and responses appear after upload, search, or chat triggers LLM / Embedding calls.")} />
-      ) : latestLogs.map((log) => (
-        <Card key={log.id} className={cn(log.status === "FAILED" && "border-red-200 bg-red-50/60")}>
-          <CardContent className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Badge>{log.kind === "llm" ? "LLM" : "Embedding"}</Badge>
-                  <div className="truncate text-sm font-semibold">{log.operation}</div>
+        <EmptyState
+          title={t("暂无原始日志", "No raw logs yet")}
+          description={t(
+            "上传、检索或对话触发 LLM / Embedding 后会显示原始请求和返回。",
+            "Raw requests and responses appear after upload, search, or chat triggers LLM / Embedding calls.",
+          )}
+        />
+      ) : (
+        latestLogs.map((log) => (
+          <Card
+            key={log.id}
+            className={cn(
+              log.status === "FAILED" && "border-red-200 bg-red-50/60",
+            )}
+          >
+            <CardContent className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Badge>{log.kind === "llm" ? "LLM" : "Embedding"}</Badge>
+                    <div className="truncate text-sm font-semibold">
+                      {log.operation}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    #{log.sequence} · {formatDate(log.createdAt)} ·{" "}
+                    {log.durationMs} {t("毫秒", "ms")}
+                  </div>
                 </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  #{log.sequence} · {formatDate(log.createdAt)} · {log.durationMs} {t("毫秒", "ms")}
-                </div>
+                <Badge
+                  className={
+                    log.status === "FAILED"
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : ""
+                  }
+                >
+                  {log.status === "FAILED"
+                    ? t("失败", "Failed")
+                    : t("成功", "Succeeded")}
+                </Badge>
               </div>
-              <Badge className={log.status === "FAILED" ? "border-red-200 bg-red-50 text-red-700" : ""}>
-                {log.status === "FAILED" ? t("失败", "Failed") : t("成功", "Succeeded")}
-              </Badge>
-            </div>
-            <JsonBlock title={t("请求", "Request")} value={log.request} compact preserveRaw />
-            {log.response !== undefined ? <JsonBlock title={t("返回", "Response")} value={log.response} compact preserveRaw /> : null}
-            {log.error ? (
-              <div className="rounded-md bg-red-50 p-2 text-xs leading-5 text-red-700">{log.error}</div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ))}
+              <JsonBlock
+                title={t("请求", "Request")}
+                value={log.request}
+                compact
+                preserveRaw
+              />
+              {log.response !== undefined ? (
+                <JsonBlock
+                  title={t("返回", "Response")}
+                  value={log.response}
+                  compact
+                  preserveRaw
+                />
+              ) : null}
+              {log.error ? (
+                <div className="rounded-md bg-red-50 p-2 text-xs leading-5 text-red-700">
+                  {log.error}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        ))
+      )}
     </div>
   );
 }
 
-function UploadJobsPanel({ jobs, expanded, onToggle }: {
+function UploadJobsPanel({
+  jobs,
+  expanded,
+  onToggle,
+}: {
   jobs: UploadJobRecord[];
   expanded: boolean;
   onToggle: () => void;
 }) {
   const { t } = useI18n();
-  const activeCount = jobs.filter((job) => job.status === "QUEUED" || job.status === "RUNNING").length;
-  const completedCount = jobs.filter((job) => job.status === "COMPLETED").length;
+  const activeCount = jobs.filter(
+    (job) => job.status === "QUEUED" || job.status === "RUNNING",
+  ).length;
+  const completedCount = jobs.filter(
+    (job) => job.status === "COMPLETED",
+  ).length;
   const failedCount = jobs.filter((job) => job.status === "FAILED").length;
   const latestJob = jobs[0];
   return (
@@ -4602,30 +6252,62 @@ function UploadJobsPanel({ jobs, expanded, onToggle }: {
         onClick={onToggle}
       >
         <div className="min-w-0">
-          <div className="text-xs font-medium text-muted-foreground">{t("处理队列", "Processing queue")}</div>
+          <div className="text-xs font-medium text-muted-foreground">
+            {t("处理队列", "Processing queue")}
+          </div>
           <div className="mt-0.5 truncate text-xs text-muted-foreground">
             {activeCount > 0
-              ? t(`${activeCount} 个任务处理中`, `${activeCount} job(s) processing`)
-              : t(`已收起：完成 ${completedCount}，失败 ${failedCount}`, `Collapsed: ${completedCount} completed, ${failedCount} failed`)}
-            {latestJob ? t(` · 最近：${latestJob.title || latestJob.fileName}`, ` · Latest: ${latestJob.title || latestJob.fileName}`) : ""}
+              ? t(
+                  `${activeCount} 个任务处理中`,
+                  `${activeCount} job(s) processing`,
+                )
+              : t(
+                  `已收起：完成 ${completedCount}，失败 ${failedCount}`,
+                  `Collapsed: ${completedCount} completed, ${failedCount} failed`,
+                )}
+            {latestJob
+              ? t(
+                  ` · 最近：${latestJob.title || latestJob.fileName}`,
+                  ` · Latest: ${latestJob.title || latestJob.fileName}`,
+                )
+              : ""}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {activeCount > 0 ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
-          <Badge>{expanded ? t("收起", "Collapse") : t("展开", "Expand")}</Badge>
+          {activeCount > 0 ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : null}
+          <Badge>
+            {expanded ? t("收起", "Collapse") : t("展开", "Expand")}
+          </Badge>
         </div>
       </button>
       {expanded ? (
         <div className="space-y-2">
           {jobs.map((job) => (
-            <Card key={job.id} className={cn(job.status === "FAILED" && "border-red-200 bg-red-50/60")}>
+            <Card
+              key={job.id}
+              className={cn(
+                job.status === "FAILED" && "border-red-200 bg-red-50/60",
+              )}
+            >
               <CardContent className="space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{job.title || job.fileName}</div>
-                    <div className="mt-0.5 truncate text-xs text-muted-foreground">{job.fileName}</div>
+                    <div className="truncate text-sm font-semibold">
+                      {job.title || job.fileName}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {job.fileName}
+                    </div>
                   </div>
-                  <Badge className={job.status === "FAILED" ? "border-red-200 bg-red-50 text-red-700" : ""}>
+                  <Badge
+                    className={
+                      job.status === "FAILED"
+                        ? "border-red-200 bg-red-50 text-red-700"
+                        : ""
+                    }
+                  >
                     {uploadStatusLabel(job.status, t)}
                   </Badge>
                 </div>
@@ -4633,23 +6315,33 @@ function UploadJobsPanel({ jobs, expanded, onToggle }: {
                   <div
                     className={cn(
                       "h-full rounded-full bg-primary transition-all",
-                      job.status === "FAILED" && "bg-red-500"
+                      job.status === "FAILED" && "bg-red-500",
                     )}
-                    style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }}
+                    style={{
+                      width: `${Math.max(0, Math.min(100, job.progress))}%`,
+                    }}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                  <span className="min-w-0 truncate">{uploadStageLabel(job.stage, t)} · {job.message}</span>
+                  <span className="min-w-0 truncate">
+                    {uploadStageLabel(job.stage, t)} · {job.message}
+                  </span>
                   <span className="shrink-0">{Math.round(job.progress)}%</span>
                 </div>
                 {job.totalChunks ? (
                   <div className="text-xs text-muted-foreground">
-                    {t(`切片进度：${job.currentChunk ?? 0}/${job.totalChunks}`, `Chunk progress: ${job.currentChunk ?? 0}/${job.totalChunks}`)}
+                    {t(
+                      `切片进度：${job.currentChunk ?? 0}/${job.totalChunks}`,
+                      `Chunk progress: ${job.currentChunk ?? 0}/${job.totalChunks}`,
+                    )}
                   </div>
                 ) : null}
                 {job.status === "COMPLETED" ? (
                   <div className="text-xs text-muted-foreground">
-                    {t(`已生成 ${job.chunkCount ?? 0} 个切片，${job.eventCount ?? 0} 个事件`, `Generated ${job.chunkCount ?? 0} chunk(s), ${job.eventCount ?? 0} event(s)`)}
+                    {t(
+                      `已生成 ${job.chunkCount ?? 0} 个切片，${job.eventCount ?? 0} 个事件`,
+                      `Generated ${job.chunkCount ?? 0} chunk(s), ${job.eventCount ?? 0} event(s)`,
+                    )}
                   </div>
                 ) : null}
                 {job.error ? (
@@ -4672,15 +6364,28 @@ function OverviewPanel(props: {
 }) {
   const { t } = useI18n();
   if (!props.document) {
-    return <EmptyState title={t("未选择文档", "No document selected")} description={t("选择文档后可查看处理结果。", "Select a document to view processing results.")} />;
+    return (
+      <EmptyState
+        title={t("未选择文档", "No document selected")}
+        description={t(
+          "选择文档后可查看处理结果。",
+          "Select a document to view processing results.",
+        )}
+      />
+    );
   }
   return (
     <div className="space-y-3">
       <Card>
         <CardContent className="space-y-2">
           <div className="text-sm font-semibold">{props.document.title}</div>
-          <div className="text-xs text-muted-foreground">{t("处理状态", "Processing status")}：{props.document.parseStatus}</div>
-          <div className="text-xs text-muted-foreground">{t("创建时间", "Created at")}：{formatDate(props.document.createdAt)}</div>
+          <div className="text-xs text-muted-foreground">
+            {t("处理状态", "Processing status")}：{props.document.parseStatus}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {t("创建时间", "Created at")}：
+            {formatDate(props.document.createdAt)}
+          </div>
           <DocumentSourceDetails document={props.document} />
         </CardContent>
       </Card>
@@ -4691,14 +6396,37 @@ function OverviewPanel(props: {
       </div>
       <Card>
         <CardContent className="space-y-2">
-          <div className="text-sm font-semibold">{t("Embedding 状态", "Embedding status")}</div>
+          <div className="text-sm font-semibold">
+            {t("Embedding 状态", "Embedding status")}
+          </div>
           <div className="grid grid-cols-3 gap-2">
-            <Metric label={t("切片向量", "Chunk vectors")} value={props.chunks.filter((chunk) => Boolean(chunk.embedding)).length} />
-            <Metric label={t("事件向量", "Event vectors")} value={props.events.filter((event) => Boolean(event.titleEmbedding || event.contentEmbedding)).length} />
-            <Metric label={t("实体向量", "Entity vectors")} value={props.entities.filter((entity) => Boolean(entity.embedding)).length} />
+            <Metric
+              label={t("切片向量", "Chunk vectors")}
+              value={
+                props.chunks.filter((chunk) => Boolean(chunk.embedding)).length
+              }
+            />
+            <Metric
+              label={t("事件向量", "Event vectors")}
+              value={
+                props.events.filter((event) =>
+                  Boolean(event.titleEmbedding || event.contentEmbedding),
+                ).length
+              }
+            />
+            <Metric
+              label={t("实体向量", "Entity vectors")}
+              value={
+                props.entities.filter((entity) => Boolean(entity.embedding))
+                  .length
+              }
+            />
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            {t("列表卡片会显示维度和前 8 位样本，用来确认向量已经真实写入数据库。", "List cards show dimensions and the first 8 sample values to confirm vectors were written to the database.")}
+            {t(
+              "列表卡片会显示维度和前 8 位样本，用来确认向量已经真实写入数据库。",
+              "List cards show dimensions and the first 8 sample values to confirm vectors were written to the database.",
+            )}
           </p>
         </CardContent>
       </Card>
@@ -4715,6 +6443,8 @@ function ResultTitleSearch(props: {
   onClear: () => void;
 }) {
   const { t } = useI18n();
+  const hasMatchedFilter =
+    props.query.trim() || props.matchedCount !== props.totalCount;
   return (
     <div className="mb-3 space-y-1.5">
       <div className="flex items-center gap-2">
@@ -4724,18 +6454,274 @@ function ResultTitleSearch(props: {
             className="h-9 pl-8"
             value={props.query}
             onChange={(event) => props.onQueryChange(event.target.value)}
-            placeholder={t(`按${props.label}标题搜索`, `Search ${props.label} titles`)}
+            placeholder={t(
+              `按${props.label}标题搜索`,
+              `Search ${props.label} titles`,
+            )}
           />
         </div>
         {props.query.trim() ? (
-          <Button variant="ghost" size="sm" onClick={props.onClear}>{t("清空", "Clear")}</Button>
+          <Button variant="ghost" size="sm" onClick={props.onClear}>
+            {t("清空", "Clear")}
+          </Button>
         ) : null}
       </div>
       <div className="text-xs text-muted-foreground">
-        {props.query.trim()
-          ? t(`匹配 ${props.matchedCount}/${props.totalCount}`, `Matched ${props.matchedCount}/${props.totalCount}`)
+        {hasMatchedFilter
+          ? t(
+              `匹配 ${props.matchedCount}/${props.totalCount}`,
+              `Matched ${props.matchedCount}/${props.totalCount}`,
+            )
           : t(`共 ${props.totalCount} 条`, `${props.totalCount} total`)}
       </div>
+    </div>
+  );
+}
+
+function EntityAssetTypeFilter(props: {
+  allOptions: KnowledgeAssetEntityTypeOption[];
+  options: KnowledgeAssetEntityTypeOption[];
+  selectedTypes: Set<string>;
+  query: string;
+  scope: KnowledgeAssetEntityScope;
+  exportFormat: KnowledgeAssetEntityExportFormat;
+  isExporting: boolean;
+  matchedEntityCount: number;
+  totalEntityCount: number;
+  matchedEntityRowCount: number;
+  totalEntityRowCount: number;
+  onScopeChange: (scope: KnowledgeAssetEntityScope) => void;
+  onExportFormatChange: (format: KnowledgeAssetEntityExportFormat) => void;
+  onExport: () => void;
+  onQueryChange: (value: string) => void;
+  onToggleType: (type: string) => void;
+  onSelectTypes: (types: string[]) => void;
+  onClear: () => void;
+}) {
+  const { t } = useI18n();
+  const selectedOptions = props.allOptions.filter((option) =>
+    props.selectedTypes.has(option.type),
+  );
+  const hasTypeFilter = props.selectedTypes.size > 0;
+  const visibleOptionTypes = props.options.map((option) => option.type);
+  const hasMatchedFilter =
+    props.query.trim() ||
+    hasTypeFilter ||
+    props.matchedEntityCount !== props.totalEntityCount;
+  return (
+    <div className="mb-3 rounded-xl border border-border bg-background/80 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold">
+            {t("实体筛选与统计", "Entity filters and stats")}
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {t(
+              "支持按当前文档或整个项目查看实体；类型支持多选与模糊搜索；“化工品类”会匹配原料、中间体、产品、下游产品、联产品、副产品、催化剂、牌号/规格等。",
+              "View entities for the current document or the whole project. Types support multi-select and fuzzy search. Chemical products matches raw materials, intermediates, products, downstream products, co-products, by-products, catalysts, grades/specifications, and similar types.",
+            )}
+          </p>
+        </div>
+        <Badge>
+          {t(
+            `匹配 ${props.matchedEntityCount}/${props.totalEntityCount}`,
+            `Matched ${props.matchedEntityCount}/${props.totalEntityCount}`,
+          )}
+        </Badge>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-4">
+        <Metric
+          label={t("统计范围", "Scope")}
+          value={
+            props.scope === "project"
+              ? t("整个项目", "Project")
+              : t("当前文档", "Document")
+          }
+        />
+        <Metric
+          label={t("实体名称", "Entity names")}
+          value={props.totalEntityCount}
+        />
+        <Metric
+          label={t("实体记录", "Entity rows")}
+          value={props.totalEntityRowCount}
+        />
+        <Metric
+          label={t("筛选记录", "Filtered rows")}
+          value={props.matchedEntityRowCount}
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/25 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            {t("范围", "Scope")}
+          </span>
+          {(["document", "project"] as KnowledgeAssetEntityScope[]).map(
+            (scope) => (
+              <button
+                key={scope}
+                type="button"
+                className={cn(
+                  "rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground",
+                  props.scope === scope &&
+                    "border-primary/40 bg-primary/[0.08] text-foreground",
+                )}
+                onClick={() => props.onScopeChange(scope)}
+              >
+                {scope === "project"
+                  ? t("整个项目", "Project")
+                  : t("当前文档", "Document")}
+              </button>
+            ),
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            {t("导出筛选结果", "Export filtered")}
+          </span>
+          <select
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={props.exportFormat}
+            onChange={(event) =>
+              props.onExportFormatChange(
+                event.target.value as KnowledgeAssetEntityExportFormat,
+              )
+            }
+          >
+            <option value="csv">CSV</option>
+            <option value="markdown">MD</option>
+            <option value="json">JSON</option>
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={props.matchedEntityRowCount === 0 || props.isExporting}
+            onClick={props.onExport}
+          >
+            {props.isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {props.isExporting
+              ? t("导出中", "Exporting")
+              : t("导出", "Export")}
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
+        <div className="relative min-w-0">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-9 pl-8"
+            value={props.query}
+            onChange={(event) => props.onQueryChange(event.target.value)}
+            placeholder={t(
+              "搜索实体类型，支持模糊匹配",
+              "Search entity types with fuzzy matching",
+            )}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={visibleOptionTypes.length === 0}
+            onClick={() => props.onSelectTypes(visibleOptionTypes)}
+          >
+            {t("全选当前", "Select visible")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!hasTypeFilter && !props.query.trim()}
+            onClick={props.onClear}
+          >
+            {t("清空筛选", "Clear filters")}
+          </Button>
+        </div>
+      </div>
+      {selectedOptions.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {selectedOptions.slice(0, 8).map((option) => (
+            <button
+              key={option.type}
+              type="button"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => props.onToggleType(option.type)}
+              title={t("点击移除该类型", "Click to remove this type")}
+            >
+              <span>{option.label}</span>
+              <X className="h-3 w-3" />
+            </button>
+          ))}
+          {selectedOptions.length > 8 ? (
+            <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+              {t(
+                `+${selectedOptions.length - 8} 个`,
+                `+${selectedOptions.length - 8} more`,
+              )}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="mt-3 grid max-h-56 gap-1.5 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-3">
+        {props.options.length > 0 ? (
+          props.options.map((option) => (
+            <label
+              key={option.type}
+              className={cn(
+                "flex cursor-pointer items-start justify-between gap-2 rounded-lg border border-border bg-background px-2.5 py-2 text-xs hover:bg-accent",
+                props.selectedTypes.has(option.type) &&
+                  "border-primary/30 bg-primary/[0.06]",
+              )}
+            >
+              <span className="flex min-w-0 items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={props.selectedTypes.has(option.type)}
+                  onChange={() => props.onToggleType(option.type)}
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-input"
+                />
+                <span className="min-w-0">
+                  <span
+                    className="block truncate font-medium"
+                    title={option.label}
+                  >
+                    {option.label}
+                  </span>
+                  {option.description ? (
+                    <span className="mt-0.5 block line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                      {option.description}
+                    </span>
+                  ) : null}
+                </span>
+              </span>
+              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                {option.count}
+              </span>
+            </label>
+          ))
+        ) : (
+          <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground md:col-span-2 xl:col-span-3">
+            {t("没有匹配的实体类型", "No matching entity types")}
+          </div>
+        )}
+      </div>
+      {hasMatchedFilter ? (
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          {t(
+            "导出会使用当前范围、名称/描述搜索和实体类型筛选后的结果；结果会按实体名称去重，并在每个实体下汇总同名记录、关联事件名称和同名实体属性。",
+            "Exports use the current scope plus name/description search and type filters. Results are deduplicated by entity name, with same-name records, related event names, and same-name attributes summarized under each entity.",
+          )}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -4749,12 +6735,21 @@ function PaginationControls(props: {
 }) {
   const { t } = useI18n();
   const pageCount = Math.max(1, Math.ceil(props.totalCount / props.pageSize));
-  const from = props.totalCount === 0 ? 0 : (props.page - 1) * props.pageSize + 1;
+  const from =
+    props.totalCount === 0 ? 0 : (props.page - 1) * props.pageSize + 1;
   const to = Math.min(props.page * props.pageSize, props.totalCount);
   return (
-    <div className={cn("flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3", props.className)}>
+    <div
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3",
+        props.className,
+      )}
+    >
       <div className="text-xs text-muted-foreground">
-        {t(`第 ${props.page}/${pageCount} 页 · ${from}-${to} / ${props.totalCount} 条`, `Page ${props.page}/${pageCount} · ${from}-${to} / ${props.totalCount}`)}
+        {t(
+          `第 ${props.page}/${pageCount} 页 · ${from}-${to} / ${props.totalCount} 条`,
+          `Page ${props.page}/${pageCount} · ${from}-${to} / ${props.totalCount}`,
+        )}
       </div>
       <div className="flex items-center gap-2">
         <Button
@@ -4770,7 +6765,9 @@ function PaginationControls(props: {
           variant="outline"
           size="sm"
           disabled={props.page >= pageCount}
-          onClick={() => props.onPageChange(Math.min(pageCount, props.page + 1))}
+          onClick={() =>
+            props.onPageChange(Math.min(pageCount, props.page + 1))
+          }
         >
           {t("下一页", "Next")}
           <ChevronRight className="h-4 w-4" />
@@ -4783,14 +6780,32 @@ function PaginationControls(props: {
 function ChunksPanel(props: {
   chunks: ChunkRecord[];
   hasFilter?: boolean;
-  onUpdateChunk: (chunkId: string, input: { heading?: string | null; content?: string; rawContent?: string | null }) => void;
+  onUpdateChunk: (
+    chunkId: string,
+    input: {
+      heading?: string | null;
+      content?: string;
+      rawContent?: string | null;
+    },
+  ) => void;
   onDeleteChunk: (chunkId: string) => void;
 }) {
   const { t } = useI18n();
   if (props.chunks.length === 0) {
-    return props.hasFilter
-      ? <EmptyState title={t("没有匹配的切片", "No matching chunks")} description={t("换一个标题关键字再试。", "Try another title keyword.")} />
-      : <EmptyState title={t("暂无切片", "No chunks yet")} description={t("文档处理后会在这里展示切片。", "Chunks appear here after document processing.")} />;
+    return props.hasFilter ? (
+      <EmptyState
+        title={t("没有匹配的切片", "No matching chunks")}
+        description={t("换一个标题关键字再试。", "Try another title keyword.")}
+      />
+    ) : (
+      <EmptyState
+        title={t("暂无切片", "No chunks yet")}
+        description={t(
+          "文档处理后会在这里展示切片。",
+          "Chunks appear here after document processing.",
+        )}
+      />
+    );
   }
   return (
     <div className="space-y-2">
@@ -4811,14 +6826,28 @@ function EventsPanel(props: {
   hasFilter?: boolean;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
-  onUpdateEvent: (eventId: string, input: { title?: string; summary?: string; content?: string }) => void;
+  onUpdateEvent: (
+    eventId: string,
+    input: { title?: string; summary?: string; content?: string },
+  ) => void;
   onDeleteEvent: (eventId: string) => void;
 }) {
   const { t } = useI18n();
   if (props.events.length === 0) {
-    return props.hasFilter
-      ? <EmptyState title={t("没有匹配的事件", "No matching events")} description={t("换一个标题关键字再试。", "Try another title keyword.")} />
-      : <EmptyState title={t("暂无事件", "No events yet")} description={t("开启抽取后，事件会显示关联实体。", "Events and related entities appear after extraction is enabled.")} />;
+    return props.hasFilter ? (
+      <EmptyState
+        title={t("没有匹配的事件", "No matching events")}
+        description={t("换一个标题关键字再试。", "Try another title keyword.")}
+      />
+    ) : (
+      <EmptyState
+        title={t("暂无事件", "No events yet")}
+        description={t(
+          "开启抽取后，事件会显示关联实体。",
+          "Events and related entities appear after extraction is enabled.",
+        )}
+      />
+    );
   }
   return (
     <div className="space-y-2">
@@ -4837,17 +6866,31 @@ function EventsPanel(props: {
 }
 
 function EntitiesPanel(props: {
-  entities: EntityRecord[];
+  entities: KnowledgeAssetEntityListRecord[];
   hasFilter?: boolean;
   onOpenEntity: (entityId: string) => void;
-  onUpdateEntity: (entityId: string, input: { type?: string; name?: string; description?: string | null }) => void;
+  onUpdateEntity: (
+    entityId: string,
+    input: { type?: string; name?: string; description?: string | null },
+  ) => void;
   onDeleteEntity: (entityId: string) => void;
 }) {
   const { t } = useI18n();
   if (props.entities.length === 0) {
-    return props.hasFilter
-      ? <EmptyState title={t("没有匹配的实体", "No matching entities")} description={t("换一个标题关键字再试。", "Try another title keyword.")} />
-      : <EmptyState title={t("暂无实体", "No entities yet")} description={t("事件抽取后会在这里聚合实体。", "Entities are aggregated here after event extraction.")} />;
+    return props.hasFilter ? (
+      <EmptyState
+        title={t("没有匹配的实体", "No matching entities")}
+        description={t("换一个标题关键字再试。", "Try another title keyword.")}
+      />
+    ) : (
+      <EmptyState
+        title={t("暂无实体", "No entities yet")}
+        description={t(
+          "事件抽取后会在这里聚合实体。",
+          "Entities are aggregated here after event extraction.",
+        )}
+      />
+    );
   }
   return (
     <div className="space-y-2">
@@ -4866,7 +6909,11 @@ function EntitiesPanel(props: {
 
 // 知识资产里的「编辑」改为页内行内编辑（#2）：点击编辑后直接在卡片里出现
 // 输入框/文本域，改完点保存即可，不再弹出只能看到一行的浏览器对话框。
-function InlineEditActions(props: { onSave: () => void; onCancel: () => void; saveDisabled?: boolean }) {
+function InlineEditActions(props: {
+  onSave: () => void;
+  onCancel: () => void;
+  saveDisabled?: boolean;
+}) {
   const { t } = useI18n();
   return (
     <div className="flex flex-wrap gap-2">
@@ -4876,7 +6923,7 @@ function InlineEditActions(props: { onSave: () => void; onCancel: () => void; sa
         disabled={props.saveDisabled}
         className={cn(
           "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10",
-          props.saveDisabled && "cursor-not-allowed opacity-50"
+          props.saveDisabled && "cursor-not-allowed opacity-50",
         )}
       >
         <Check className="h-3.5 w-3.5" />
@@ -4896,7 +6943,14 @@ function InlineEditActions(props: { onSave: () => void; onCancel: () => void; sa
 
 function ChunkCard(props: {
   chunk: ChunkRecord;
-  onUpdateChunk: (chunkId: string, input: { heading?: string | null; content?: string; rawContent?: string | null }) => void;
+  onUpdateChunk: (
+    chunkId: string,
+    input: {
+      heading?: string | null;
+      content?: string;
+      rawContent?: string | null;
+    },
+  ) => void;
   onDeleteChunk: (chunkId: string) => void;
 }) {
   const { t } = useI18n();
@@ -4921,24 +6975,51 @@ function ChunkCard(props: {
       <CardContent className="space-y-2">
         {editing ? (
           <div className="space-y-2">
-            <Input value={heading} onChange={(event) => setHeading(event.target.value)} placeholder={t("切片标题", "Chunk title")} />
-            <Textarea value={content} onChange={(event) => setContent(event.target.value)} rows={6} placeholder={t("切片内容", "Chunk content")} />
-            <InlineEditActions onSave={save} onCancel={() => setEditing(false)} saveDisabled={!content.trim()} />
+            <Input
+              value={heading}
+              onChange={(event) => setHeading(event.target.value)}
+              placeholder={t("切片标题", "Chunk title")}
+            />
+            <Textarea
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              rows={6}
+              placeholder={t("切片内容", "Chunk content")}
+            />
+            <InlineEditActions
+              onSave={save}
+              onCancel={() => setEditing(false)}
+              saveDisabled={!content.trim()}
+            />
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between gap-2">
-              <div className="truncate text-sm font-medium">{chunk.heading || t("未命名切片", "Untitled chunk")}</div>
+              <div className="truncate text-sm font-medium">
+                {chunk.heading || t("未命名切片", "Untitled chunk")}
+              </div>
               <Badge>{t(`排序 ${chunk.rank}`, `Rank ${chunk.rank}`)}</Badge>
             </div>
-            <p className="line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{chunk.content}</p>
-            <EmbeddingPreviewBlock title={t("切片 Embedding", "Chunk Embedding")} preview={chunk.embedding} />
+            <p className="line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+              {chunk.content}
+            </p>
+            <EmbeddingPreviewBlock
+              title={t("切片 Embedding", "Chunk Embedding")}
+              preview={chunk.embedding}
+            />
             <div className="flex flex-wrap gap-2">
               <MiniButton onClick={startEdit}>{t("编辑", "Edit")}</MiniButton>
               <MiniButton
                 danger
                 onClick={() => {
-                  if (window.confirm(t("删除这个切片及其关联事件？", "Delete this chunk and its linked events?"))) {
+                  if (
+                    window.confirm(
+                      t(
+                        "删除这个切片及其关联事件？",
+                        "Delete this chunk and its linked events?",
+                      ),
+                    )
+                  ) {
                     props.onDeleteChunk(chunk.id);
                   }
                 }}
@@ -4957,7 +7038,10 @@ function EventCard(props: {
   event: EventRecord;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
-  onUpdateEvent: (eventId: string, input: { title?: string; summary?: string; content?: string }) => void;
+  onUpdateEvent: (
+    eventId: string,
+    input: { title?: string; summary?: string; content?: string },
+  ) => void;
   onDeleteEvent: (eventId: string) => void;
 }) {
   const { t } = useI18n();
@@ -4965,7 +7049,9 @@ function EventCard(props: {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(event.title);
   const [summary, setSummary] = useState(event.summary ?? "");
-  const [content, setContent] = useState(event.content || event.summary || event.title);
+  const [content, setContent] = useState(
+    event.content || event.summary || event.title,
+  );
 
   function startEdit() {
     setTitle(event.title);
@@ -4984,36 +7070,77 @@ function EventCard(props: {
       <CardContent className="space-y-2">
         {editing ? (
           <div className="space-y-2">
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("事件标题", "Event title")} />
-            <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={3} placeholder={t("事件摘要", "Event summary")} />
-            <Textarea value={content} onChange={(e) => setContent(e.target.value)} rows={6} placeholder={t("事件内容", "Event content")} />
-            <InlineEditActions onSave={save} onCancel={() => setEditing(false)} saveDisabled={!title.trim() || !content.trim()} />
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t("事件标题", "Event title")}
+            />
+            <Textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              rows={3}
+              placeholder={t("事件摘要", "Event summary")}
+            />
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={6}
+              placeholder={t("事件内容", "Event content")}
+            />
+            <InlineEditActions
+              onSave={save}
+              onCancel={() => setEditing(false)}
+              saveDisabled={!title.trim() || !content.trim()}
+            />
           </div>
         ) : (
           <>
-            <button className="w-full text-left text-sm font-semibold hover:underline" onClick={() => props.onOpenEvent(event.id)}>
+            <button
+              className="w-full text-left text-sm font-semibold hover:underline"
+              onClick={() => props.onOpenEvent(event.id)}
+            >
               {event.title}
             </button>
-            <p className="line-clamp-3 text-sm text-muted-foreground">{event.summary || event.content}</p>
+            <p className="line-clamp-3 text-sm text-muted-foreground">
+              {event.summary || event.content}
+            </p>
             <div className="flex flex-wrap gap-1">
               {(event.entities ?? []).length === 0 ? (
-                <Badge>{t(`${event.entityCount ?? 0} 个实体`, `${event.entityCount ?? 0} entities`)}</Badge>
-              ) : (event.entities ?? []).map((entity) => (
-                <button key={entity.id} onClick={() => props.onOpenEntity(entity.id)}>
-                  <Badge>{entity.name}</Badge>
-                </button>
-              ))}
+                <Badge>
+                  {t(
+                    `${event.entityCount ?? 0} 个实体`,
+                    `${event.entityCount ?? 0} entities`,
+                  )}
+                </Badge>
+              ) : (
+                (event.entities ?? []).map((entity) => (
+                  <button
+                    key={entity.id}
+                    onClick={() => props.onOpenEntity(entity.id)}
+                  >
+                    <Badge>{entity.name}</Badge>
+                  </button>
+                ))
+              )}
             </div>
             <div className="grid min-w-0 gap-2">
-              <EmbeddingPreviewBlock title={t("标题 Embedding", "Title Embedding")} preview={event.titleEmbedding} />
-              <EmbeddingPreviewBlock title={t("内容 Embedding", "Content Embedding")} preview={event.contentEmbedding} />
+              <EmbeddingPreviewBlock
+                title={t("标题 Embedding", "Title Embedding")}
+                preview={event.titleEmbedding}
+              />
+              <EmbeddingPreviewBlock
+                title={t("内容 Embedding", "Content Embedding")}
+                preview={event.contentEmbedding}
+              />
             </div>
             <div className="flex flex-wrap gap-2">
               <MiniButton onClick={startEdit}>{t("编辑", "Edit")}</MiniButton>
               <MiniButton
                 danger
                 onClick={() => {
-                  if (window.confirm(t("删除这个事件？", "Delete this event?"))) {
+                  if (
+                    window.confirm(t("删除这个事件？", "Delete this event?"))
+                  ) {
                     props.onDeleteEvent(event.id);
                   }
                 }}
@@ -5029,9 +7156,12 @@ function EventCard(props: {
 }
 
 function EntityCard(props: {
-  entity: EntityRecord;
+  entity: KnowledgeAssetEntityListRecord;
   onOpenEntity: (entityId: string) => void;
-  onUpdateEntity: (entityId: string, input: { type?: string; name?: string; description?: string | null }) => void;
+  onUpdateEntity: (
+    entityId: string,
+    input: { type?: string; name?: string; description?: string | null },
+  ) => void;
   onDeleteEntity: (entityId: string) => void;
 }) {
   const { t } = useI18n();
@@ -5040,6 +7170,16 @@ function EntityCard(props: {
   const [type, setType] = useState(entity.type);
   const [name, setName] = useState(entity.name);
   const [description, setDescription] = useState(entity.description || "");
+  const sameNameEntityCount = entity.sameNameEntityCount ?? 1;
+  const sameNameTypeLabel =
+    entity.sameNameEntityTypes && entity.sameNameEntityTypes.length > 0
+      ? formatKnowledgeAssetListPreview(entity.sameNameEntityTypes, 3)
+      : entity.type;
+  const descriptionPreview =
+    entity.sameNameEntityDescriptions &&
+    entity.sameNameEntityDescriptions.length > 0
+      ? formatKnowledgeAssetListPreview(entity.sameNameEntityDescriptions, 2)
+      : entity.description || entity.normalizedName;
 
   function startEdit() {
     setType(entity.type);
@@ -5057,31 +7197,94 @@ function EntityCard(props: {
     <div className="w-full min-w-0 max-w-full rounded-md border border-border bg-background/80 p-3 text-left">
       {editing ? (
         <div className="space-y-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("实体名称", "Entity name")} />
-          <Input value={type} onChange={(e) => setType(e.target.value)} placeholder={t("实体类型", "Entity type")} />
-          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder={t("实体描述", "Entity description")} />
-          <InlineEditActions onSave={save} onCancel={() => setEditing(false)} saveDisabled={!type.trim() || !name.trim()} />
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t("实体名称", "Entity name")}
+          />
+          <Input
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            placeholder={t("实体类型", "Entity type")}
+          />
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            placeholder={t("实体描述", "Entity description")}
+          />
+          <InlineEditActions
+            onSave={save}
+            onCancel={() => setEditing(false)}
+            saveDisabled={!type.trim() || !name.trim()}
+          />
         </div>
       ) : (
         <>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">{entity.name}</div>
-              <div className="text-xs text-muted-foreground">{entity.type}</div>
+              <button
+                type="button"
+                className="block max-w-full truncate text-left text-sm font-semibold hover:underline"
+                onClick={() => props.onOpenEntity(entity.id)}
+                title={t("查看实体详情", "View entity details")}
+              >
+                {entity.name}
+              </button>
+              <div className="text-xs text-muted-foreground">
+                {sameNameTypeLabel}
+              </div>
             </div>
-            <Badge>{t(`${entity.eventCount ?? 0} 事件`, `${entity.eventCount ?? 0} events`)}</Badge>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+              {entity.hasSameNameEntities ? (
+                <Badge>
+                  {t(
+                    `${sameNameEntityCount} 条同名`,
+                    `${sameNameEntityCount} same-name`,
+                  )}
+                </Badge>
+              ) : null}
+              <Badge>
+                {t(
+                  `${entity.eventCount ?? 0} 事件`,
+                  `${entity.eventCount ?? 0} events`,
+                )}
+              </Badge>
+            </div>
           </div>
-          <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{entity.description || entity.normalizedName}</p>
+          <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+            {descriptionPreview}
+          </p>
+          {entity.hasSameNameEntities ? (
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {t(
+                "列表已按实体名称去重；右侧详情会列出同名实体的不同类型、描述和关联事件。",
+                "The list is deduplicated by entity name; the detail drawer shows same-name variants with different types, descriptions, and related events.",
+              )}
+            </p>
+          ) : null}
           <div className="mt-2 min-w-0">
-            <EmbeddingPreviewBlock title={t("实体 Embedding", "Entity Embedding")} preview={entity.embedding} />
+            <EmbeddingPreviewBlock
+              title={t("实体 Embedding", "Entity Embedding")}
+              preview={entity.embedding}
+            />
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            <MiniButton onClick={() => props.onOpenEntity(entity.id)}>{t("查看", "View")}</MiniButton>
+            <MiniButton onClick={() => props.onOpenEntity(entity.id)}>
+              {t("查看", "View")}
+            </MiniButton>
             <MiniButton onClick={startEdit}>{t("编辑", "Edit")}</MiniButton>
             <MiniButton
               danger
               onClick={() => {
-                if (window.confirm(t("删除这个实体及其关联关系？", "Delete this entity and its relations?"))) {
+                if (
+                  window.confirm(
+                    t(
+                      "删除这个实体及其关联关系？",
+                      "Delete this entity and its relations?",
+                    ),
+                  )
+                ) {
                   props.onDeleteEntity(entity.id);
                 }
               }}
@@ -5113,15 +7316,16 @@ function SearchPanel(props: {
           {t("检索模式", "Search mode")}
         </div>
         <div className="flex rounded-md border border-border bg-background p-0.5">
-          {([
+          {[
             { value: "fast" as const, label: t("极速", "Fast") },
-            { value: "standard" as const, label: t("标准", "Standard") }
-          ]).map((mode) => (
+            { value: "standard" as const, label: t("标准", "Standard") },
+          ].map((mode) => (
             <button
               key={mode.value}
               className={cn(
                 "rounded px-3 py-1 text-xs text-muted-foreground hover:text-foreground",
-                props.searchMode === mode.value && "bg-foreground text-background hover:text-background"
+                props.searchMode === mode.value &&
+                  "bg-foreground text-background hover:text-background",
               )}
               onClick={() => props.onSearchModeChange(mode.value)}
               type="button"
@@ -5132,14 +7336,28 @@ function SearchPanel(props: {
         </div>
         <div className="basis-full text-xs text-muted-foreground">
           {props.searchMode === "fast"
-            ? t("实体全文匹配 + rerank 模型，不走 LLM 过滤。", "Entity full-text matching + rerank model, without LLM filtering.")
-            : t("LLM 抽取查询实体 + LLM 重排，适合对比质量。", "LLM extracts query entities + LLM reranking, useful for quality comparison.")}
+            ? t(
+                "实体全文匹配 + rerank 模型，不走 LLM 过滤。",
+                "Entity full-text matching + rerank model, without LLM filtering.",
+              )
+            : t(
+                "LLM 抽取查询实体 + LLM 重排，适合对比质量。",
+                "LLM extracts query entities + LLM reranking, useful for quality comparison.",
+              )}
         </div>
       </div>
       <div className="flex gap-2">
-        <Input value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder={t("输入检索问题", "Enter a search question")} />
+        <Input
+          value={props.query}
+          onChange={(event) => props.onQueryChange(event.target.value)}
+          placeholder={t("输入检索问题", "Enter a search question")}
+        />
         <Button size="sm" onClick={props.onSearch} disabled={props.isSearching}>
-          {props.isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          {props.isSearching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Search className="h-4 w-4" />
+          )}
         </Button>
       </div>
       {props.result ? (
@@ -5148,17 +7366,31 @@ function SearchPanel(props: {
             <Card key={section.chunkId}>
               <CardContent className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="truncate text-sm font-medium">{section.heading || t("结果切片", "Result chunk")}</div>
+                  <div className="truncate text-sm font-medium">
+                    {section.heading || t("结果切片", "Result chunk")}
+                  </div>
                   <Badge>{section.score.toFixed(3)}</Badge>
                 </div>
-                <p className="line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{section.content}</p>
+                <p className="line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                  {section.content}
+                </p>
               </CardContent>
             </Card>
           ))}
-          <JsonBlock title={t("检索链路", "Search trace")} value={props.result.trace ?? { traceId: props.result.traceId }} compact />
+          <JsonBlock
+            title={t("检索链路", "Search trace")}
+            value={props.result.trace ?? { traceId: props.result.traceId }}
+            compact
+          />
         </div>
       ) : (
-        <EmptyState title={t("还没有检索结果", "No search results yet")} description={t("检索范围固定为当前项目。", "The search scope is fixed to the current project.")} />
+        <EmptyState
+          title={t("还没有检索结果", "No search results yet")}
+          description={t(
+            "检索范围固定为当前项目。",
+            "The search scope is fixed to the current project.",
+          )}
+        />
       )}
     </div>
   );
@@ -5195,7 +7427,12 @@ const DEFAULT_CHUNKING_MODE: ChunkingMode = "heading_strict";
 const DEFAULT_CHUNK_TOKEN_LIMIT = 512;
 const DEFAULT_CHUNK_OVERLAP_TOKENS = 100;
 
-function boundedInteger(value: unknown, fallback: number, min: number, max: number): number {
+function boundedInteger(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(Math.trunc(value), max));
 }
@@ -5225,16 +7462,19 @@ function SettingsPanel(props: {
   const [clearLlmApiKey, setClearLlmApiKey] = useState(false);
   const [llmTimeoutMs, setLlmTimeoutMs] = useState(300000);
   const [llmMaxRetries, setLlmMaxRetries] = useState(2);
-  const [defaultSearchMode, setDefaultSearchMode] = useState<SearchMode>("fast");
+  const [defaultSearchMode, setDefaultSearchMode] =
+    useState<SearchMode>("fast");
   const [defaultSearchTopK, setDefaultSearchTopK] = useState(10);
-  const [defaultChunkingMode, setDefaultChunkingMode] = useState<ChunkingMode>("heading_strict");
+  const [defaultChunkingMode, setDefaultChunkingMode] =
+    useState<ChunkingMode>("heading_strict");
   const [chunkTokenLimit, setChunkTokenLimit] = useState(512);
   const [chunkOverlapTokens, setChunkOverlapTokens] = useState(100);
   const [answerSystemPrompt, setAnswerSystemPrompt] = useState("");
   const [mermaidTemplate, setMermaidTemplate] = useState("");
   const [mermaidPendingText, setMermaidPendingText] = useState("");
   const [mcpSearchMode, setMcpSearchMode] = useState<SearchMode>("fast");
-  const [graphDefaultLayoutStyle, setGraphDefaultLayoutStyle] = useState("search_layers");
+  const [graphDefaultLayoutStyle, setGraphDefaultLayoutStyle] =
+    useState("search_layers");
   const [welcomePromptText, setWelcomePromptText] = useState("");
   const [longTermMemoryEnabled, setLongTermMemoryEnabled] = useState(false);
 
@@ -5252,12 +7492,31 @@ function SettingsPanel(props: {
     setLlmTimeoutMs(props.settings.llmTimeoutMs);
     setLlmMaxRetries(props.settings.llmMaxRetries);
     setDefaultSearchMode(props.settings.defaultSearchMode);
-    setDefaultSearchTopK(boundedInteger(props.settings.defaultSearchTopK, DEFAULT_SEARCH_TOP_K, 1, 50));
-    setDefaultChunkingMode(normalizeChunkingMode(props.settings.defaultChunkingMode));
-    const normalizedTokenLimit = boundedInteger(props.settings.chunkTokenLimit, DEFAULT_CHUNK_TOKEN_LIMIT, 64, 8192);
+    setDefaultSearchTopK(
+      boundedInteger(
+        props.settings.defaultSearchTopK,
+        DEFAULT_SEARCH_TOP_K,
+        1,
+        50,
+      ),
+    );
+    setDefaultChunkingMode(
+      normalizeChunkingMode(props.settings.defaultChunkingMode),
+    );
+    const normalizedTokenLimit = boundedInteger(
+      props.settings.chunkTokenLimit,
+      DEFAULT_CHUNK_TOKEN_LIMIT,
+      64,
+      8192,
+    );
     setChunkTokenLimit(normalizedTokenLimit);
     setChunkOverlapTokens(
-      boundedInteger(props.settings.chunkOverlapTokens, DEFAULT_CHUNK_OVERLAP_TOKENS, 0, normalizedTokenLimit - 1)
+      boundedInteger(
+        props.settings.chunkOverlapTokens,
+        DEFAULT_CHUNK_OVERLAP_TOKENS,
+        0,
+        normalizedTokenLimit - 1,
+      ),
     );
     setAnswerSystemPrompt(props.settings.answerSystemPrompt);
     setMermaidTemplate(props.settings.mermaidTemplate);
@@ -5269,10 +7528,18 @@ function SettingsPanel(props: {
   }, [props.settings]);
 
   useEffect(() => {
-    setChunkOverlapTokens((current) => Math.min(current, Math.max(0, chunkTokenLimit - 1)));
+    setChunkOverlapTokens((current) =>
+      Math.min(current, Math.max(0, chunkTokenLimit - 1)),
+    );
   }, [chunkTokenLimit]);
 
-  if (!props.settings) return <EmptyState title={t("正在加载设置", "Loading settings")} description={t("请稍候。", "Please wait.")} />;
+  if (!props.settings)
+    return (
+      <EmptyState
+        title={t("正在加载设置", "Loading settings")}
+        description={t("请稍候。", "Please wait.")}
+      />
+    );
 
   return (
     <form
@@ -5301,40 +7568,67 @@ function SettingsPanel(props: {
           mermaidPendingText,
           mcpSearchMode,
           graphDefaultLayoutStyle,
-          welcomePromptTemplates: welcomePromptText.split("\n").map((item) => item.trim()).filter(Boolean),
-          longTermMemoryEnabled
+          welcomePromptTemplates: welcomePromptText
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          longTermMemoryEnabled,
         });
       }}
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">CHEMCLOUD SYSTEM</div>
-          <h2 className="mt-1 text-base font-semibold">{t("知识引擎与模型设置", "Knowledge engine and model settings")}</h2>
-          <p className="text-xs text-muted-foreground">{t("密钥只显示配置状态，不回显明文。", "Keys only show configuration status and are never echoed in plaintext.")}</p>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+            CHEMCLOUD SYSTEM
+          </div>
+          <h2 className="mt-1 text-base font-semibold">
+            {t("知识引擎与模型设置", "Knowledge engine and model settings")}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "密钥只显示配置状态，不回显明文。",
+              "Keys only show configuration status and are never echoed in plaintext.",
+            )}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <div className="text-xs text-muted-foreground">{t("更新于", "Updated")} {formatDate(props.settings.updatedAt)}</div>
-          <Button type="button" variant="outline" size="sm" onClick={props.onClose}>{t("退出设置", "Exit settings")}</Button>
+          <div className="text-xs text-muted-foreground">
+            {t("更新于", "Updated")} {formatDate(props.settings.updatedAt)}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={props.onClose}
+          >
+            {t("退出设置", "Exit settings")}
+          </Button>
         </div>
       </div>
 
       <ThemeSettingsCard />
 
-      <SettingsCard title={t("界面", "Interface")} badge={props.language === "zh" ? "中文" : "English"}>
+      <SettingsCard
+        title={t("界面", "Interface")}
+        badge={props.language === "zh" ? "中文" : "English"}
+      >
         <div className="space-y-3 md:col-span-2">
-          <div className="text-sm font-medium">{t("界面语言", "Interface language")}</div>
+          <div className="text-sm font-medium">
+            {t("界面语言", "Interface language")}
+          </div>
           <div className="flex w-fit rounded-md border border-border bg-background p-0.5">
-            {([
+            {[
               { value: "auto" as const, label: t("自动", "Auto") },
               { value: "zh" as const, label: "中文" },
-              { value: "en" as const, label: "English" }
-            ]).map((option) => (
+              { value: "en" as const, label: "English" },
+            ].map((option) => (
               <button
                 key={option.value}
                 type="button"
                 className={cn(
                   "rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground",
-                  props.languagePreference === option.value && "bg-foreground text-background hover:text-background"
+                  props.languagePreference === option.value &&
+                    "bg-foreground text-background hover:text-background",
                 )}
                 onClick={() => props.onLanguagePreferenceChange(option.value)}
               >
@@ -5345,23 +7639,29 @@ function SettingsPanel(props: {
           <div className="text-xs leading-5 text-muted-foreground">
             {t(
               `当前显示语言：${props.language === "zh" ? "中文" : "英文"}。自动模式会根据浏览器语言选择。`,
-              `Current display language: ${props.language === "zh" ? "Chinese" : "English"}. Auto mode follows the browser language.`
+              `Current display language: ${props.language === "zh" ? "Chinese" : "English"}. Auto mode follows the browser language.`,
             )}
           </div>
         </div>
         <div className="space-y-3 md:col-span-2">
-          <div className="text-sm font-medium">{t("知识超图默认重排样式", "Default graph layout")}</div>
+          <div className="text-sm font-medium">
+            {t("知识超图默认重排样式", "Default graph layout")}
+          </div>
           <div className="flex w-fit flex-wrap rounded-md border border-border bg-background p-0.5">
-            {([
-              { value: "search_layers", label: t("搜索居中", "Search-centered") },
-              { value: "columns", label: t("分栏", "Columns") }
-            ]).map((option) => (
+            {[
+              {
+                value: "search_layers",
+                label: t("搜索居中", "Search-centered"),
+              },
+              { value: "columns", label: t("分栏", "Columns") },
+            ].map((option) => (
               <button
                 key={option.value}
                 type="button"
                 className={cn(
                   "rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground",
-                  graphDefaultLayoutStyle === option.value && "bg-foreground text-background hover:text-background"
+                  graphDefaultLayoutStyle === option.value &&
+                    "bg-foreground text-background hover:text-background",
                 )}
                 onClick={() => setGraphDefaultLayoutStyle(option.value)}
               >
@@ -5372,9 +7672,14 @@ function SettingsPanel(props: {
         </div>
       </SettingsCard>
 
-      <SettingsCard title={t("欢迎页问题", "Welcome prompts")} badge={t("可编辑", "Editable")}>
+      <SettingsCard
+        title={t("欢迎页问题", "Welcome prompts")}
+        badge={t("可编辑", "Editable")}
+      >
         <div className="space-y-2 md:col-span-2">
-          <div className="text-sm font-medium">{t("默认问题（每行一个）", "Default prompts (one per line)")}</div>
+          <div className="text-sm font-medium">
+            {t("默认问题（每行一个）", "Default prompts (one per line)")}
+          </div>
           <Textarea
             className="min-h-44 text-xs leading-5"
             value={welcomePromptText}
@@ -5383,45 +7688,81 @@ function SettingsPanel(props: {
           <div className="text-xs leading-5 text-muted-foreground">
             {t(
               "支持占位符：{projectName}、{focus}、{secondary}。留空保存时会恢复默认问题。",
-              "Supported placeholders: {projectName}, {focus}, {secondary}. Saving an empty value restores the defaults."
+              "Supported placeholders: {projectName}, {focus}, {secondary}. Saving an empty value restores the defaults.",
             )}
           </div>
         </div>
       </SettingsCard>
 
-      <SettingsCard title={t("长期记忆", "Long-term memory")} badge={longTermMemoryEnabled ? t("已开启", "On") : t("已关闭", "Off")}>
+      <SettingsCard
+        title={t("长期记忆", "Long-term memory")}
+        badge={longTermMemoryEnabled ? t("已开启", "On") : t("已关闭", "Off")}
+      >
         <div className="space-y-3 md:col-span-2">
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
               checked={longTermMemoryEnabled}
-              onChange={(event) => setLongTermMemoryEnabled(event.target.checked)}
+              onChange={(event) =>
+                setLongTermMemoryEnabled(event.target.checked)
+              }
             />
-            {t("开启后，系统会总结本项目问答中的长期偏好，并用于后续回答风格和图谱呈现。", "When enabled, SAG summarizes long-term preferences in this project's chats and uses them for later answer style and graph presentation.")}
+            {t(
+              "开启后，系统会总结本项目问答中的长期偏好，并用于后续回答风格和图谱呈现。",
+              "When enabled, SAG summarizes long-term preferences in this project's chats and uses them for later answer style and graph presentation.",
+            )}
           </label>
           <div className="text-xs leading-5 text-muted-foreground">
-            {t("默认关闭。关闭后不会读取或更新长期记忆；已保存的历史记忆会保留但不生效。", "Off by default. When disabled, memory is neither read nor updated; existing saved memory is kept but ignored.")}
+            {t(
+              "默认关闭。关闭后不会读取或更新长期记忆；已保存的历史记忆会保留但不生效。",
+              "Off by default. When disabled, memory is neither read nor updated; existing saved memory is kept but ignored.",
+            )}
           </div>
         </div>
       </SettingsCard>
 
       <SettingsCard title="AI Provider" badge="302.ai">
         <Field label={t("Embedding 接口地址", "Embedding API base URL")}>
-          <Input value={embeddingBaseUrl} onChange={(event) => setEmbeddingBaseUrl(event.target.value)} />
+          <Input
+            value={embeddingBaseUrl}
+            onChange={(event) => setEmbeddingBaseUrl(event.target.value)}
+          />
         </Field>
         <Field label={t("Embedding 模型", "Embedding model")}>
-          <Input value={embeddingModel} onChange={(event) => setEmbeddingModel(event.target.value)} />
+          <Input
+            value={embeddingModel}
+            onChange={(event) => setEmbeddingModel(event.target.value)}
+          />
         </Field>
-        <Field label={t("向量维度（数据库固定）", "Vector dimensions (database fixed)")}>
-          <Input type="number" min={1024} max={1024} value={embeddingDimensions} disabled onChange={(event) => setEmbeddingDimensions(Number(event.target.value))} />
+        <Field
+          label={t(
+            "向量维度（数据库固定）",
+            "Vector dimensions (database fixed)",
+          )}
+        >
+          <Input
+            type="number"
+            min={1024}
+            max={1024}
+            value={embeddingDimensions}
+            disabled
+            onChange={(event) =>
+              setEmbeddingDimensions(Number(event.target.value))
+            }
+          />
         </Field>
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 md:col-span-2">
           {t(
             "Embedding 必须填写“向量模型”的 OpenAI 兼容接口，本项目会自动请求 接口地址 + /embeddings，并且数据库固定要求 1024 维。DeepSeek 聊天模型通常只能填在 LLM 区域；如果第三方中转没有把 DeepSeek 密钥映射到可用的 embedding 模型，就会报错。建议选择支持 1024 维的 bge-m3、jina-embeddings-v3 或中转平台明确标注的 embedding 模型。",
-            "Embedding must use an OpenAI-compatible embedding model endpoint. SAG calls base URL + /embeddings, and the database requires 1024 dimensions. DeepSeek chat models usually belong in the LLM fields; they will fail here unless your relay maps the key to a real embedding model. Use a 1024-dimensional model such as bge-m3, jina-embeddings-v3, or an embedding model explicitly listed by your relay."
+            "Embedding must use an OpenAI-compatible embedding model endpoint. SAG calls base URL + /embeddings, and the database requires 1024 dimensions. DeepSeek chat models usually belong in the LLM fields; they will fail here unless your relay maps the key to a real embedding model. Use a 1024-dimensional model such as bge-m3, jina-embeddings-v3, or an embedding model explicitly listed by your relay.",
           )}
         </div>
-        <Field label={t(`Embedding 密钥：${props.settings.hasEmbeddingApiKey ? "已配置" : "未配置"}`, `Embedding key: ${props.settings.hasEmbeddingApiKey ? "configured" : "not configured"}`)}>
+        <Field
+          label={t(
+            `Embedding 密钥：${props.settings.hasEmbeddingApiKey ? "已配置" : "未配置"}`,
+            `Embedding key: ${props.settings.hasEmbeddingApiKey ? "configured" : "not configured"}`,
+          )}
+        >
           <Input
             type="password"
             value={embeddingApiKey}
@@ -5433,18 +7774,46 @@ function SettingsPanel(props: {
           />
         </Field>
         <Field label={t("LLM 接口地址", "LLM API base URL")}>
-          <Input value={llmBaseUrl} onChange={(event) => setLlmBaseUrl(event.target.value)} />
+          <Input
+            value={llmBaseUrl}
+            onChange={(event) => setLlmBaseUrl(event.target.value)}
+          />
         </Field>
         <Field label={t("LLM 模型", "LLM model")}>
-          <Input value={llmModel} onChange={(event) => setLlmModel(event.target.value)} />
+          <Input
+            value={llmModel}
+            onChange={(event) => setLlmModel(event.target.value)}
+          />
         </Field>
-        <Field label={t("超时毫秒（第三方中转建议 300000）", "Timeout in ms (300000 recommended for relays)")}>
-          <Input type="number" min={10000} step={10000} value={llmTimeoutMs} onChange={(event) => setLlmTimeoutMs(Number(event.target.value))} />
+        <Field
+          label={t(
+            "超时毫秒（第三方中转建议 300000）",
+            "Timeout in ms (300000 recommended for relays)",
+          )}
+        >
+          <Input
+            type="number"
+            min={10000}
+            step={10000}
+            value={llmTimeoutMs}
+            onChange={(event) => setLlmTimeoutMs(Number(event.target.value))}
+          />
         </Field>
         <Field label={t("重试次数", "Retry count")}>
-          <Input type="number" min={0} max={10} value={llmMaxRetries} onChange={(event) => setLlmMaxRetries(Number(event.target.value))} />
+          <Input
+            type="number"
+            min={0}
+            max={10}
+            value={llmMaxRetries}
+            onChange={(event) => setLlmMaxRetries(Number(event.target.value))}
+          />
         </Field>
-        <Field label={t(`LLM 密钥：${props.settings.hasLlmApiKey ? "已配置" : "未配置"}`, `LLM key: ${props.settings.hasLlmApiKey ? "configured" : "not configured"}`)}>
+        <Field
+          label={t(
+            `LLM 密钥：${props.settings.hasLlmApiKey ? "已配置" : "未配置"}`,
+            `LLM key: ${props.settings.hasLlmApiKey ? "configured" : "not configured"}`,
+          )}
+        >
           <Input
             type="password"
             value={llmApiKey}
@@ -5457,9 +7826,14 @@ function SettingsPanel(props: {
         </Field>
       </SettingsCard>
 
-      <SettingsCard title={t("回答风格", "Answer style")} badge={t("可编辑", "Editable")}>
+      <SettingsCard
+        title={t("回答风格", "Answer style")}
+        badge={t("可编辑", "Editable")}
+      >
         <div className="space-y-2 md:col-span-2">
-          <div className="text-sm font-medium">{t("系统提示词", "System prompt")}</div>
+          <div className="text-sm font-medium">
+            {t("系统提示词", "System prompt")}
+          </div>
           <Textarea
             className="min-h-36 font-mono text-xs leading-5"
             value={answerSystemPrompt}
@@ -5468,12 +7842,14 @@ function SettingsPanel(props: {
           <div className="text-xs leading-5 text-muted-foreground">
             {t(
               "用于控制智能问答最终答案的专业程度、语气、结构和引用方式。留空保存时会恢复默认提示词。",
-              "Controls the final Q&A answer style, tone, structure, and citation behavior. Saving an empty value restores the default prompt."
+              "Controls the final Q&A answer style, tone, structure, and citation behavior. Saving an empty value restores the default prompt.",
             )}
           </div>
         </div>
         <div className="space-y-2 md:col-span-2">
-          <div className="text-sm font-medium">{t("Mermaid 产业链图模板", "Mermaid industry-chain template")}</div>
+          <div className="text-sm font-medium">
+            {t("Mermaid 产业链图模板", "Mermaid industry-chain template")}
+          </div>
           <Textarea
             className="min-h-72 font-mono text-xs leading-5"
             value={mermaidTemplate}
@@ -5482,7 +7858,7 @@ function SettingsPanel(props: {
           <div className="text-xs leading-5 text-muted-foreground">
             {t(
               "开启“自动生成 Mermaid 图”后，模型会参考这里的生成规则、分组和样式。建议把“禁止图内引用标记、每条连线单独一行、产业链关系图引用说明放图外并使用 [1] 编号”等规则直接保留在这里。",
-              "When automatic Mermaid diagrams are enabled, the model follows these generation rules, groups, and styles. Keep the rules about no citations inside the diagram, one edge per line, and graph citations outside the Mermaid block."
+              "When automatic Mermaid diagrams are enabled, the model follows these generation rules, groups, and styles. Keep the rules about no citations inside the diagram, one edge per line, and graph citations outside the Mermaid block.",
             )}
           </div>
         </div>
@@ -5495,20 +7871,44 @@ function SettingsPanel(props: {
         </Field>
       </SettingsCard>
 
-      <SettingsCard title={t("检索", "Search")} badge={defaultSearchMode === "fast" ? t("极速", "Fast") : t("标准", "Standard")}>
+      <SettingsCard
+        title={t("检索", "Search")}
+        badge={
+          defaultSearchMode === "fast"
+            ? t("极速", "Fast")
+            : t("标准", "Standard")
+        }
+      >
         <div className="space-y-3 md:col-span-2">
-          <div className="text-sm font-medium">{t("默认检索模式", "Default search mode")}</div>
+          <div className="text-sm font-medium">
+            {t("默认检索模式", "Default search mode")}
+          </div>
           <div className="flex w-fit rounded-md border border-border bg-background p-0.5">
-            {([
-              { value: "fast" as const, label: t("极速模式", "Fast mode"), description: t("实体全文匹配 + rerank 模型，不调用 LLM 抽 key 和过滤。", "Entity full-text matching + rerank model, without LLM key extraction or filtering.") },
-              { value: "standard" as const, label: t("标准模式", "Standard mode"), description: t("LLM 抽取查询实体 + LLM 重排，适合质量对比。", "LLM extracts query entities + LLM reranking, useful for quality comparison.") }
-            ]).map((mode) => (
+            {[
+              {
+                value: "fast" as const,
+                label: t("极速模式", "Fast mode"),
+                description: t(
+                  "实体全文匹配 + rerank 模型，不调用 LLM 抽 key 和过滤。",
+                  "Entity full-text matching + rerank model, without LLM key extraction or filtering.",
+                ),
+              },
+              {
+                value: "standard" as const,
+                label: t("标准模式", "Standard mode"),
+                description: t(
+                  "LLM 抽取查询实体 + LLM 重排，适合质量对比。",
+                  "LLM extracts query entities + LLM reranking, useful for quality comparison.",
+                ),
+              },
+            ].map((mode) => (
               <button
                 key={mode.value}
                 type="button"
                 className={cn(
                   "rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground",
-                  defaultSearchMode === mode.value && "bg-foreground text-background hover:text-background"
+                  defaultSearchMode === mode.value &&
+                    "bg-foreground text-background hover:text-background",
                 )}
                 onClick={() => setDefaultSearchMode(mode.value)}
               >
@@ -5518,23 +7918,35 @@ function SettingsPanel(props: {
           </div>
           <div className="text-xs leading-5 text-muted-foreground">
             {defaultSearchMode === "fast"
-              ? t("默认使用极速链路：问题直接匹配实体库，最后用 rerank 模型选 top-k。", "Default fast path: match the question directly against the entity store, then use the rerank model to select top-k.")
-              : t("默认使用标准链路：先由 LLM 识别查询实体，最后由 LLM 选择候选事件。", "Default standard path: first let the LLM identify query entities, then let the LLM choose candidate events.")}
+              ? t(
+                  "默认使用极速链路：问题直接匹配实体库，最后用 rerank 模型选 top-k。",
+                  "Default fast path: match the question directly against the entity store, then use the rerank model to select top-k.",
+                )
+              : t(
+                  "默认使用标准链路：先由 LLM 识别查询实体，最后由 LLM 选择候选事件。",
+                  "Default standard path: first let the LLM identify query entities, then let the LLM choose candidate events.",
+                )}
           </div>
         </div>
         <div className="space-y-3 md:col-span-2">
-          <div className="text-sm font-medium">{t("智能问答 MCP 搜索模式", "Q&A MCP search mode")}</div>
+          <div className="text-sm font-medium">
+            {t("智能问答 MCP 搜索模式", "Q&A MCP search mode")}
+          </div>
           <div className="flex w-fit rounded-md border border-border bg-background p-0.5">
-            {([
+            {[
               { value: "fast" as const, label: t("极速模式", "Fast mode") },
-              { value: "standard" as const, label: t("标准模式", "Standard mode") }
-            ]).map((mode) => (
+              {
+                value: "standard" as const,
+                label: t("标准模式", "Standard mode"),
+              },
+            ].map((mode) => (
               <button
                 key={mode.value}
                 type="button"
                 className={cn(
                   "rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground",
-                  mcpSearchMode === mode.value && "bg-foreground text-background hover:text-background"
+                  mcpSearchMode === mode.value &&
+                    "bg-foreground text-background hover:text-background",
                 )}
                 onClick={() => setMcpSearchMode(mode.value)}
               >
@@ -5544,8 +7956,14 @@ function SettingsPanel(props: {
           </div>
           <div className="text-xs leading-5 text-muted-foreground">
             {mcpSearchMode === "fast"
-              ? t("智能问答默认用极速链路，减少 LLM 重排等待。", "Q&A uses the fast path by default to reduce LLM rerank waits.")
-              : t("智能问答默认用标准链路，会启用 LLM 抽取与重排，质量更高但更慢。", "Q&A uses the standard path by default, enabling LLM extraction and reranking; higher quality but slower.")}
+              ? t(
+                  "智能问答默认用极速链路，减少 LLM 重排等待。",
+                  "Q&A uses the fast path by default to reduce LLM rerank waits.",
+                )
+              : t(
+                  "智能问答默认用标准链路，会启用 LLM 抽取与重排，质量更高但更慢。",
+                  "Q&A uses the standard path by default, enabling LLM extraction and reranking; higher quality but slower.",
+                )}
           </div>
         </div>
         <Field label={t("默认 Top-K", "Default top-k")}>
@@ -5554,22 +7972,33 @@ function SettingsPanel(props: {
             min={1}
             max={50}
             value={defaultSearchTopK}
-            onChange={(event) => setDefaultSearchTopK(Number(event.target.value))}
+            onChange={(event) =>
+              setDefaultSearchTopK(Number(event.target.value))
+            }
           />
         </Field>
         <div className="space-y-3 md:col-span-2">
-          <div className="text-sm font-medium">{t("默认切片模式", "Default chunking mode")}</div>
+          <div className="text-sm font-medium">
+            {t("默认切片模式", "Default chunking mode")}
+          </div>
           <div className="flex w-fit rounded-md border border-border bg-background p-0.5">
-            {([
-              { value: "heading_strict" as const, label: t("标题严格", "Heading strict") },
-              { value: "token" as const, label: t("Token 强制", "Token window") }
-            ]).map((mode) => (
+            {[
+              {
+                value: "heading_strict" as const,
+                label: t("标题严格", "Heading strict"),
+              },
+              {
+                value: "token" as const,
+                label: t("Token 强制", "Token window"),
+              },
+            ].map((mode) => (
               <button
                 key={mode.value}
                 type="button"
                 className={cn(
                   "rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground",
-                  defaultChunkingMode === mode.value && "bg-foreground text-background hover:text-background"
+                  defaultChunkingMode === mode.value &&
+                    "bg-foreground text-background hover:text-background",
                 )}
                 onClick={() => setDefaultChunkingMode(mode.value)}
               >
@@ -5579,8 +8008,14 @@ function SettingsPanel(props: {
           </div>
           <div className="text-xs leading-5 text-muted-foreground">
             {defaultChunkingMode === "heading_strict"
-              ? t("默认与 benchmark 一致：遇到新标题就形成独立切片，不按 token 合并短片段。", "Matches the benchmark default: each heading section becomes an independent chunk without token-based merging.")
-              : t("强制按 token 窗口切片，并按 overlap 保留上下文。", "Force token-window chunking and keep context with overlap.")}
+              ? t(
+                  "默认与 benchmark 一致：遇到新标题就形成独立切片，不按 token 合并短片段。",
+                  "Matches the benchmark default: each heading section becomes an independent chunk without token-based merging.",
+                )
+              : t(
+                  "强制按 token 窗口切片，并按 overlap 保留上下文。",
+                  "Force token-window chunking and keep context with overlap.",
+                )}
           </div>
         </div>
         <Field label={t("Token 数", "Token limit")}>
@@ -5598,12 +8033,17 @@ function SettingsPanel(props: {
             min={0}
             max={Math.max(0, chunkTokenLimit - 1)}
             value={chunkOverlapTokens}
-            onChange={(event) => setChunkOverlapTokens(Number(event.target.value))}
+            onChange={(event) =>
+              setChunkOverlapTokens(Number(event.target.value))
+            }
           />
         </Field>
       </SettingsCard>
 
-      <SettingsCard title={t("危险操作", "Danger zone")} badge={t("谨慎", "Careful")}>
+      <SettingsCard
+        title={t("危险操作", "Danger zone")}
+        badge={t("谨慎", "Careful")}
+      >
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
@@ -5638,12 +8078,24 @@ function SettingsPanel(props: {
   );
 }
 
-function ProjectMcpWorkspace({ project, settings }: { project: SourceRecord | null; settings: PublicMcpSettings | null }) {
+function ProjectMcpWorkspace({
+  project,
+  settings,
+}: {
+  project: SourceRecord | null;
+  settings: PublicMcpSettings | null;
+}) {
   const { t } = useI18n();
   if (!project) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center px-6">
-        <EmptyState title={t("先选择项目", "Select a project first")} description={t("MCP server 会绑定到当前项目，选择项目后可查看对应的接入配置和工具说明。", "The MCP server binds to the current project. Select a project to view integration config and tool details.")} />
+        <EmptyState
+          title={t("先选择项目", "Select a project first")}
+          description={t(
+            "MCP server 会绑定到当前项目，选择项目后可查看对应的接入配置和工具说明。",
+            "The MCP server binds to the current project. Select a project to view integration config and tool details.",
+          )}
+        />
       </section>
     );
   }
@@ -5652,9 +8104,21 @@ function ProjectMcpWorkspace({ project, settings }: { project: SourceRecord | nu
       <div className="mx-auto grid max-w-4xl gap-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">CHEMCLAW CONNECT</div>
-            <h2 className="mt-1 text-base font-semibold">{t("接入 ChemClaw 智能入口", "Connect to the ChemClaw intelligence portal")}</h2>
-            <p className="text-xs text-muted-foreground">{t("当前知识空间 ID 会写入 MCP server 启动配置，供 ChemClaw 直接调用产业链知识能力。", "The current knowledge-space ID is written into the MCP server config for direct ChemClaw access.")}</p>
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+              CHEMCLAW CONNECT
+            </div>
+            <h2 className="mt-1 text-base font-semibold">
+              {t(
+                "接入 ChemClaw 智能入口",
+                "Connect to the ChemClaw intelligence portal",
+              )}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "当前知识空间 ID 会写入 MCP server 启动配置，供 ChemClaw 直接调用产业链知识能力。",
+                "The current knowledge-space ID is written into the MCP server config for direct ChemClaw access.",
+              )}
+            </p>
           </div>
           <Badge>{project.name}</Badge>
         </div>
@@ -5664,20 +8128,31 @@ function ProjectMcpWorkspace({ project, settings }: { project: SourceRecord | nu
   );
 }
 
-function McpSettingsCard({ project, settings }: { project: SourceRecord; settings: PublicMcpSettings | null }) {
+function McpSettingsCard({
+  project,
+  settings,
+}: {
+  project: SourceRecord;
+  settings: PublicMcpSettings | null;
+}) {
   const { t } = useI18n();
   const [expandedToolName, setExpandedToolName] = useState<string | null>(null);
 
   if (!settings) {
     return (
       <SettingsCard title="MCP" badge={t("加载中", "Loading")}>
-        <div className="text-sm text-muted-foreground">{t("正在加载 MCP 信息。", "Loading MCP information.")}</div>
+        <div className="text-sm text-muted-foreground">
+          {t("正在加载 MCP 信息。", "Loading MCP information.")}
+        </div>
       </SettingsCard>
     );
   }
-  const externalClientConfig = settings.clientConfigs.find((clientConfig) => clientConfig.id === "stdio-npm")
-    ?? settings.clientConfigs[0]
-    ?? null;
+  const externalClientConfig =
+    settings.clientConfigs.find(
+      (clientConfig) => clientConfig.id === "stdio-npm",
+    ) ??
+    settings.clientConfigs[0] ??
+    null;
   const externalClientConfigValue = externalClientConfig
     ? replaceMcpProjectPlaceholder(externalClientConfig.config, project.id)
     : null;
@@ -5690,16 +8165,30 @@ function McpSettingsCard({ project, settings }: { project: SourceRecord; setting
       />
       <PanelInfo
         label={t("项目绑定", "Project binding")}
-        value={t("MCP server 启动时读取 SAG_MCP_SOURCE_ID，所有工具默认只访问这个项目。", "The MCP server reads SAG_MCP_SOURCE_ID at startup, and all tools access only this project by default.")}
+        value={t(
+          "MCP server 启动时读取 SAG_MCP_SOURCE_ID，所有工具默认只访问这个项目。",
+          "The MCP server reads SAG_MCP_SOURCE_ID at startup, and all tools access only this project by default.",
+        )}
         multiline
       />
-      <PanelInfo label={t("工具超时", "Tool timeout")} value={t(`${settings.toolTimeoutMs} 毫秒`, `${settings.toolTimeoutMs} ms`)} />
+      <PanelInfo
+        label={t("工具超时", "Tool timeout")}
+        value={t(
+          `${settings.toolTimeoutMs} 毫秒`,
+          `${settings.toolTimeoutMs} ms`,
+        )}
+      />
       {externalClientConfig && externalClientConfigValue ? (
         <div className="space-y-3 md:col-span-2">
           <div>
-            <div className="text-xs font-medium text-muted-foreground">mcpServers JSON</div>
+            <div className="text-xs font-medium text-muted-foreground">
+              mcpServers JSON
+            </div>
             <div className="mt-1 text-xs leading-5 text-muted-foreground">
-              {t("复制给其他 Agent 后会直接绑定当前项目；切换项目后这里会自动换成对应项目 ID。", "Copy this to another agent to bind directly to the current project. Switching projects updates the project ID automatically.")}
+              {t(
+                "复制给其他 Agent 后会直接绑定当前项目；切换项目后这里会自动换成对应项目 ID。",
+                "Copy this to another agent to bind directly to the current project. Switching projects updates the project ID automatically.",
+              )}
             </div>
           </div>
           <CopyableCodeBlock
@@ -5709,14 +8198,20 @@ function McpSettingsCard({ project, settings }: { project: SourceRecord; setting
         </div>
       ) : null}
       <div className="md:col-span-2">
-        <div className="mb-2 text-xs font-medium text-muted-foreground">{t("可用工具", "Available tools")}</div>
+        <div className="mb-2 text-xs font-medium text-muted-foreground">
+          {t("可用工具", "Available tools")}
+        </div>
         <div className="grid gap-2">
           {settings.tools.map((tool) => (
             <McpToolCard
               key={tool.name}
               tool={tool}
               expanded={expandedToolName === tool.name}
-              onToggle={() => setExpandedToolName((current) => current === tool.name ? null : tool.name)}
+              onToggle={() =>
+                setExpandedToolName((current) =>
+                  current === tool.name ? null : tool.name,
+                )
+              }
             />
           ))}
         </div>
@@ -5725,7 +8220,10 @@ function McpSettingsCard({ project, settings }: { project: SourceRecord; setting
   );
 }
 
-function replaceMcpProjectPlaceholder(value: unknown, projectId: string): unknown {
+function replaceMcpProjectPlaceholder(
+  value: unknown,
+  projectId: string,
+): unknown {
   if (typeof value === "string") {
     return value === "__SAG_LITE_PROJECT_ID__" ? projectId : value;
   }
@@ -5734,7 +8232,10 @@ function replaceMcpProjectPlaceholder(value: unknown, projectId: string): unknow
   }
   if (isPlainRecord(value)) {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, replaceMcpProjectPlaceholder(item, projectId)])
+      Object.entries(value).map(([key, item]) => [
+        key,
+        replaceMcpProjectPlaceholder(item, projectId),
+      ]),
     );
   }
   return value;
@@ -5743,7 +8244,7 @@ function replaceMcpProjectPlaceholder(value: unknown, projectId: string): unknow
 function McpToolCard({
   tool,
   expanded,
-  onToggle
+  onToggle,
 }: {
   tool: PublicMcpSettings["tools"][number];
   expanded: boolean;
@@ -5751,24 +8252,48 @@ function McpToolCard({
 }) {
   const { t } = useI18n();
   return (
-    <div className={cn("rounded-md border border-border", expanded && "border-foreground/30 bg-muted/20")}>
+    <div
+      className={cn(
+        "rounded-md border border-border",
+        expanded && "border-foreground/30 bg-muted/20",
+      )}
+    >
       <button
         type="button"
         className="flex w-full items-start gap-3 p-3 text-left"
         aria-expanded={expanded}
         onClick={onToggle}
       >
-        <ChevronRight className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")} />
+        <ChevronRight
+          className={cn(
+            "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+            expanded && "rotate-90",
+          )}
+        />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">{tool.name}</div>
-          <div className="mt-1 text-xs leading-5 text-muted-foreground">{tool.description}</div>
+          <div className="mt-1 text-xs leading-5 text-muted-foreground">
+            {tool.description}
+          </div>
         </div>
-        <span className="shrink-0 text-xs text-muted-foreground">{expanded ? t("收起", "Collapse") : t("展开", "Expand")}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {expanded ? t("收起", "Collapse") : t("展开", "Expand")}
+        </span>
       </button>
       {expanded ? (
         <div className="space-y-3 border-t border-border p-3 pt-3">
-          <JsonBlock title={t("输入参数 Schema", "Input schema")} value={tool.inputSchema} compact preserveRaw />
-          <JsonBlock title={t("调用示例", "Call example")} value={tool.example} compact preserveRaw />
+          <JsonBlock
+            title={t("输入参数 Schema", "Input schema")}
+            value={tool.inputSchema}
+            compact
+            preserveRaw
+          />
+          <JsonBlock
+            title={t("调用示例", "Call example")}
+            value={tool.example}
+            compact
+            preserveRaw
+          />
         </div>
       ) : null}
     </div>
@@ -5793,7 +8318,12 @@ function CopyableCodeBlock({ label, value }: { label: string; value: string }) {
     <div className="min-w-0">
       <div className="mb-1 flex items-center justify-between gap-2">
         <div className="text-xs font-medium text-muted-foreground">{label}</div>
-        <Button type="button" variant="outline" size="sm" onClick={() => void copy()}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void copy()}
+        >
           {copied ? t("已复制", "Copied") : t("复制", "Copy")}
         </Button>
       </div>
@@ -5805,7 +8335,9 @@ function CopyableCodeBlock({ label, value }: { label: string; value: string }) {
 }
 
 function DetailDrawer(props: {
-  drawer: Exclude<DetailDrawer, null>;
+  drawer: ActiveDetailDrawer;
+  canGoBack: boolean;
+  onBack: () => void;
   onClose: () => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
@@ -5822,7 +8354,8 @@ function DetailDrawer(props: {
       props.onClose();
     }
     document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onPointerDown, true);
   }, [props]);
   return (
     <div className="pointer-events-none fixed inset-0 z-20" role="presentation">
@@ -5839,7 +8372,10 @@ function DetailDrawer(props: {
                 ? drawer.detail.event.title
                 : drawer.type === "entity"
                   ? drawer.detail.entity.name
-                  : t(`引用 ${drawer.citation.index}`, `Citation ${drawer.citation.index}`)}
+                  : t(
+                      `引用 ${drawer.citation.index}`,
+                      `Citation ${drawer.citation.index}`,
+                    )}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
               {drawer.type === "event"
@@ -5849,13 +8385,29 @@ function DetailDrawer(props: {
                   : t("引用原文", "Source citation")}
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={props.onClose}>{t("关闭", "Close")}</Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {props.canGoBack ? (
+              <Button variant="outline" size="sm" onClick={props.onBack}>
+                {t("返回", "Back")}
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={props.onClose}>
+              {t("关闭", "Close")}
+            </Button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin">
           {drawer.type === "event" ? (
-            <EventDetailPanel detail={drawer.detail} onOpenEntity={props.onOpenEntity} />
+            <EventDetailPanel
+              detail={drawer.detail}
+              onOpenEntity={props.onOpenEntity}
+            />
           ) : drawer.type === "entity" ? (
-            <EntityDetailPanel detail={drawer.detail} onOpenEvent={props.onOpenEvent} />
+            <EntityDetailPanel
+              detail={drawer.detail}
+              sameNameDetails={drawer.sameNameDetails}
+              onOpenEvent={props.onOpenEvent}
+            />
           ) : (
             <CitationDetailPanel citation={drawer.citation} />
           )}
@@ -5865,54 +8417,196 @@ function DetailDrawer(props: {
   );
 }
 
-function EventDetailPanel({ detail, onOpenEntity }: { detail: EventDetailRecord; onOpenEntity: (entityId: string) => void }) {
+function EventDetailPanel({
+  detail,
+  onOpenEntity,
+}: {
+  detail: EventDetailRecord;
+  onOpenEntity: (entityId: string) => void;
+}) {
   const { t } = useI18n();
   return (
     <div className="space-y-4">
-      <PanelInfo label={t("所属文档", "Source document")} value={detail.document?.title ?? t("未知文档", "Unknown document")} />
+      <PanelInfo
+        label={t("所属文档", "Source document")}
+        value={detail.document?.title ?? t("未知文档", "Unknown document")}
+      />
       <DocumentSourceDetails document={detail.document} />
-      <PanelInfo label={t("事件内容", "Event content")} value={detail.event.content || detail.event.summary} multiline />
+      <PanelInfo
+        label={t("事件内容", "Event content")}
+        value={detail.event.content || detail.event.summary}
+        multiline
+      />
       <PanelSection title={t("关联实体", "Related entities")}>
         <div className="flex flex-wrap gap-2">
-          {detail.entities.length === 0 ? <EmptyLine text={t("暂无关联实体。", "No related entities.")} /> : detail.entities.map((entity) => (
-            <button key={entity.id} onClick={() => onOpenEntity(entity.id)}>
-              <Badge>{entity.name}</Badge>
-            </button>
-          ))}
+          {detail.entities.length === 0 ? (
+            <EmptyLine text={t("暂无关联实体。", "No related entities.")} />
+          ) : (
+            detail.entities.map((entity) => (
+              <button key={entity.id} onClick={() => onOpenEntity(entity.id)}>
+                <Badge>{entity.name}</Badge>
+              </button>
+            ))
+          )}
         </div>
       </PanelSection>
       <PanelSection title={t("关联切片", "Related chunk")}>
         {detail.chunk ? (
           <Card>
             <CardContent>
-              <div className="mb-2 text-xs text-muted-foreground">{detail.chunk.heading || t(`排序 ${detail.chunk.rank ?? 0}`, `Rank ${detail.chunk.rank ?? 0}`)}</div>
-              <p className="whitespace-pre-wrap text-sm leading-6">{detail.chunk.content}</p>
+              <div className="mb-2 text-xs text-muted-foreground">
+                {detail.chunk.heading ||
+                  t(
+                    `排序 ${detail.chunk.rank ?? 0}`,
+                    `Rank ${detail.chunk.rank ?? 0}`,
+                  )}
+              </div>
+              <p className="whitespace-pre-wrap text-sm leading-6">
+                {detail.chunk.content}
+              </p>
             </CardContent>
           </Card>
-        ) : <EmptyLine text={t("没有关联切片。", "No related chunk.")} />}
+        ) : (
+          <EmptyLine text={t("没有关联切片。", "No related chunk.")} />
+        )}
       </PanelSection>
     </div>
   );
 }
 
-function EntityDetailPanel({ detail, onOpenEvent }: { detail: EntityDetailRecord; onOpenEvent: (eventId: string) => void }) {
+function EntityDetailPanel({
+  detail,
+  sameNameDetails,
+  onOpenEvent,
+}: {
+  detail: EntityDetailRecord;
+  sameNameDetails?: EntityDetailRecord[];
+  onOpenEvent: (eventId: string) => void;
+}) {
   const { t } = useI18n();
+  const allSameNameDetails = [detail, ...(sameNameDetails ?? [])];
   return (
     <div className="space-y-4">
       <PanelInfo label={t("类型", "Type")} value={detail.entity.type} />
-      <PanelInfo label={t("描述", "Description")} value={detail.entity.description || detail.entity.normalizedName} multiline />
-      <PanelSection title={t(`关联事件（${detail.events.length}）`, `Related events (${detail.events.length})`)}>
+      <PanelInfo
+        label={t("描述", "Description")}
+        value={detail.entity.description || detail.entity.normalizedName}
+        multiline
+      />
+      {allSameNameDetails.length > 1 ? (
+        <PanelSection
+          title={t(
+            `同名实体说明（${allSameNameDetails.length}）`,
+            `Same-name entity notes (${allSameNameDetails.length})`,
+          )}
+        >
+          <div className="rounded-md border border-border bg-muted/25 p-3 text-xs leading-5 text-muted-foreground">
+            {t(
+              "知识资产列表已按实体名称去重。这里把同名实体拆开显示，方便对比它们的类型、描述和各自关联的事件关系。",
+              "The asset list is deduplicated by entity name. This section separates same-name records so you can compare their types, descriptions, and related event relationships.",
+            )}
+          </div>
+          <div className="space-y-2">
+            {allSameNameDetails.map((sameNameDetail) => (
+              <SameNameEntityDetailCard
+                key={sameNameDetail.entity.id}
+                detail={sameNameDetail}
+                isCurrent={sameNameDetail.entity.id === detail.entity.id}
+                onOpenEvent={onOpenEvent}
+              />
+            ))}
+          </div>
+        </PanelSection>
+      ) : null}
+      <PanelSection
+        title={t(
+          `关联事件（${detail.events.length}）`,
+          `Related events (${detail.events.length})`,
+        )}
+      >
         <div className="space-y-2">
-          {detail.events.length === 0 ? <EmptyLine text={t("暂无关联事件。", "No related events.")} /> : detail.events.map((event) => (
-            <button key={event.id} className="w-full rounded-md border border-border p-3 text-left hover:bg-accent" onClick={() => onOpenEvent(event.id)}>
-              <div className="text-sm font-medium">{event.title}</div>
-              <DocumentSourceSummary document={event.document} compact />
-              <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{event.summary || event.content}</p>
-            </button>
-          ))}
+          {detail.events.length === 0 ? (
+            <EmptyLine text={t("暂无关联事件。", "No related events.")} />
+          ) : (
+            detail.events.map((event) => (
+              <button
+                key={event.id}
+                className="w-full rounded-md border border-border p-3 text-left hover:bg-accent"
+                onClick={() => onOpenEvent(event.id)}
+              >
+                <div className="text-sm font-medium">{event.title}</div>
+                <DocumentSourceSummary document={event.document} compact />
+                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                  {event.summary || event.content}
+                </p>
+              </button>
+            ))
+          )}
         </div>
       </PanelSection>
     </div>
+  );
+}
+
+function SameNameEntityDetailCard({
+  detail,
+  isCurrent,
+  onOpenEvent,
+}: {
+  detail: EntityDetailRecord;
+  isCurrent: boolean;
+  onOpenEvent: (eventId: string) => void;
+}) {
+  const { t } = useI18n();
+  const previewEvents = detail.events.slice(0, 5);
+  const remainingEventCount = Math.max(
+    0,
+    detail.events.length - previewEvents.length,
+  );
+  return (
+    <Card>
+      <CardContent className="space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">{detail.entity.type}</div>
+            <div className="mt-0.5 break-words text-xs text-muted-foreground">
+              {detail.entity.description || detail.entity.normalizedName}
+            </div>
+          </div>
+          {isCurrent ? <Badge>{t("当前", "Current")}</Badge> : null}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {t(
+            `${detail.events.length} 个关联事件`,
+            `${detail.events.length} related events`,
+          )}
+        </div>
+        <div className="space-y-1">
+          {previewEvents.length === 0 ? (
+            <EmptyLine text={t("暂无关联事件。", "No related events.")} />
+          ) : (
+            previewEvents.map((event) => (
+              <button
+                key={event.id}
+                type="button"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-left text-xs hover:bg-accent"
+                onClick={() => onOpenEvent(event.id)}
+              >
+                <span className="line-clamp-2">{event.title}</span>
+              </button>
+            ))
+          )}
+          {remainingEventCount > 0 ? (
+            <div className="px-2 text-xs text-muted-foreground">
+              {t(
+                `还有 ${remainingEventCount} 个事件`,
+                `${remainingEventCount} more events`,
+              )}
+            </div>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -5920,19 +8614,44 @@ function CitationDetailPanel({ citation }: { citation: AnswerCitation }) {
   const { t } = useI18n();
   return (
     <div className="space-y-4">
-      <PanelInfo label={t("切片标题", "Chunk title")} value={citation.heading || t(`引用 ${citation.index}`, `Citation ${citation.index}`)} />
+      <PanelInfo
+        label={t("切片标题", "Chunk title")}
+        value={
+          citation.heading ||
+          t(`引用 ${citation.index}`, `Citation ${citation.index}`)
+        }
+      />
       <div className="grid grid-cols-2 gap-3">
-        <PanelInfo label={t("排序", "Rank")} value={citation.rank == null ? "-" : String(citation.rank)} />
-        <PanelInfo label={t("得分", "Score")} value={citation.score == null ? "-" : citation.score.toFixed(4)} />
+        <PanelInfo
+          label={t("排序", "Rank")}
+          value={citation.rank == null ? "-" : String(citation.rank)}
+        />
+        <PanelInfo
+          label={t("得分", "Score")}
+          value={citation.score == null ? "-" : citation.score.toFixed(4)}
+        />
       </div>
-      {citation.query ? <PanelInfo label={t("搜索语句", "Search query")} value={citation.query} multiline /> : null}
+      {citation.query ? (
+        <PanelInfo
+          label={t("搜索语句", "Search query")}
+          value={citation.query}
+          multiline
+        />
+      ) : null}
       <PanelInfo label={t("切片 ID", "Chunk ID")} value={citation.chunkId} />
-      {citation.documentId ? <PanelInfo label={t("文档 ID", "Document ID")} value={citation.documentId} /> : null}
+      {citation.documentId ? (
+        <PanelInfo
+          label={t("文档 ID", "Document ID")}
+          value={citation.documentId}
+        />
+      ) : null}
       <DocumentSourceDetails document={citation.document} />
       <PanelSection title={t("原文块", "Original chunk")}>
         <Card>
           <CardContent>
-            <p className="whitespace-pre-wrap break-words text-sm leading-6">{citation.content}</p>
+            <p className="whitespace-pre-wrap break-words text-sm leading-6">
+              {citation.content}
+            </p>
           </CardContent>
         </Card>
       </PanelSection>
@@ -5940,19 +8659,37 @@ function CitationDetailPanel({ citation }: { citation: AnswerCitation }) {
   );
 }
 
-function SettingsCard({ title, badge, children }: { title: string; badge: string; children: ReactNode }) {
+function SettingsCard({
+  title,
+  badge,
+  children,
+}: {
+  title: string;
+  badge: string;
+  children: ReactNode;
+}) {
   return (
     <Card className="chem-settings-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <h3 className="text-sm font-semibold">{title}</h3>
         <Badge>{badge}</Badge>
       </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-2">{children}</CardContent>
+      <CardContent className="grid gap-3 md:grid-cols-2">
+        {children}
+      </CardContent>
     </Card>
   );
 }
 
-function PanelSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+function PanelSection({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section>
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -5964,17 +8701,39 @@ function PanelSection({ title, action, children }: { title: string; action?: Rea
   );
 }
 
-function PanelInfo({ label, value, multiline }: { label: string; value: string; multiline?: boolean }) {
+function PanelInfo({
+  label,
+  value,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+}) {
   return (
     <div className="min-w-0">
-      <div className="mb-1 text-xs font-medium text-muted-foreground">{label}</div>
-      <div className={cn("break-words text-sm", multiline && "whitespace-pre-wrap leading-6")}>{value}</div>
+      <div className="mb-1 text-xs font-medium text-muted-foreground">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "break-words text-sm",
+          multiline && "whitespace-pre-wrap leading-6",
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 
-
-function DocumentSourceSummary({ document, compact }: { document?: DocumentRecord | null; compact?: boolean }) {
+function DocumentSourceSummary({
+  document,
+  compact,
+}: {
+  document?: DocumentRecord | null;
+  compact?: boolean;
+}) {
   const { t } = useI18n();
   if (!hasDocumentSource(document)) {
     return null;
@@ -5983,17 +8742,23 @@ function DocumentSourceSummary({ document, compact }: { document?: DocumentRecor
     document?.sourceName || document?.title,
     document?.sourceDate,
     document?.sourceAuthor,
-    document?.sourceType
+    document?.sourceType,
   ].filter(Boolean);
   if (parts.length === 0 && !document?.sourceUrl) {
     return null;
   }
   return (
-    <div className={cn(
-      "min-w-0 text-xs leading-5 text-muted-foreground",
-      compact ? "mt-1 line-clamp-2" : "rounded-md border border-border bg-muted/30 p-2"
-    )}>
-      <span className="font-medium text-foreground/80">{t("来源", "Source")}：</span>
+    <div
+      className={cn(
+        "min-w-0 text-xs leading-5 text-muted-foreground",
+        compact
+          ? "mt-1 line-clamp-2"
+          : "rounded-md border border-border bg-muted/30 p-2",
+      )}
+    >
+      <span className="font-medium text-foreground/80">
+        {t("来源", "Source")}：
+      </span>
       {parts.join(" · ")}
       {document?.sourceUrl ? (
         <>
@@ -6001,7 +8766,12 @@ function DocumentSourceSummary({ document, compact }: { document?: DocumentRecor
           {compact ? (
             <span>{t("有链接", "Has link")}</span>
           ) : (
-            <a className="underline underline-offset-2" href={document.sourceUrl} target="_blank" rel="noreferrer">
+            <a
+              className="underline underline-offset-2"
+              href={document.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
               {t("链接", "Link")}
             </a>
           )}
@@ -6011,7 +8781,11 @@ function DocumentSourceSummary({ document, compact }: { document?: DocumentRecor
   );
 }
 
-function DocumentSourceDetails({ document }: { document?: DocumentRecord | null }) {
+function DocumentSourceDetails({
+  document,
+}: {
+  document?: DocumentRecord | null;
+}) {
   const { t } = useI18n();
   if (!hasDocumentSource(document)) {
     return null;
@@ -6021,22 +8795,36 @@ function DocumentSourceDetails({ document }: { document?: DocumentRecord | null 
     [t("来源类型", "Source type"), document?.sourceType],
     [t("来源日期", "Source date"), document?.sourceDate],
     [t("来源作者", "Source author"), document?.sourceAuthor],
-    [t("来源链接", "Source URL"), document?.sourceUrl]
+    [t("来源链接", "Source URL"), document?.sourceUrl],
   ].filter(([, value]) => Boolean(value));
   if (rows.length === 0) {
     return null;
   }
   return (
     <div className="rounded-lg border border-border bg-muted/25 p-3">
-      <div className="mb-2 text-xs font-medium text-muted-foreground">{t("来源信息", "Source information")}</div>
+      <div className="mb-2 text-xs font-medium text-muted-foreground">
+        {t("来源信息", "Source information")}
+      </div>
       <div className="space-y-1.5">
         {rows.map(([label, value]) => (
-          <div key={label} className="grid gap-1 text-xs sm:grid-cols-[72px_minmax(0,1fr)]">
+          <div
+            key={label}
+            className="grid gap-1 text-xs sm:grid-cols-[72px_minmax(0,1fr)]"
+          >
             <span className="text-muted-foreground">{label}</span>
             {label === t("来源链接", "Source URL") ? (
-              <a className="break-all text-primary underline underline-offset-2" href={String(value)} target="_blank" rel="noreferrer">{String(value)}</a>
+              <a
+                className="break-all text-primary underline underline-offset-2"
+                href={String(value)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {String(value)}
+              </a>
             ) : (
-              <span className="break-words text-foreground">{String(value)}</span>
+              <span className="break-words text-foreground">
+                {String(value)}
+              </span>
             )}
           </div>
         ))}
@@ -6046,25 +8834,41 @@ function DocumentSourceDetails({ document }: { document?: DocumentRecord | null 
 }
 
 function hasDocumentSource(document?: DocumentRecord | null) {
-  return Boolean(document?.sourceName || document?.sourceType || document?.sourceDate || document?.sourceAuthor || document?.sourceUrl);
+  return Boolean(
+    document?.sourceName ||
+    document?.sourceType ||
+    document?.sourceDate ||
+    document?.sourceAuthor ||
+    document?.sourceUrl,
+  );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="chem-metric rounded-xl border border-border px-3 py-3">
       <div className="text-xl font-bold tracking-tight">{value}</div>
-      <div className="mt-0.5 text-[11px] font-medium text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-[11px] font-medium text-muted-foreground">
+        {label}
+      </div>
     </div>
   );
 }
 
-function MiniButton({ children, danger, onClick }: { children: ReactNode; danger?: boolean; onClick: () => void }) {
+function MiniButton({
+  children,
+  danger,
+  onClick,
+}: {
+  children: ReactNode;
+  danger?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       className={cn(
         "rounded px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground",
-        danger && "text-red-600 hover:text-red-700"
+        danger && "text-red-600 hover:text-red-700",
       )}
       onClick={onClick}
     >
@@ -6082,20 +8886,41 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function EmbeddingPreviewBlock({ title, preview }: { title: string; preview?: EmbeddingPreview | null }) {
+function EmbeddingPreviewBlock({
+  title,
+  preview,
+}: {
+  title: string;
+  preview?: EmbeddingPreview | null;
+}) {
   const { t } = useI18n();
   return (
     <div className="min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-muted/30 p-2 text-left">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">{title}</span>
-        <Badge className="shrink-0">{preview ? t(`${preview.dimensions} 维`, `${preview.dimensions} dims`) : t("未生成", "Not generated")}</Badge>
+        <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+          {title}
+        </span>
+        <Badge className="shrink-0">
+          {preview
+            ? t(`${preview.dimensions} 维`, `${preview.dimensions} dims`)
+            : t("未生成", "Not generated")}
+        </Badge>
       </div>
       {preview ? (
         <code className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted-foreground">
-          [{preview.sample.map((value) => formatEmbeddingNumber(value)).join(", ")}{preview.dimensions > preview.sample.length ? ", ..." : ""}]
+          [
+          {preview.sample
+            .map((value) => formatEmbeddingNumber(value))
+            .join(", ")}
+          {preview.dimensions > preview.sample.length ? ", ..." : ""}]
         </code>
       ) : (
-        <div className="text-xs text-muted-foreground">{t("数据库中还没有这个向量。", "This vector is not in the database yet.")}</div>
+        <div className="text-xs text-muted-foreground">
+          {t(
+            "数据库中还没有这个向量。",
+            "This vector is not in the database yet.",
+          )}
+        </div>
       )}
     </div>
   );
@@ -6116,37 +8941,50 @@ function normalizeAnswerCitation(value: unknown): AnswerCitation | null {
   if (!isPlainRecord(value)) {
     return null;
   }
-  const index = typeof value.index === "number" ? value.index : Number(value.index);
+  const index =
+    typeof value.index === "number" ? value.index : Number(value.index);
   const chunkId = typeof value.chunkId === "string" ? value.chunkId : "";
   const sourceId = typeof value.sourceId === "string" ? value.sourceId : "";
   const content = typeof value.content === "string" ? value.content : "";
-  if (!Number.isInteger(index) || index <= 0 || !chunkId || !sourceId || !content) {
+  if (
+    !Number.isInteger(index) ||
+    index <= 0 ||
+    !chunkId ||
+    !sourceId ||
+    !content
+  ) {
     return null;
   }
   return {
     index,
     chunkId,
     sourceId,
-    documentId: typeof value.documentId === "string" ? value.documentId : undefined,
+    documentId:
+      typeof value.documentId === "string" ? value.documentId : undefined,
     heading: typeof value.heading === "string" ? value.heading : undefined,
     content,
     rank: typeof value.rank === "number" ? value.rank : undefined,
     score: typeof value.score === "number" ? value.score : undefined,
-    query: typeof value.query === "string" ? value.query : undefined
+    query: typeof value.query === "string" ? value.query : undefined,
   };
 }
 
-function buildKnowledgeAssetOverview(detail: McpSessionDetail | null): KnowledgeAssetOverview {
+function buildKnowledgeAssetOverview(
+  detail: McpSessionDetail | null,
+): KnowledgeAssetOverview {
   if (!detail) {
     return { citations: [], events: [], entities: [], searchCount: 0 };
   }
   const citations = uniqueCitations(
     detail.messages
       .filter((message) => message.role === "assistant")
-      .flatMap(getMessageCitations)
+      .flatMap(getMessageCitations),
   );
   const events = new Map<string, KnowledgeAssetOverview["events"][number]>();
-  const entities = new Map<string, KnowledgeAssetOverview["entities"][number]>();
+  const entities = new Map<
+    string,
+    KnowledgeAssetOverview["entities"][number]
+  >();
   let searchCount = 0;
 
   for (const toolCall of detail.toolCalls) {
@@ -6162,19 +9000,28 @@ function buildKnowledgeAssetOverview(detail: McpSessionDetail | null): Knowledge
     citations,
     events: [...events.values()],
     entities: [...entities.values()],
-    searchCount
+    searchCount,
   };
 }
 
-function mergeKnowledgeAssetOverview(base: KnowledgeAssetOverview, chunkAssets: ChunkAssetLookup | null): KnowledgeAssetOverview {
+function mergeKnowledgeAssetOverview(
+  base: KnowledgeAssetOverview,
+  chunkAssets: ChunkAssetLookup | null,
+): KnowledgeAssetOverview {
   if (!chunkAssets) {
     return base;
   }
-  const chunkById = new Map((chunkAssets.chunks ?? []).map((chunk) => [chunk.id, chunk]));
+  const chunkById = new Map(
+    (chunkAssets.chunks ?? []).map((chunk) => [chunk.id, chunk]),
+  );
   const citations = base.citations.map((citation) => {
     const chunk = chunkById.get(citation.chunkId);
     return chunk?.document
-      ? { ...citation, document: chunk.document, documentId: citation.documentId ?? chunk.document.id }
+      ? {
+          ...citation,
+          document: chunk.document,
+          documentId: citation.documentId ?? chunk.document.id,
+        }
       : citation;
   });
   const events = new Map(base.events.map((event) => [event.id, event]));
@@ -6186,7 +9033,7 @@ function mergeKnowledgeAssetOverview(base: KnowledgeAssetOverview, chunkAssets: 
         title: event.title,
         summary: event.summary || event.content,
         score: event.score,
-        rank: event.rank
+        rank: event.rank,
       });
     }
     for (const entity of event.entities ?? []) {
@@ -6197,7 +9044,7 @@ function mergeKnowledgeAssetOverview(base: KnowledgeAssetOverview, chunkAssets: 
           type: entity.type,
           description: entity.description ?? undefined,
           score: entity.score,
-          eventCount: entity.eventCount
+          eventCount: entity.eventCount,
         });
       }
     }
@@ -6210,7 +9057,7 @@ function mergeKnowledgeAssetOverview(base: KnowledgeAssetOverview, chunkAssets: 
         type: entity.type,
         description: entity.description ?? undefined,
         score: entity.score,
-        eventCount: entity.eventCount
+        eventCount: entity.eventCount,
       });
     }
   }
@@ -6218,7 +9065,7 @@ function mergeKnowledgeAssetOverview(base: KnowledgeAssetOverview, chunkAssets: 
     ...base,
     citations,
     events: [...events.values()],
-    entities: [...entities.values()]
+    entities: [...entities.values()],
   };
 }
 
@@ -6232,27 +9079,45 @@ function uniqueCitations(citations: AnswerCitation[]) {
   return [...byChunkId.values()];
 }
 
-function collectEventSnapshots(trace: Record<string, unknown> | null, target: Map<string, KnowledgeAssetOverview["events"][number]>) {
+function collectEventSnapshots(
+  trace: Record<string, unknown> | null,
+  target: Map<string, KnowledgeAssetOverview["events"][number]>,
+) {
   if (!trace) return;
-  for (const key of ["eventSnapshots", "rerankedEvents", "coarseRankedEvents", "queryEvents", "expandedEvents"]) {
+  for (const key of [
+    "eventSnapshots",
+    "rerankedEvents",
+    "coarseRankedEvents",
+    "queryEvents",
+    "expandedEvents",
+  ]) {
     const items = Array.isArray(trace[key]) ? trace[key] : [];
     for (const item of items) {
       if (!isPlainRecord(item)) continue;
-      const id = readRecordString(item, "id") || readRecordString(item, "eventId") || readRecordString(item, "systemEventId");
-      const title = readRecordString(item, "title") || readRecordString(item, "eventTitle");
+      const id =
+        readRecordString(item, "id") ||
+        readRecordString(item, "eventId") ||
+        readRecordString(item, "systemEventId");
+      const title =
+        readRecordString(item, "title") || readRecordString(item, "eventTitle");
       if (!id || !title || target.has(id)) continue;
       target.set(id, {
         id,
         title,
-        summary: readRecordString(item, "summary") || readRecordString(item, "content"),
+        summary:
+          readRecordString(item, "summary") ||
+          readRecordString(item, "content"),
         score: readRecordNumber(item, "score"),
-        rank: readRecordNumber(item, "rank")
+        rank: readRecordNumber(item, "rank"),
       });
     }
   }
 }
 
-function collectEntitySnapshots(trace: Record<string, unknown> | null, target: Map<string, KnowledgeAssetOverview["entities"][number]>) {
+function collectEntitySnapshots(
+  trace: Record<string, unknown> | null,
+  target: Map<string, KnowledgeAssetOverview["entities"][number]>,
+) {
   if (!trace) return;
   for (const key of ["recalledEntities", "queryEntities", "entities"]) {
     const items = Array.isArray(trace[key]) ? trace[key] : [];
@@ -6262,40 +9127,72 @@ function collectEntitySnapshots(trace: Record<string, unknown> | null, target: M
         continue;
       }
       if (!isPlainRecord(item)) continue;
-      const name = readRecordString(item, "name") || readRecordString(item, "entityName");
+      const name =
+        readRecordString(item, "name") || readRecordString(item, "entityName");
       if (!name) continue;
-      const id = readRecordString(item, "id") || readRecordString(item, "entityId") || `${readRecordString(item, "type")}:${name}`;
+      const id =
+        readRecordString(item, "id") ||
+        readRecordString(item, "entityId") ||
+        `${readRecordString(item, "type")}:${name}`;
       if (target.has(id)) continue;
       target.set(id, {
         id,
         name,
-        type: readRecordString(item, "type") || readRecordString(item, "entityType"),
+        type:
+          readRecordString(item, "type") ||
+          readRecordString(item, "entityType"),
         description: readRecordString(item, "description"),
         score: readRecordNumber(item, "score"),
-        eventCount: readRecordNumber(item, "eventCount")
+        eventCount: readRecordNumber(item, "eventCount"),
       });
     }
   }
 }
 
-function readRecordString(record: Record<string, unknown>, key: string): string {
+function readRecordString(
+  record: Record<string, unknown>,
+  key: string,
+): string {
   const value = record[key];
   return typeof value === "string" ? value.trim() : "";
 }
 
-function readRecordNumber(record: Record<string, unknown>, key: string): number | undefined {
+function readRecordNumber(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
   const value = record[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
-function JsonBlock({ title, value, compact, preserveRaw }: { title: string; value: unknown; compact?: boolean; preserveRaw?: boolean }) {
+function JsonBlock({
+  title,
+  value,
+  compact,
+  preserveRaw,
+}: {
+  title: string;
+  value: unknown;
+  compact?: boolean;
+  preserveRaw?: boolean;
+}) {
   const { t } = useI18n();
-  const content = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  const content =
+    typeof value === "string" ? value : JSON.stringify(value, null, 2);
   const renderedValue = preserveRaw ? content : formatDataContent(content, t);
   return (
     <div className="min-w-0">
-      <div className="mb-1 text-xs font-medium text-muted-foreground">{title}</div>
-      <pre className={cn("overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs leading-5", compact ? "max-h-64" : "max-h-96")}>
+      <div className="mb-1 text-xs font-medium text-muted-foreground">
+        {title}
+      </div>
+      <pre
+        className={cn(
+          "overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs leading-5",
+          compact ? "max-h-64" : "max-h-96",
+        )}
+      >
         {renderedValue}
       </pre>
     </div>
@@ -6303,14 +9200,26 @@ function JsonBlock({ title, value, compact, preserveRaw }: { title: string; valu
 }
 
 function EmptyLine({ text }: { text: string }) {
-  return <div className="rounded-md px-3 py-2 text-xs text-muted-foreground">{text}</div>;
+  return (
+    <div className="rounded-md px-3 py-2 text-xs text-muted-foreground">
+      {text}
+    </div>
+  );
 }
 
-function EmptyState({ title, description }: { title: string; description: string }) {
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
   return (
     <div className="flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed border-border p-6 text-center">
       <div className="text-sm font-medium">{title}</div>
-      <div className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</div>
+      <div className="mt-1 max-w-sm text-sm text-muted-foreground">
+        {description}
+      </div>
     </div>
   );
 }
@@ -6323,9 +9232,774 @@ function resultViewLabel(view: ResultView, language: SupportedLanguage) {
   return language === "en" ? "Search" : "检索";
 }
 
-function filterByKeyword<T>(items: T[], keyword: string, getTitle: (item: T) => string) {
+function filterByKeyword<T>(
+  items: T[],
+  keyword: string,
+  getTitle: (item: T) => string,
+) {
   if (!keyword) return items;
-  return items.filter((item) => normalizeKeyword(getTitle(item)).includes(keyword));
+  return items.filter((item) =>
+    normalizeKeyword(getTitle(item)).includes(keyword),
+  );
+}
+
+type KnowledgeAssetEntityTypeOption = {
+  type: string;
+  label: string;
+  count: number;
+  description?: string;
+};
+
+type KnowledgeAssetEntityListRecord = EntityRecord & {
+  sameNameEntities?: EntityRecord[];
+  sameNameEntityCount?: number;
+  sameNameEntityTypes?: string[];
+  sameNameEntityDescriptions?: string[];
+  hasSameNameEntities?: boolean;
+};
+
+const KNOWLEDGE_ASSET_UNCATEGORIZED_ENTITY_TYPE =
+  "__sag_uncategorized_entity__";
+const KNOWLEDGE_ASSET_CHEMICAL_ENTITY_GROUP = "__sag_chemical_entity_group__";
+const KNOWLEDGE_ASSET_CHEMICAL_TYPE_KEYWORDS = [
+  "原料",
+  "中间体",
+  "产品",
+  "下游产品",
+  "联产品",
+  "副产品",
+  "催化剂",
+  "牌号",
+  "规格",
+  "化学品",
+  "化工品",
+  "溶剂",
+  "添加剂",
+  "助剂",
+  "单体",
+  "聚合物",
+  "材料",
+  "rawmaterial",
+  "intermediate",
+  "product",
+  "downstreamproduct",
+  "coproduct",
+  "byproduct",
+  "catalyst",
+  "grade",
+  "specification",
+  "chemical",
+  "solvent",
+  "additive",
+  "monomer",
+  "polymer",
+  "material",
+];
+
+function buildKnowledgeAssetEntityTypeOptions(
+  entities: EntityRecord[],
+  language: SupportedLanguage,
+): KnowledgeAssetEntityTypeOption[] {
+  const counts = new Map<
+    string,
+    { count: number; firstIndex: number; rawType: string }
+  >();
+  let chemicalCount = 0;
+  entities.forEach((entity, index) => {
+    const type = normalizeKnowledgeAssetEntityType(entity.type);
+    const current = counts.get(type) ?? {
+      count: 0,
+      firstIndex: index,
+      rawType: type,
+    };
+    current.count += 1;
+    counts.set(type, current);
+    if (isChemicalKnowledgeAssetEntityType(entity.type)) {
+      chemicalCount += 1;
+    }
+  });
+
+  const options: Array<
+    KnowledgeAssetEntityTypeOption & { firstIndex: number }
+  > = [...counts.entries()]
+    .map(([type, count]) => ({
+      type,
+      label: formatKnowledgeAssetEntityTypeLabel(type, language),
+      count: count.count,
+      firstIndex: count.firstIndex,
+    }))
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        left.label.localeCompare(right.label) ||
+        left.firstIndex - right.firstIndex,
+    );
+
+  const actualOptions = options.map(
+    ({ firstIndex: _firstIndex, ...option }) => option,
+  );
+  if (chemicalCount <= 0) return actualOptions;
+  return [
+    {
+      type: KNOWLEDGE_ASSET_CHEMICAL_ENTITY_GROUP,
+      label: language === "en" ? "Chemical products" : "化工品类",
+      count: chemicalCount,
+      description:
+        language === "en"
+          ? "Raw materials, intermediates, products, downstream products, co-products, by-products, catalysts, grades/specifications, and similar chemical-related types."
+          : "原料、中间体、产品、下游产品、联产品、副产品、催化剂、牌号/规格等化工相关类型。",
+    },
+    ...actualOptions,
+  ];
+}
+
+function filterKnowledgeAssetEntityTypeOptions(
+  options: KnowledgeAssetEntityTypeOption[],
+  query: string,
+) {
+  const normalizedQuery = normalizeKnowledgeAssetSearchText(query);
+  if (!normalizedQuery) return options;
+  return options.filter(
+    (option) =>
+      knowledgeAssetMatchScore(
+        `${option.label} ${option.type} ${option.description ?? ""}`,
+        normalizedQuery,
+      ) > 0,
+  );
+}
+
+function filterKnowledgeAssetEntities(
+  entities: EntityRecord[],
+  query: string,
+  selectedTypes: Set<string>,
+) {
+  const normalizedQuery = normalizeKnowledgeAssetSearchText(query);
+  return entities.filter((entity) => {
+    const matchesKeyword =
+      !normalizedQuery ||
+      knowledgeAssetMatchScore(
+        `${entity.name} ${entity.type} ${entity.description ?? ""}`,
+        normalizedQuery,
+      ) > 0;
+    const matchesType =
+      selectedTypes.size === 0 ||
+      matchesKnowledgeAssetEntityTypeFilter(entity.type, selectedTypes);
+    return matchesKeyword && matchesType;
+  });
+}
+
+function dedupeKnowledgeAssetEntities(
+  entities: EntityRecord[],
+): KnowledgeAssetEntityListRecord[] {
+  const groups = new Map<string, EntityRecord[]>();
+  const groupOrder: string[] = [];
+  for (const entity of entities) {
+    const key = getKnowledgeAssetEntityNameKey(entity);
+    if (!key) continue;
+    const group = groups.get(key);
+    if (group) {
+      group.push(entity);
+    } else {
+      groups.set(key, [entity]);
+      groupOrder.push(key);
+    }
+  }
+
+  return groupOrder.map((key) => {
+    const sameNameEntities = groups.get(key) ?? [];
+    const representative =
+      pickKnowledgeAssetEntityRepresentative(sameNameEntities);
+    const sameNameEntityTypes = uniqueKnowledgeAssetValues(
+      sameNameEntities.map((entity) => entity.type),
+    );
+    const sameNameEntityDescriptions = uniqueKnowledgeAssetValues(
+      sameNameEntities
+        .map((entity) => entity.description)
+        .filter((description): description is string =>
+          Boolean(description?.trim()),
+        ),
+    );
+    const aggregatedEventCount = sameNameEntities.reduce(
+      (sum, entity) => sum + (entity.eventCount ?? 0),
+      0,
+    );
+    return {
+      ...representative,
+      eventCount: aggregatedEventCount || representative.eventCount,
+      sameNameEntities,
+      sameNameEntityCount: sameNameEntities.length,
+      sameNameEntityTypes,
+      sameNameEntityDescriptions,
+      hasSameNameEntities: sameNameEntities.length > 1,
+    };
+  });
+}
+
+function pickKnowledgeAssetEntityRepresentative(entities: EntityRecord[]) {
+  return [...entities].sort((left, right) => {
+    const eventDiff = (right.eventCount ?? 0) - (left.eventCount ?? 0);
+    if (eventDiff !== 0) return eventDiff;
+    const descriptionDiff =
+      Number(Boolean(right.description?.trim())) -
+      Number(Boolean(left.description?.trim()));
+    if (descriptionDiff !== 0) return descriptionDiff;
+    return (
+      left.name.localeCompare(right.name) ||
+      left.type.localeCompare(right.type) ||
+      left.id.localeCompare(right.id)
+    );
+  })[0];
+}
+
+function collectSameNameKnowledgeAssetEntityIds(
+  entities: EntityRecord[],
+  target: EntityRecord,
+) {
+  const targetKey = getKnowledgeAssetEntityNameKey(target);
+  if (!targetKey) return [target.id];
+  return uniqueKnowledgeAssetValues([
+    target.id,
+    ...entities
+      .filter((entity) => getKnowledgeAssetEntityNameKey(entity) === targetKey)
+      .map((entity) => entity.id),
+  ]);
+}
+
+function getKnowledgeAssetEntityNameKey(
+  entity: Pick<EntityRecord, "name" | "normalizedName">,
+) {
+  return normalizeKnowledgeAssetSearchText(
+    entity.normalizedName || entity.name,
+  );
+}
+
+function uniqueKnowledgeAssetValues(values: string[]) {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const key = normalizeKnowledgeAssetSearchText(trimmed);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+function formatKnowledgeAssetListPreview(values: string[], maxItems: number) {
+  const visible = values.slice(0, maxItems);
+  const extraCount = Math.max(0, values.length - visible.length);
+  return extraCount > 0
+    ? `${visible.join(" / ")} +${extraCount}`
+    : visible.join(" / ");
+}
+
+type KnowledgeAssetEntityExportMetadata = {
+  scope: KnowledgeAssetEntityScope;
+  project: string;
+  document: string;
+  keyword: string;
+  selectedTypes: string[];
+  matchedEntityNames: number;
+  matchedEntityRows: number;
+  totalEntityNames: number;
+  totalEntityRows: number;
+  exportedAt: string;
+};
+
+type KnowledgeAssetEntityExportEvent = {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  documentId: string;
+  documentTitle: string;
+};
+
+type KnowledgeAssetEntityExportVariant = {
+  id: string;
+  sourceId: string;
+  type: string;
+  name: string;
+  normalizedName: string;
+  description: string;
+  relatedEventCount: number;
+  relatedEvents: KnowledgeAssetEntityExportEvent[];
+};
+
+type KnowledgeAssetEntityExportGroup = {
+  representativeId: string;
+  name: string;
+  normalizedName: string;
+  types: string[];
+  descriptions: string[];
+  sameNameCount: number;
+  relatedEventCount: number;
+  relatedEvents: KnowledgeAssetEntityExportEvent[];
+  variants: KnowledgeAssetEntityExportVariant[];
+};
+
+async function buildKnowledgeAssetEntityExportGroups(
+  entities: KnowledgeAssetEntityListRecord[],
+): Promise<KnowledgeAssetEntityExportGroup[]> {
+  const groups: KnowledgeAssetEntityExportGroup[] = [];
+  for (const entity of entities) {
+    const sourceEntities = getKnowledgeAssetEntityExportSourceEntities(entity);
+    const details = await mapKnowledgeAssetExportDetails(sourceEntities);
+    groups.push(buildKnowledgeAssetEntityExportGroup(entity, details));
+  }
+  return groups;
+}
+
+function getKnowledgeAssetEntityExportSourceEntities(
+  entity: KnowledgeAssetEntityListRecord,
+) {
+  const sourceEntities = entity.sameNameEntities?.length
+    ? entity.sameNameEntities
+    : [entity];
+  const result: EntityRecord[] = [];
+  const seen = new Set<string>();
+  for (const sourceEntity of sourceEntities) {
+    if (seen.has(sourceEntity.id)) continue;
+    seen.add(sourceEntity.id);
+    result.push(sourceEntity);
+  }
+  return result;
+}
+
+async function mapKnowledgeAssetExportDetails(entities: EntityRecord[]) {
+  const details: EntityDetailRecord[] = [];
+  const concurrency = 6;
+  for (let index = 0; index < entities.length; index += concurrency) {
+    const batch = entities.slice(index, index + concurrency);
+    const batchDetails = await Promise.all(
+      batch.map(async (entity) => {
+        try {
+          const detail = await api.getEntity(entity.id);
+          return detail ?? createFallbackKnowledgeAssetEntityDetail(entity);
+        } catch {
+          return createFallbackKnowledgeAssetEntityDetail(entity);
+        }
+      }),
+    );
+    details.push(...batchDetails);
+  }
+  return details;
+}
+
+function createFallbackKnowledgeAssetEntityDetail(
+  entity: EntityRecord,
+): EntityDetailRecord {
+  return {
+    entity: {
+      ...entity,
+      eventCount: entity.eventCount ?? 0,
+    },
+    events: [],
+    source: null,
+  };
+}
+
+function buildKnowledgeAssetEntityExportGroup(
+  representative: KnowledgeAssetEntityListRecord,
+  details: EntityDetailRecord[],
+): KnowledgeAssetEntityExportGroup {
+  const variants = details.map(formatKnowledgeAssetExportVariant);
+  const relatedEvents = uniqueKnowledgeAssetExportEvents(
+    variants.flatMap((variant) => variant.relatedEvents),
+  );
+  const types = uniqueKnowledgeAssetValues(variants.map((variant) => variant.type));
+  const descriptions = uniqueKnowledgeAssetValues(
+    variants.map((variant) => variant.description),
+  );
+  return {
+    representativeId: representative.id,
+    name: representative.name,
+    normalizedName: representative.normalizedName,
+    types,
+    descriptions,
+    sameNameCount: variants.length,
+    relatedEventCount: relatedEvents.length,
+    relatedEvents,
+    variants,
+  };
+}
+
+function formatKnowledgeAssetExportVariant(
+  detail: EntityDetailRecord,
+): KnowledgeAssetEntityExportVariant {
+  const relatedEvents = uniqueKnowledgeAssetExportEvents(
+    detail.events.map(formatKnowledgeAssetExportEvent),
+  );
+  return {
+    id: detail.entity.id,
+    sourceId: detail.entity.sourceId,
+    type: detail.entity.type,
+    name: detail.entity.name,
+    normalizedName: detail.entity.normalizedName,
+    description: detail.entity.description ?? "",
+    relatedEventCount: relatedEvents.length,
+    relatedEvents,
+  };
+}
+
+function formatKnowledgeAssetExportEvent(
+  event: EventRecord,
+): KnowledgeAssetEntityExportEvent {
+  return {
+    id: event.id,
+    title: event.title,
+    summary: event.summary,
+    content: event.content,
+    documentId: event.documentId ?? event.document?.id ?? "",
+    documentTitle: event.document?.title ?? "",
+  };
+}
+
+function uniqueKnowledgeAssetExportEvents(
+  events: KnowledgeAssetEntityExportEvent[],
+) {
+  const result: KnowledgeAssetEntityExportEvent[] = [];
+  const seen = new Set<string>();
+  for (const event of events) {
+    const key = event.id || normalizeKnowledgeAssetSearchText(event.title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(event);
+  }
+  return result;
+}
+
+function formatKnowledgeAssetEntitiesCsv(
+  groups: KnowledgeAssetEntityExportGroup[],
+  metadata: KnowledgeAssetEntityExportMetadata,
+  language: SupportedLanguage,
+) {
+  const headers =
+    language === "en"
+      ? [
+          "scope",
+          "project",
+          "document",
+          "entity_name",
+          "entity_types",
+          "same_name_count",
+          "related_event_count",
+          "related_event_names",
+          "same_name_entity_attributes",
+          "normalized_name",
+          "representative_entity_id",
+        ]
+      : [
+          "范围",
+          "项目",
+          "文档",
+          "实体名称",
+          "实体类型汇总",
+          "同名实体数量",
+          "关联事件数量",
+          "关联事件名称",
+          "同名实体属性明细",
+          "标准化名称",
+          "代表实体ID",
+        ];
+  const scopeLabel = formatKnowledgeAssetEntityScope(metadata.scope, language);
+  const lines = [
+    headers.map(csvEscape).join(","),
+    ...groups.map((group) =>
+      [
+        scopeLabel,
+        metadata.project,
+        metadata.scope === "project" ? "" : metadata.document,
+        group.name,
+        group.types.join("；"),
+        String(group.sameNameCount),
+        String(group.relatedEventCount),
+        group.relatedEvents.map((event) => event.title).join("；"),
+        formatKnowledgeAssetEntityVariantSummary(group.variants, language),
+        group.normalizedName,
+        group.representativeId,
+      ]
+        .map(csvEscape)
+        .join(","),
+    ),
+  ];
+  return lines.join("\n");
+}
+
+function formatKnowledgeAssetEntitiesMarkdown(
+  groups: KnowledgeAssetEntityExportGroup[],
+  metadata: KnowledgeAssetEntityExportMetadata,
+  language: SupportedLanguage,
+) {
+  const scopeLabel = formatKnowledgeAssetEntityScope(metadata.scope, language);
+  const selectedTypes =
+    metadata.selectedTypes.length > 0
+      ? metadata.selectedTypes.join("、")
+      : language === "en"
+        ? "All"
+        : "全部";
+  const title = language === "en" ? "# SAG entity export" : "# SAG 实体导出";
+  const summaryLines =
+    language === "en"
+      ? [
+          `- Scope: ${scopeLabel}`,
+          `- Project: ${metadata.project || "-"}`,
+          `- Document: ${metadata.scope === "project" ? "-" : metadata.document || "-"}`,
+          `- Keyword: ${metadata.keyword || "-"}`,
+          `- Selected types: ${selectedTypes}`,
+          `- Deduplicated entity names: ${metadata.matchedEntityNames}/${metadata.totalEntityNames}`,
+          `- Underlying entity rows: ${metadata.matchedEntityRows}/${metadata.totalEntityRows}`,
+          `- Exported at: ${metadata.exportedAt}`,
+        ]
+      : [
+          `- 范围：${scopeLabel}`,
+          `- 项目：${metadata.project || "-"}`,
+          `- 文档：${metadata.scope === "project" ? "-" : metadata.document || "-"}`,
+          `- 关键词：${metadata.keyword || "-"}`,
+          `- 选中类型：${selectedTypes}`,
+          `- 去重实体名称：${metadata.matchedEntityNames}/${metadata.totalEntityNames}`,
+          `- 原始实体记录：${metadata.matchedEntityRows}/${metadata.totalEntityRows}`,
+          `- 导出时间：${metadata.exportedAt}`,
+        ];
+  const groupSections = groups.map((group, index) => {
+    const heading = `${index + 1}. ${group.name}`;
+    const eventLines = group.relatedEvents.length
+      ? group.relatedEvents.map((event) => {
+          const documentTitle = event.documentTitle
+            ? language === "en"
+              ? ` (${event.documentTitle})`
+              : `（${event.documentTitle}）`
+            : "";
+          return `  - ${event.title}${documentTitle}`;
+        })
+      : [language === "en" ? "  - None" : "  - 暂无"];
+    const variantLines = group.variants.flatMap((variant, variantIndex) => {
+      const relatedEventNames = variant.relatedEvents
+        .map((event) => event.title)
+        .join(language === "en" ? "; " : "；");
+      return language === "en"
+        ? [
+            `${variantIndex + 1}. Type: ${variant.type || "-"}`,
+            `   Description: ${variant.description || variant.normalizedName || "-"}`,
+            `   Related events (${variant.relatedEventCount}): ${relatedEventNames || "-"}`,
+            `   Entity ID: ${variant.id}`,
+          ]
+        : [
+            `${variantIndex + 1}. 类型：${variant.type || "-"}`,
+            `   描述：${variant.description || variant.normalizedName || "-"}`,
+            `   关联事件（${variant.relatedEventCount}）：${relatedEventNames || "-"}`,
+            `   实体ID：${variant.id}`,
+          ];
+    });
+    return [
+      `## ${heading}`,
+      "",
+      language === "en"
+        ? `- Entity types: ${group.types.join(", ") || "-"}`
+        : `- 实体类型：${group.types.join("、") || "-"}`,
+      language === "en"
+        ? `- Same-name entities: ${group.sameNameCount}`
+        : `- 同名实体数量：${group.sameNameCount}`,
+      language === "en"
+        ? `- Related events: ${group.relatedEventCount}`
+        : `- 关联事件数量：${group.relatedEventCount}`,
+      language === "en" ? "- Related event names:" : "- 关联事件名称：",
+      ...eventLines,
+      "",
+      language === "en" ? "### Same-name entity attributes" : "### 同名实体属性",
+      "",
+      ...variantLines,
+    ].join("\n");
+  });
+  return [title, "", ...summaryLines, "", ...groupSections, ""].join("\n");
+}
+
+function formatKnowledgeAssetEntitiesJson(
+  groups: KnowledgeAssetEntityExportGroup[],
+  metadata: KnowledgeAssetEntityExportMetadata,
+) {
+  return JSON.stringify(
+    {
+      metadata,
+      summary: {
+        deduplicatedEntityCount: groups.length,
+        underlyingEntityCount: metadata.matchedEntityRows,
+      },
+      entities: groups,
+    },
+    null,
+    2,
+  );
+}
+
+function formatKnowledgeAssetEntityVariantSummary(
+  variants: KnowledgeAssetEntityExportVariant[],
+  language: SupportedLanguage,
+) {
+  return variants
+    .map((variant, index) => {
+      const relatedEventNames = variant.relatedEvents
+        .map((event) => event.title)
+        .join("；");
+      if (language === "en") {
+        return [
+          `[${index + 1}] type: ${variant.type || "-"}`,
+          `description: ${variant.description || variant.normalizedName || "-"}`,
+          `related events (${variant.relatedEventCount}): ${relatedEventNames || "-"}`,
+          `entity id: ${variant.id}`,
+        ].join(", ");
+      }
+      return [
+        `[${index + 1}] 类型：${variant.type || "-"}`,
+        `描述：${variant.description || variant.normalizedName || "-"}`,
+        `关联事件（${variant.relatedEventCount}）：${relatedEventNames || "-"}`,
+        `实体ID：${variant.id}`,
+      ].join("，");
+    })
+    .join(" | ");
+}
+
+function formatKnowledgeAssetEntityScope(
+  scope: KnowledgeAssetEntityScope,
+  language: SupportedLanguage,
+) {
+  return scope === "project"
+    ? language === "en"
+      ? "Project"
+      : "整个项目"
+    : language === "en"
+      ? "Document"
+      : "当前文档";
+}
+
+function buildKnowledgeAssetEntityExportFilenameBase(input: {
+  projectName?: string | null;
+  documentTitle?: string | null;
+  scope: KnowledgeAssetEntityScope;
+}) {
+  const date = new Date().toISOString().slice(0, 10);
+  const scope = input.scope === "project" ? "project" : "document";
+  const title =
+    input.scope === "project"
+      ? input.projectName
+      : input.documentTitle || input.projectName;
+  return `sag-entities-${scope}-${sanitizeKnowledgeAssetFilenameSegment(title || "untitled")}-${date}`;
+}
+
+function sanitizeKnowledgeAssetFilenameSegment(value: string) {
+  const sanitized = value
+    .normalize("NFKC")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/[\s.]+$/g, "")
+    .trim()
+    .slice(0, 80);
+  return sanitized || "untitled";
+}
+
+function markdownTableEscape(value: string) {
+  return value.replace(/\r?\n/g, "<br>").replace(/\|/g, "\\|").trim();
+}
+
+function matchesKnowledgeAssetEntityTypeFilter(
+  type: string,
+  selectedTypes: Set<string>,
+) {
+  const normalizedType = normalizeKnowledgeAssetEntityType(type);
+  return (
+    selectedTypes.has(normalizedType) ||
+    (selectedTypes.has(KNOWLEDGE_ASSET_CHEMICAL_ENTITY_GROUP) &&
+      isChemicalKnowledgeAssetEntityType(type))
+  );
+}
+
+function normalizeKnowledgeAssetEntityType(value: unknown) {
+  const type = String(value ?? "").trim();
+  return type || KNOWLEDGE_ASSET_UNCATEGORIZED_ENTITY_TYPE;
+}
+
+function formatKnowledgeAssetEntityTypeLabel(
+  type: string,
+  language: SupportedLanguage,
+) {
+  return type === KNOWLEDGE_ASSET_UNCATEGORIZED_ENTITY_TYPE
+    ? language === "en"
+      ? "Uncategorized"
+      : "未分类"
+    : type;
+}
+
+function isChemicalKnowledgeAssetEntityType(type: string) {
+  const normalizedType = normalizeKnowledgeAssetSearchText(type);
+  return KNOWLEDGE_ASSET_CHEMICAL_TYPE_KEYWORDS.some((keyword) =>
+    normalizedType.includes(keyword),
+  );
+}
+
+function knowledgeAssetMatchScore(
+  label: string,
+  normalizedQuery: string,
+): number {
+  const normalizedLabel = normalizeKnowledgeAssetSearchText(label);
+  if (!normalizedLabel) return 0;
+  if (normalizedLabel === normalizedQuery) return 120;
+  if (normalizedLabel.startsWith(normalizedQuery)) return 105;
+  if (normalizedLabel.includes(normalizedQuery)) {
+    return 90 - Math.min(20, normalizedLabel.length - normalizedQuery.length);
+  }
+  if (normalizedQuery.includes(normalizedLabel)) return 82;
+  const similarity = knowledgeAssetTrigramSimilarity(
+    normalizedLabel,
+    normalizedQuery,
+  );
+  if (similarity >= 0.18) return Math.round(similarity * 70);
+  return isKnowledgeAssetSubsequence(normalizedQuery, normalizedLabel)
+    ? Math.max(
+        10,
+        Math.round((normalizedQuery.length / normalizedLabel.length) * 45),
+      )
+    : 0;
+}
+
+function normalizeKnowledgeAssetSearchText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, "");
+}
+
+function knowledgeAssetTrigramSimilarity(left: string, right: string): number {
+  if (left.length < 2 || right.length < 2) return 0;
+  const leftParts = knowledgeAssetNgrams(left, Math.min(3, left.length));
+  const rightParts = knowledgeAssetNgrams(right, Math.min(3, right.length));
+  let intersection = 0;
+  for (const part of leftParts) {
+    if (rightParts.has(part)) intersection += 1;
+  }
+  return (
+    intersection / Math.max(1, leftParts.size + rightParts.size - intersection)
+  );
+}
+
+function knowledgeAssetNgrams(value: string, size: number): Set<string> {
+  const parts = new Set<string>();
+  for (let index = 0; index <= value.length - size; index += 1) {
+    parts.add(value.slice(index, index + size));
+  }
+  return parts;
+}
+
+function isKnowledgeAssetSubsequence(
+  needle: string,
+  haystack: string,
+): boolean {
+  let index = 0;
+  for (const character of haystack) {
+    if (character === needle[index]) index += 1;
+    if (index >= needle.length) return true;
+  }
+  return false;
 }
 
 function paginateItems<T>(items: T[], page: number, pageSize: number) {
@@ -6337,7 +10011,10 @@ function normalizeKeyword(value: string) {
   return value.normalize("NFKC").trim().toLocaleLowerCase();
 }
 
-function contextPanelModeLabel(mode: ContextPanelMode, t: (zh: string, en: string) => string) {
+function contextPanelModeLabel(
+  mode: ContextPanelMode,
+  t: (zh: string, en: string) => string,
+) {
   if (mode === "process") return t("推理链路", "Reasoning trace");
   if (mode === "assets") return t("引用资产", "Assets");
   return t("模型日志", "Model logs");
@@ -6354,7 +10031,12 @@ function loadStoredModelLogs(): ModelCallLogRecord[] {
   }
 }
 
-function loadStoredNumber(key: string, fallback: number, min: number, max: number) {
+function loadStoredNumber(
+  key: string,
+  fallback: number,
+  min: number,
+  max: number,
+) {
   const value = Number(window.localStorage.getItem(key));
   if (!Number.isFinite(value)) return fallback;
   return clampNumber(value, min, max);
@@ -6379,14 +10061,19 @@ function startPanelResize(
     maxWidth: number;
     getWidth: (startWidth: number, deltaX: number) => number;
     onResize: (width: number) => void;
-  }
+  },
 ) {
   event.preventDefault();
   const startX = event.clientX;
   document.body.classList.add("chem-panel-resizing");
   const onPointerMove = (moveEvent: PointerEvent) => {
-    const nextWidth = options.getWidth(options.startWidth, moveEvent.clientX - startX);
-    options.onResize(clampNumber(nextWidth, options.minWidth, options.maxWidth));
+    const nextWidth = options.getWidth(
+      options.startWidth,
+      moveEvent.clientX - startX,
+    );
+    options.onResize(
+      clampNumber(nextWidth, options.minWidth, options.maxWidth),
+    );
   };
   const onPointerUp = () => {
     document.body.classList.remove("chem-panel-resizing");
@@ -6403,7 +10090,10 @@ function loadStoredModelLogCursor(): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-function mergeModelLogs(current: ModelCallLogRecord[], incoming: ModelCallLogRecord[]): ModelCallLogRecord[] {
+function mergeModelLogs(
+  current: ModelCallLogRecord[],
+  incoming: ModelCallLogRecord[],
+): ModelCallLogRecord[] {
   const byId = new Map<string, ModelCallLogRecord>();
   for (const log of [...current, ...incoming]) {
     byId.set(log.id, log);
@@ -6416,7 +10106,10 @@ function mergeModelLogs(current: ModelCallLogRecord[], incoming: ModelCallLogRec
 function persistModelLogs(logs: ModelCallLogRecord[]) {
   for (const limit of [MAX_BROWSER_MODEL_LOGS, 100, 50, 20]) {
     try {
-      window.localStorage.setItem(MODEL_LOGS_STORAGE_KEY, JSON.stringify(logs.slice(-limit)));
+      window.localStorage.setItem(
+        MODEL_LOGS_STORAGE_KEY,
+        JSON.stringify(logs.slice(-limit)),
+      );
       return;
     } catch {
       // localStorage may exceed quota because embedding responses contain full vectors.
@@ -6429,27 +10122,37 @@ function persistModelLogs(logs: ModelCallLogRecord[]) {
   }
 }
 
-function uploadStatusLabel(status: UploadJobRecord["status"], t: (zh: string, en: string) => string) {
+function uploadStatusLabel(
+  status: UploadJobRecord["status"],
+  t: (zh: string, en: string) => string,
+) {
   if (status === "QUEUED") return t("排队中", "Queued");
   if (status === "RUNNING") return t("处理中", "Processing");
   if (status === "COMPLETED") return t("完成", "Completed");
   return t("失败", "Failed");
 }
 
-function uploadStageLabel(stage: UploadJobRecord["stage"], t: (zh: string, en: string) => string) {
+function uploadStageLabel(
+  stage: UploadJobRecord["stage"],
+  t: (zh: string, en: string) => string,
+) {
   if (stage === "QUEUED") return t("排队", "Queued");
   if (stage === "READING") return t("读取文件", "Reading file");
   if (stage === "PARSING") return t("解析文档", "Parsing document");
   if (stage === "CHUNKING") return t("生成切片", "Generating chunks");
   if (stage === "EMBEDDING_CHUNKS") return t("切片向量化", "Embedding chunks");
   if (stage === "EXTRACTING_EVENTS") return t("抽取事件", "Extracting events");
-  if (stage === "EMBEDDING_EVENTS") return t("事件与实体向量化", "Embedding events and entities");
+  if (stage === "EMBEDDING_EVENTS")
+    return t("事件与实体向量化", "Embedding events and entities");
   if (stage === "WRITING_GRAPH") return t("写入图谱", "Writing graph");
   if (stage === "COMPLETED") return t("处理完成", "Completed");
   return t("处理失败", "Failed");
 }
 
-function processStatusLabel(status: ProcessStepStatus, t: (zh: string, en: string) => string) {
+function processStatusLabel(
+  status: ProcessStepStatus,
+  t: (zh: string, en: string) => string,
+) {
   if (status === "running") return t("运行中", "Running");
   if (status === "failed") return t("失败", "Failed");
   return t("完成", "Done");
@@ -6462,28 +10165,36 @@ function processStatusClassName(status: ProcessStepStatus) {
 }
 
 function makeStepId(prefix: string) {
-  const randomId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const randomId =
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `${prefix}-${randomId}`;
 }
 
-function buildSearchProcessSteps(result: SearchResult, language: SupportedLanguage): ProcessStep[] {
+function buildSearchProcessSteps(
+  result: SearchResult,
+  language: SupportedLanguage,
+): ProcessStep[] {
   const trace = result.trace ?? { traceId: result.traceId };
-  const t = (zh: string, en: string) => language === "en" ? en : zh;
+  const t = (zh: string, en: string) => (language === "en" ? en : zh);
   return [
     {
       id: makeStepId("search-start"),
       title: t("开始检索", "Start search"),
       detail: t(
         `查询：${searchTraceText(trace, "query") ?? "当前问题"}；模式：${searchModeLabel(searchTraceText(trace, "searchMode"), language)}`,
-        `Query: ${searchTraceText(trace, "query") ?? "current question"}; mode: ${searchModeLabel(searchTraceText(trace, "searchMode"), language)}`
+        `Query: ${searchTraceText(trace, "query") ?? "current question"}; mode: ${searchModeLabel(searchTraceText(trace, "searchMode"), language)}`,
       ),
-      status: "done"
+      status: "done",
     },
     ...buildTraceProcessSteps(trace, t("检索链路", "Search trace"), language),
     {
       id: makeStepId("search-result"),
       title: t("生成结果", "Generate results"),
-      detail: t(`返回 ${result.sections.length} 个切片结果`, `${result.sections.length} chunk result(s) returned`),
+      detail: t(
+        `返回 ${result.sections.length} 个切片结果`,
+        `${result.sections.length} chunk result(s) returned`,
+      ),
       status: "done",
       payload: {
         traceId: result.traceId,
@@ -6491,15 +10202,19 @@ function buildSearchProcessSteps(result: SearchResult, language: SupportedLangua
           chunkId: section.chunkId,
           heading: section.heading,
           score: section.score,
-          rank: section.rank
-        }))
-      }
-    }
+          rank: section.rank,
+        })),
+      },
+    },
   ];
 }
 
-function buildTraceProcessSteps(trace: unknown, groupTitle: string, language: SupportedLanguage): ProcessStep[] {
-  const t = (zh: string, en: string) => language === "en" ? en : zh;
+function buildTraceProcessSteps(
+  trace: unknown,
+  groupTitle: string,
+  language: SupportedLanguage,
+): ProcessStep[] {
+  const t = (zh: string, en: string) => (language === "en" ? en : zh);
   const record = isPlainRecord(trace) ? trace : {};
   const timings = isPlainRecord(record.timings) ? record.timings : {};
   const orderedSteps: Array<{
@@ -6511,73 +10226,119 @@ function buildTraceProcessSteps(trace: unknown, groupTitle: string, language: Su
     {
       key: "queryEmbedding",
       title: t("查询向量化", "Query embedding"),
-      detail: t("把用户问题转成向量，用于召回相关事件和切片。", "Convert the user question into a vector for recalling related events and chunks.")
+      detail: t(
+        "把用户问题转成向量，用于召回相关事件和切片。",
+        "Convert the user question into a vector for recalling related events and chunks.",
+      ),
     },
     {
       key: "step1Bm25Entities",
       title: t("BM25 匹配查询实体", "BM25 match query entities"),
-      detail: countSummary(record.recalledEntities, t("个实体", "entities"), language),
-      payload: record.recalledEntities
+      detail: countSummary(
+        record.recalledEntities,
+        t("个实体", "entities"),
+        language,
+      ),
+      payload: record.recalledEntities,
     },
     {
       key: "step1ExtractEntities",
       title: t("抽取查询实体", "Extract query entities"),
       detail: entitySummary(record.queryEntities, language),
-      payload: record.queryEntities
+      payload: record.queryEntities,
     },
     {
       key: "step2RetrieveEntities",
       title: t("召回相关实体", "Retrieve related entities"),
-      detail: countSummary(record.recalledEntities, t("个实体", "entities"), language),
-      payload: record.recalledEntities
+      detail: countSummary(
+        record.recalledEntities,
+        t("个实体", "entities"),
+        language,
+      ),
+      payload: record.recalledEntities,
     },
     {
       key: "step3EntityEvents",
       title: t("实体关联事件", "Entity-linked events"),
-      detail: countSummary(record.entityEvents ?? record.entityEventIds, t("个事件", "events"), language),
-      payload: eventPayload(record, "entityEvents", "entityEventIds")
+      detail: countSummary(
+        record.entityEvents ?? record.entityEventIds,
+        t("个事件", "events"),
+        language,
+      ),
+      payload: eventPayload(record, "entityEvents", "entityEventIds"),
     },
     {
       key: "step3QueryEvents",
       title: t("标题向量召回事件", "Title-vector event recall"),
-      detail: countSummary(record.queryEvents ?? record.queryEventIds, t("个事件", "events"), language),
-      payload: eventPayload(record, "queryEvents", "queryEventIds")
+      detail: countSummary(
+        record.queryEvents ?? record.queryEventIds,
+        t("个事件", "events"),
+        language,
+      ),
+      payload: eventPayload(record, "queryEvents", "queryEventIds"),
     },
     {
       key: "step4FetchDetails",
       title: t("读取候选事件详情", "Fetch candidate event details"),
-      detail: countSummary(record.eventSnapshots, t("个候选事件", "candidate events"), language),
-      payload: record.eventSnapshots
+      detail: countSummary(
+        record.eventSnapshots,
+        t("个候选事件", "candidate events"),
+        language,
+      ),
+      payload: record.eventSnapshots,
     },
     {
       key: "step5Expand",
       title: t("事件扩展", "Event expansion"),
-      detail: countSummary(record.expandedEvents ?? record.expandedEventIds, t("个事件", "events"), language),
-      payload: eventPayload(record, "expandedEvents", "expandedEventIds")
+      detail: countSummary(
+        record.expandedEvents ?? record.expandedEventIds,
+        t("个事件", "events"),
+        language,
+      ),
+      payload: eventPayload(record, "expandedEvents", "expandedEventIds"),
     },
     {
       key: "step6CoarseRank",
       title: t("粗排事件", "Coarse-rank events"),
-      detail: countSummary(record.coarseRankedEvents ?? record.coarseRankedEventIds, t("个候选", "candidates"), language),
-      payload: eventPayload(record, "coarseRankedEvents", "coarseRankedEventIds")
+      detail: countSummary(
+        record.coarseRankedEvents ?? record.coarseRankedEventIds,
+        t("个候选", "candidates"),
+        language,
+      ),
+      payload: eventPayload(
+        record,
+        "coarseRankedEvents",
+        "coarseRankedEventIds",
+      ),
     },
     {
       key: "step7LlmRerank",
       title: t("LLM 重排", "LLM rerank"),
-      detail: countSummary(record.rerankedEvents ?? record.rerankedEventIds, t("个候选", "candidates"), language),
-      payload: eventPayload(record, "rerankedEvents", "rerankedEventIds")
+      detail: countSummary(
+        record.rerankedEvents ?? record.rerankedEventIds,
+        t("个候选", "candidates"),
+        language,
+      ),
+      payload: eventPayload(record, "rerankedEvents", "rerankedEventIds"),
     },
     {
       key: "step7RerankModel",
       title: t("Rerank 模型重排", "Rerank model rerank"),
-      detail: countSummary(record.rerankedEvents ?? record.rerankedEventIds, t("个候选", "candidates"), language),
-      payload: eventPayload(record, "rerankedEvents", "rerankedEventIds")
+      detail: countSummary(
+        record.rerankedEvents ?? record.rerankedEventIds,
+        t("个候选", "candidates"),
+        language,
+      ),
+      payload: eventPayload(record, "rerankedEvents", "rerankedEventIds"),
     },
     {
       key: "step8FetchChunks",
       title: t("回取关联切片", "Fetch related chunks"),
-      detail: t("读取最终事件关联的原文切片，作为回答上下文。", "Fetch original chunks linked to the final events as answer context.")
-    }
+      detail: t(
+        "读取最终事件关联的原文切片，作为回答上下文。",
+        "Fetch original chunks linked to the final events as answer context.",
+      ),
+    },
   ];
 
   const steps: ProcessStep[] = orderedSteps
@@ -6588,7 +10349,7 @@ function buildTraceProcessSteps(trace: unknown, groupTitle: string, language: Su
       detail: step.detail,
       status: "done" as const,
       durationMs: numberOrNull(timings[step.key]),
-      payload: step.payload
+      payload: step.payload,
     }));
 
   const fallbackReason = searchTraceText(record, "fallbackReason");
@@ -6597,7 +10358,7 @@ function buildTraceProcessSteps(trace: unknown, groupTitle: string, language: Su
       id: makeStepId("fallback"),
       title: t("降级路径", "Fallback path"),
       detail: fallbackReason,
-      status: "done"
+      status: "done",
     });
   }
 
@@ -6605,52 +10366,82 @@ function buildTraceProcessSteps(trace: unknown, groupTitle: string, language: Su
     steps.push({
       id: makeStepId("trace"),
       title: groupTitle,
-      detail: t("工具返回了链路数据，但没有包含可拆解的阶段字段。", "The tool returned trace data but did not include decomposable stage fields."),
+      detail: t(
+        "工具返回了链路数据，但没有包含可拆解的阶段字段。",
+        "The tool returned trace data but did not include decomposable stage fields.",
+      ),
       status: "done",
-      payload: trace
+      payload: trace,
     });
   }
 
   return steps;
 }
 
-function buildToolProcessPayload(toolCall: McpToolCallRecord, language: SupportedLanguage) {
+function buildToolProcessPayload(
+  toolCall: McpToolCallRecord,
+  language: SupportedLanguage,
+) {
   return {
     [language === "en" ? "arguments" : "参数"]: toolCall.arguments,
     [language === "en" ? "result" : "结果"]: parseToolResponse(toolCall.result),
-    [language === "en" ? "error" : "错误"]: toolCall.error ?? undefined
+    [language === "en" ? "error" : "错误"]: toolCall.error ?? undefined,
   };
 }
 
-function buildRunningMcpSearch(toolName: string, args: Record<string, unknown>, language: SupportedLanguage): RunningMcpSearch {
-  const query = typeof args.query === "string" && args.query.trim()
-    ? args.query.trim()
-    : language === "en" ? `${toolName} did not provide a query argument` : `${toolName} 未提供 query 参数`;
-  const searchMode = typeof args.searchMode === "string" ? searchModeLabel(args.searchMode, language) : undefined;
+function buildRunningMcpSearch(
+  toolName: string,
+  args: Record<string, unknown>,
+  language: SupportedLanguage,
+): RunningMcpSearch {
+  const query =
+    typeof args.query === "string" && args.query.trim()
+      ? args.query.trim()
+      : language === "en"
+        ? `${toolName} did not provide a query argument`
+        : `${toolName} 未提供 query 参数`;
+  const searchMode =
+    typeof args.searchMode === "string"
+      ? searchModeLabel(args.searchMode, language)
+      : undefined;
   return {
     id: makeStepId("running-mcp-search"),
     toolName,
     query,
-    searchMode
+    searchMode,
   };
 }
 
-function getMcpSearchQuery(args: Record<string, unknown>, language: SupportedLanguage) {
+function getMcpSearchQuery(
+  args: Record<string, unknown>,
+  language: SupportedLanguage,
+) {
   const query = getRawMcpSearchQuery(args);
-  const mode = typeof args.searchMode === "string"
-    ? language === "en" ? `; mode: ${searchModeLabel(args.searchMode, language)}` : `；模式：${searchModeLabel(args.searchMode, language)}`
-    : "";
+  const mode =
+    typeof args.searchMode === "string"
+      ? language === "en"
+        ? `; mode: ${searchModeLabel(args.searchMode, language)}`
+        : `；模式：${searchModeLabel(args.searchMode, language)}`
+      : "";
   return query
     ? `query: ${query}${mode}`
-    : language === "en" ? "MCP called sag_search, but the arguments did not include a query field." : "MCP 调用了 sag_search，但参数里没有 query 字段。";
+    : language === "en"
+      ? "MCP called sag_search, but the arguments did not include a query field."
+      : "MCP 调用了 sag_search，但参数里没有 query 字段。";
 }
 
 function getRawMcpSearchQuery(args: Record<string, unknown>) {
   return typeof args.query === "string" ? args.query.trim() : "";
 }
 
-function buildMcpSearchQueryStep(toolCall: McpToolCallRecord, language: SupportedLanguage): ProcessStep {
-  const query = typeof toolCall.arguments.query === "string" ? toolCall.arguments.query : "";
+function buildMcpSearchQueryStep(
+  toolCall: McpToolCallRecord,
+  language: SupportedLanguage,
+): ProcessStep {
+  const query =
+    typeof toolCall.arguments.query === "string"
+      ? toolCall.arguments.query
+      : "";
   return {
     id: makeStepId("mcp-search-query"),
     title: language === "en" ? "MCP search query" : "MCP 搜索语句",
@@ -6663,35 +10454,46 @@ function buildMcpSearchQueryStep(toolCall: McpToolCallRecord, language: Supporte
       subStrategy: toolCall.arguments.subStrategy,
       searchMode: toolCall.arguments.searchMode,
       topK: toolCall.arguments.topK,
-      returnTrace: toolCall.arguments.returnTrace
-    }
+      returnTrace: toolCall.arguments.returnTrace,
+    },
   };
 }
 
-function buildMcpSearchResultSteps(result: unknown, language: SupportedLanguage): ProcessStep[] {
+function buildMcpSearchResultSteps(
+  result: unknown,
+  language: SupportedLanguage,
+): ProcessStep[] {
   if (!isPlainRecord(result) || !Array.isArray(result.sections)) {
     return [];
   }
-  return [{
-    id: makeStepId("mcp-search-result"),
-    title: language === "en" ? "SAG returned chunks" : "SAG 返回切片",
-    detail: language === "en" ? `${result.sections.length} chunk result(s) returned` : `返回 ${result.sections.length} 个切片结果`,
-    status: "done",
-    payload: {
-      traceId: result.traceId,
-      sections: result.sections.map((section) => {
-        if (!isPlainRecord(section)) {
-          return section;
-        }
-        return {
-          heading: section.heading,
-          contentPreview: typeof section.content === "string" ? section.content.slice(0, 160) : "",
-          score: section.score,
-          rank: section.rank
-        };
-      })
-    }
-  }];
+  return [
+    {
+      id: makeStepId("mcp-search-result"),
+      title: language === "en" ? "SAG returned chunks" : "SAG 返回切片",
+      detail:
+        language === "en"
+          ? `${result.sections.length} chunk result(s) returned`
+          : `返回 ${result.sections.length} 个切片结果`,
+      status: "done",
+      payload: {
+        traceId: result.traceId,
+        sections: result.sections.map((section) => {
+          if (!isPlainRecord(section)) {
+            return section;
+          }
+          return {
+            heading: section.heading,
+            contentPreview:
+              typeof section.content === "string"
+                ? section.content.slice(0, 160)
+                : "",
+            score: section.score,
+            rank: section.rank,
+          };
+        }),
+      },
+    },
+  ];
 }
 
 function parseToolResponse(value: unknown): unknown {
@@ -6699,7 +10501,11 @@ function parseToolResponse(value: unknown): unknown {
     return value;
   }
   const text = value.content
-    .map((item) => isPlainRecord(item) && item.type === "text" ? String(item.text ?? "") : "")
+    .map((item) =>
+      isPlainRecord(item) && item.type === "text"
+        ? String(item.text ?? "")
+        : "",
+    )
     .filter(Boolean)
     .join("\n");
   if (!text) {
@@ -6715,7 +10521,12 @@ function parseToolResponse(value: unknown): unknown {
 function extractSearchTrace(value: unknown): Record<string, unknown> | null {
   if (!isPlainRecord(value)) return null;
   if (isPlainRecord(value.trace)) return value.trace;
-  if ("timings" in value || "traceId" in value || "recalledEntities" in value || "queryEventIds" in value) {
+  if (
+    "timings" in value ||
+    "traceId" in value ||
+    "recalledEntities" in value ||
+    "queryEventIds" in value
+  ) {
     return value;
   }
   return null;
@@ -6726,33 +10537,48 @@ function buildGraphFocus(value: unknown, query: string): GraphFocus | null {
   if (!trace) return null;
 
   const rerankedEventIds = stringArray(trace.rerankedEventIds);
-  const eventIds = (Array.isArray(trace.rerankedEventIds)
-    ? rerankedEventIds
-    : firstNonEmptyStringArray(
-      trace.textEventIds,
-      trace.queryEventIds,
-      trace.entityEventIds
-    )
+  const eventIds = (
+    Array.isArray(trace.rerankedEventIds)
+      ? rerankedEventIds
+      : firstNonEmptyStringArray(
+          trace.textEventIds,
+          trace.queryEventIds,
+          trace.entityEventIds,
+        )
   ).slice(0, 30);
   const recalledEntities = Array.isArray(trace.recalledEntities)
     ? trace.recalledEntities.filter(isPlainRecord)
     : [];
   const normalizedQuery = normalizeKeyword(query).replace(/\s+/g, "");
-  const directlyRelevantEntities = recalledEntities.filter((entity) => isDirectlyRelevantGraphEntity(entity, normalizedQuery));
+  const directlyRelevantEntities = recalledEntities.filter((entity) =>
+    isDirectlyRelevantGraphEntity(entity, normalizedQuery),
+  );
   const entityIds = uniqueStrings(
-    directlyRelevantEntities.map((entity) => typeof entity.id === "string" ? entity.id : "")
+    directlyRelevantEntities.map((entity) =>
+      typeof entity.id === "string" ? entity.id : "",
+    ),
   ).slice(0, 8);
   if (eventIds.length === 0 && entityIds.length === 0) {
     return null;
   }
 
   const primaryEntity = [...directlyRelevantEntities].sort((left, right) => {
-    const leftName = normalizeKeyword(String(left.name ?? "")).replace(/\s+/g, "");
-    const rightName = normalizeKeyword(String(right.name ?? "")).replace(/\s+/g, "");
-    const leftMentioned = leftName && normalizedQuery.includes(leftName) ? 1 : 0;
-    const rightMentioned = rightName && normalizedQuery.includes(rightName) ? 1 : 0;
-    return rightMentioned - leftMentioned ||
-      Number(right.score ?? 0) - Number(left.score ?? 0);
+    const leftName = normalizeKeyword(String(left.name ?? "")).replace(
+      /\s+/g,
+      "",
+    );
+    const rightName = normalizeKeyword(String(right.name ?? "")).replace(
+      /\s+/g,
+      "",
+    );
+    const leftMentioned =
+      leftName && normalizedQuery.includes(leftName) ? 1 : 0;
+    const rightMentioned =
+      rightName && normalizedQuery.includes(rightName) ? 1 : 0;
+    return (
+      rightMentioned - leftMentioned ||
+      Number(right.score ?? 0) - Number(left.score ?? 0)
+    );
   })[0];
 
   return {
@@ -6760,12 +10586,15 @@ function buildGraphFocus(value: unknown, query: string): GraphFocus | null {
     query,
     eventIds,
     entityIds,
-    primaryEntityId: typeof primaryEntity?.id === "string" ? primaryEntity.id : entityIds[0]
+    primaryEntityId:
+      typeof primaryEntity?.id === "string" ? primaryEntity.id : entityIds[0],
   };
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? uniqueStrings(value.map((item) => typeof item === "string" ? item : "")) : [];
+  return Array.isArray(value)
+    ? uniqueStrings(value.map((item) => (typeof item === "string" ? item : "")))
+    : [];
 }
 
 function firstNonEmptyStringArray(...values: unknown[]): string[] {
@@ -6776,9 +10605,16 @@ function firstNonEmptyStringArray(...values: unknown[]): string[] {
   return [];
 }
 
-function isDirectlyRelevantGraphEntity(entity: Record<string, unknown>, normalizedQuery: string) {
+function isDirectlyRelevantGraphEntity(
+  entity: Record<string, unknown>,
+  normalizedQuery: string,
+) {
   const name = normalizeKeyword(String(entity.name ?? "")).replace(/\s+/g, "");
-  if (name.length >= 2 && normalizedQuery.length >= 2 && (normalizedQuery.includes(name) || name.includes(normalizedQuery))) {
+  if (
+    name.length >= 2 &&
+    normalizedQuery.length >= 2 &&
+    (normalizedQuery.includes(name) || name.includes(normalizedQuery))
+  ) {
     return true;
   }
   const score = Number(entity.score ?? 0);
@@ -6803,18 +10639,33 @@ function searchModeLabel(value: string | null, language: SupportedLanguage) {
 
 function entitySummary(value: unknown, language: SupportedLanguage) {
   if (Array.isArray(value)) {
-    if (value.length === 0) return language === "en" ? "No query entities identified" : "没有识别到查询实体";
-    return language === "en" ? `${value.length} query entity/entities identified` : `识别到 ${value.length} 个查询实体`;
+    if (value.length === 0)
+      return language === "en"
+        ? "No query entities identified"
+        : "没有识别到查询实体";
+    return language === "en"
+      ? `${value.length} query entity/entities identified`
+      : `识别到 ${value.length} 个查询实体`;
   }
-  return language === "en" ? "Identify key entities in the user question" : "识别用户问题中的关键实体";
+  return language === "en"
+    ? "Identify key entities in the user question"
+    : "识别用户问题中的关键实体";
 }
 
-function countSummary(value: unknown, unit: string, language: SupportedLanguage) {
+function countSummary(
+  value: unknown,
+  unit: string,
+  language: SupportedLanguage,
+) {
   if (Array.isArray(value)) return `${value.length} ${unit}`;
   return language === "en" ? "Waiting for the previous step" : "等待上一步结果";
 }
 
-function eventPayload(record: Record<string, unknown>, eventKey: string, idKey: string) {
+function eventPayload(
+  record: Record<string, unknown>,
+  eventKey: string,
+  idKey: string,
+) {
   const direct = record[eventKey];
   if (Array.isArray(direct) && direct.length > 0) {
     return direct;
@@ -6827,16 +10678,16 @@ function eventPayload(record: Record<string, unknown>, eventKey: string, idKey: 
   const snapshotById = new Map(
     snapshots
       .filter(isPlainRecord)
-      .map((event) => [String(event.id ?? ""), event])
+      .map((event) => [String(event.id ?? ""), event]),
   );
-  const events = ids
-    .map((id) => snapshotById.get(String(id)))
-    .filter(Boolean);
+  const events = ids.map((id) => snapshotById.get(String(id))).filter(Boolean);
   return events.length > 0 ? events : undefined;
 }
 
 function numberOrNull(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.round(value)
+    : null;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -6848,24 +10699,36 @@ function getErrorMessage(error: unknown) {
 }
 
 function isAbortError(error: unknown) {
-  return (error instanceof DOMException && error.name === "AbortError") ||
-    (error instanceof Error && error.name === "AbortError");
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
 }
 
-function formatModelName(model: string | null | undefined, t: (zh: string, en: string) => string) {
+function formatModelName(
+  model: string | null | undefined,
+  t: (zh: string, en: string) => string,
+) {
   if (!model) return t("未知模型", "Unknown model");
-  if (model === "local-rule-fallback") return t("本地规则回退", "Local rule fallback");
+  if (model === "local-rule-fallback")
+    return t("本地规则回退", "Local rule fallback");
   return model;
 }
 
-function formatMessageRole(role: string, t: (zh: string, en: string) => string) {
+function formatMessageRole(
+  role: string,
+  t: (zh: string, en: string) => string,
+) {
   if (role === "user") return t("用户", "User");
   if (role === "assistant") return t("助手", "Assistant");
   if (role === "tool") return t("工具", "Tool");
   return t("系统", "System");
 }
 
-function formatToolStatus(status: "PENDING" | "SUCCEEDED" | "FAILED", t: (zh: string, en: string) => string) {
+function formatToolStatus(
+  status: "PENDING" | "SUCCEEDED" | "FAILED",
+  t: (zh: string, en: string) => string,
+) {
   if (status === "SUCCEEDED") return t("成功", "Succeeded");
   if (status === "FAILED") return t("失败", "Failed");
   return t("等待中", "Pending");
@@ -6875,7 +10738,10 @@ function formatEmbeddingNumber(value: number) {
   return Number.isFinite(value) ? value.toFixed(5) : "0.00000";
 }
 
-function formatMessageContent(content: string, t: (zh: string, en: string) => string) {
+function formatMessageContent(
+  content: string,
+  t: (zh: string, en: string) => string,
+) {
   return formatDataContent(content, t)
     .replaceAll("sources", t("项目", "projects"))
     .replaceAll("source", t("项目", "project"))
@@ -6885,29 +10751,38 @@ function formatMessageContent(content: string, t: (zh: string, en: string) => st
     .replaceAll("trace", t("检索链路", "trace"))
     .replaceAll(
       "Mock LLM planner completed MCP tool calls.",
-      t("模拟 LLM 规划器已完成 MCP 工具调用。", "Mock LLM planner completed MCP tool calls.")
+      t(
+        "模拟 LLM 规划器已完成 MCP 工具调用。",
+        "Mock LLM planner completed MCP tool calls.",
+      ),
     )
     .replace(
       "当前未配置 LLM_API_KEY，已使用有限 fallback 通过真实 MCP client 测试工具。",
       t(
         "当前未配置 LLM 密钥，已使用有限本地规则回退，并通过真实 MCP 客户端测试工具。",
-        "LLM key is not configured. A limited local rule fallback was used to test tools through the real MCP client."
-      )
+        "LLM key is not configured. A limited local rule fallback was used to test tools through the real MCP client.",
+      ),
     )
     .replace(
       "当前 fallback 支持列出 sources、检索 search、查询 event。请尝试：列出 sources，并搜索 SAG multi search。",
       t(
         "当前本地规则回退支持列出项目、执行检索、查询事件。请尝试：列出项目，并搜索 SAG 多路检索。",
-        "The local fallback supports listing projects, searching, and querying events. Try listing projects and searching SAG multi-search."
-      )
+        "The local fallback supports listing projects, searching, and querying events. Try listing projects and searching SAG multi-search.",
+      ),
     )
     .replace(
       "已通过 MCP 调用 sag_search，并返回检索结果和 trace。",
-      t("已通过 MCP 调用 sag_search，并返回检索结果和检索链路。", "Called sag_search through MCP and returned retrieval results and trace.")
+      t(
+        "已通过 MCP 调用 sag_search，并返回检索结果和检索链路。",
+        "Called sag_search through MCP and returned retrieval results and trace.",
+      ),
     );
 }
 
-function formatDataContent(content: string, t: (zh: string, en: string) => string) {
+function formatDataContent(
+  content: string,
+  t: (zh: string, en: string) => string,
+) {
   const project = t("项目", "project");
   const projectList = t("项目列表", "project list");
   const projectIds = t("项目ID列表", "project ID list");

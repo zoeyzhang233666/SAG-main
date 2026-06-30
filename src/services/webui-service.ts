@@ -18,6 +18,7 @@ import {
   listChunksByDocument,
   listDocumentsBySource,
   listEntitiesByDocument,
+  listEntitiesByProject,
   listEventsByDocument,
   listSources,
   restoreDocument,
@@ -457,6 +458,10 @@ export class WebuiService {
 
   async listEntities(documentId: string, tenantId = config.DEFAULT_TENANT_ID) {
     return listEntitiesByDocument({ documentId, tenantId });
+  }
+
+  async listProjectEntities(sourceId: string, tenantId = config.DEFAULT_TENANT_ID) {
+    return listEntitiesByProject({ sourceId, tenantId });
   }
 
   async updateEntity(entityId: string, input: {

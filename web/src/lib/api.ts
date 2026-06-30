@@ -105,6 +105,10 @@ export const api = {
     return request<{ graph: ProjectGraphRecord }>(`/api/projects/${projectId}/graph`);
   },
 
+  async listProjectEntities(projectId: string) {
+    return request<{ entities: EntityRecord[] }>(`/api/projects/${projectId}/entities`);
+  },
+
   async downloadProjectExport(projectId: string, format: "csv" | "json", profile: "simple" | "full" = "simple") {
     const params = new URLSearchParams({ format });
     const endpoint = profile === "simple" ? "export-simple" : "export-full";

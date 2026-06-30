@@ -308,6 +308,14 @@ export function buildHttpServer() {
     };
   });
 
+  app.get("/api/projects/:projectId/entities", async (request) => {
+    const params = request.params as { projectId: string };
+    z.string().uuid().parse(params.projectId);
+    return {
+      entities: await webuiService.listProjectEntities(params.projectId)
+    };
+  });
+
   async function sendProjectExport(
     request: FastifyRequest,
     reply: FastifyReply,

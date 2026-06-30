@@ -5,6 +5,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import { Button } from "./ui/button";
+import { renderRichTextChildren } from "./RichText";
 
 export type MarkdownCitation = {
   index: number;
@@ -68,15 +69,18 @@ export const MarkdownMessage = memo(function MarkdownMessage({
           [rehypeSanitize, sanitizeSchema]
         ]}
         components={{
-          h1: ({ children }) => <CollapsibleHeading level={1}>{children}</CollapsibleHeading>,
-          h2: ({ children }) => <CollapsibleHeading level={2}>{children}</CollapsibleHeading>,
-          h3: ({ children }) => <CollapsibleHeading level={3}>{children}</CollapsibleHeading>,
-          h4: ({ children }) => <CollapsibleHeading level={4}>{children}</CollapsibleHeading>,
-          h5: ({ children }) => <CollapsibleHeading level={5}>{children}</CollapsibleHeading>,
-          h6: ({ children }) => <CollapsibleHeading level={6}>{children}</CollapsibleHeading>,
+          h1: ({ children }) => <CollapsibleHeading level={1}>{renderRichTextChildren(children)}</CollapsibleHeading>,
+          h2: ({ children }) => <CollapsibleHeading level={2}>{renderRichTextChildren(children)}</CollapsibleHeading>,
+          h3: ({ children }) => <CollapsibleHeading level={3}>{renderRichTextChildren(children)}</CollapsibleHeading>,
+          h4: ({ children }) => <CollapsibleHeading level={4}>{renderRichTextChildren(children)}</CollapsibleHeading>,
+          h5: ({ children }) => <CollapsibleHeading level={5}>{renderRichTextChildren(children)}</CollapsibleHeading>,
+          h6: ({ children }) => <CollapsibleHeading level={6}>{renderRichTextChildren(children)}</CollapsibleHeading>,
           ul: ({ children }) => <ul className="chem-outline-list chem-outline-ul">{children}</ul>,
           ol: ({ children }) => <ol className="chem-outline-list chem-outline-ol">{children}</ol>,
-          li: ({ children }) => <CollapsibleListItem>{children}</CollapsibleListItem>,
+          li: ({ children }) => <CollapsibleListItem>{renderRichTextChildren(children)}</CollapsibleListItem>,
+          p: ({ children }) => <p>{renderRichTextChildren(children)}</p>,
+          th: ({ children }) => <th>{renderRichTextChildren(children)}</th>,
+          td: ({ children }) => <td>{renderRichTextChildren(children)}</td>,
           table: ({ children }) => (
             <div className="chem-table-wrap">
               <table>{children}</table>
@@ -100,7 +104,7 @@ export const MarkdownMessage = memo(function MarkdownMessage({
             }
             return (
               <a href={href} target="_blank" rel="noreferrer">
-                {children}
+                {renderRichTextChildren(children)}
               </a>
             );
           },
