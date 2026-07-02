@@ -1235,6 +1235,41 @@ select {
   padding-inline: 0.05em;
 }
 
+.chem-formula-quad-space {
+  display: inline-block;
+  width: 1em;
+}
+
+.chem-formula-qquad-space {
+  display: inline-block;
+  width: 2em;
+}
+
+.chem-formula-bold {
+  font-weight: 700;
+}
+
+.chem-formula-italic {
+  font-style: italic;
+}
+
+.chem-formula-sans {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.chem-formula-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.chem-formula-cal {
+  font-family: "Cambria Math", "STIX Two Math", "Times New Roman", ui-serif, serif;
+  font-style: italic;
+}
+
+.chem-formula-overline {
+  text-decoration: overline;
+}
+
 .chem-formula-roman {
   font-family: inherit;
   font-style: normal;

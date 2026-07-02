@@ -57,6 +57,7 @@ import type {
   McpToolCallRecord,
   ManualImportFormat,
   ModelCallLogRecord,
+  ProjectGraphEntityRecord,
   ProjectGraphRecord,
   ProjectStatsRecord,
   ChunkingMode,
@@ -75,6 +76,7 @@ import { Input } from "./components/ui/input";
 import { Textarea } from "./components/ui/textarea";
 import { ProjectGraphFlow } from "./components/ProjectGraphFlow";
 import { MarkdownMessage } from "./components/MarkdownMessage";
+import { RichTextFragment } from "./components/RichText";
 import {
   ThemeToggleButton,
   ThemeSettingsCard,
@@ -151,6 +153,16 @@ const DOC_RAIL_MAX_WIDTH = 680;
 const LEFT_RAIL_COLLAPSED_STORAGE_KEY = "sag:left-rail-collapsed:v1";
 const RIGHT_PANEL_COLLAPSED_STORAGE_KEY = "sag:right-panel-collapsed:v1";
 const MAX_BROWSER_MODEL_LOGS = 200;
+const MODEL_LOG_STORAGE_SOFT_LIMIT_CHARS = 1_000_000;
+const RAW_LOG_INITIAL_VISIBLE_COUNT = 30;
+const RAW_LOG_VISIBLE_INCREMENT = 30;
+const RAW_LOG_DETAIL_CHAR_LIMIT = 120_000;
+const RAW_LOG_PREVIEW_CHAR_LIMIT = 180;
+const SAFE_JSON_MAX_DEPTH = 6;
+const SAFE_JSON_MAX_STRING_LENGTH = 6000;
+const SAFE_JSON_MAX_ARRAY_ITEMS = 50;
+const SAFE_JSON_MAX_OBJECT_KEYS = 80;
+const SAFE_JSON_NUMERIC_ARRAY_PREVIEW_ITEMS = 16;
 const DOCUMENT_RESULT_PAGE_SIZE = 10;
 const LEFT_RAIL_MIN_WIDTH = 224;
 const LEFT_RAIL_MAX_WIDTH = 420;
@@ -648,7 +660,11 @@ function AppShell() {
         }
         const freshResponse = await api.listModelCallLogs(0);
         if (freshResponse.logs.length > 0) {
-          setModelLogs(freshResponse.logs.slice(-MAX_BROWSER_MODEL_LOGS));
+          setModelLogs(
+            freshResponse.logs
+              .slice(-MAX_BROWSER_MODEL_LOGS)
+              .map(sanitizeBrowserModelLog),
+          );
         }
         modelLogCursorRef.current = freshResponse.latestSequence;
         setModelLogCursor(freshResponse.latestSequence);
@@ -2795,12 +2811,14 @@ function ConversationWelcome(props: {
   onSelectPrompt: (value: string) => void;
 }) {
   const { t } = useI18n();
+  const promptSeedRef = useRef(Math.floor(Math.random() * 1_000_000_000));
   const prompts = useMemo(
     () =>
       buildWelcomePrompts({
         projectName: props.projectName,
         graph: props.graph,
         promptTemplates: props.promptTemplates,
+        randomSeed: promptSeedRef.current,
         t,
       }),
     [props.graph, props.projectName, props.promptTemplates, t],
@@ -2854,45 +2872,31 @@ function buildWelcomePrompts(input: {
   projectName: string;
   graph: ProjectGraphRecord | null;
   promptTemplates?: string[];
+  randomSeed?: number;
   t: (zh: string, en: string) => string;
 }) {
-  const topEntities = [...(input.graph?.entities ?? [])]
-    .sort(
-      (left, right) =>
-        (right.eventCount ?? 0) - (left.eventCount ?? 0) ||
-        left.name.localeCompare(right.name),
-    )
-    .slice(0, 6);
-  const productLike =
-    topEntities.find((entity) =>
-      /product|产品|化学品|品类/i.test(entity.type),
-    ) ?? topEntities[0];
-  const secondEntity =
-    topEntities.find((entity) => entity.id !== productLike?.id) ??
-    topEntities[1] ??
-    productLike;
-  const focus =
-    productLike?.name ||
-    input.projectName ||
-    input.t("当前数据库", "the current database");
-  const secondary =
-    secondEntity?.name || input.t("相关实体", "related entities");
+  const { focus, secondary } = pickWelcomePromptPlaceholderEntities({
+    graph: input.graph,
+    projectName: input.projectName,
+    randomSeed: input.randomSeed,
+    t: input.t,
+  });
   const defaultPrompts = [
     input.t(
-      `请用表格整理「${focus}」相关的产业链关系：上游原料、工艺/事件、相关企业、下游应用和证据来源。`,
-      `Build a table for "${focus}" covering upstream feedstocks, processes/events, related companies, downstream applications, and evidence.`,
+      `基于「${input.projectName}」项目资料，围绕「${focus}」整理产业链表格：上游原料、关键工艺/事件、相关企业、下游产品/应用和证据来源。`,
+      `Based on "${input.projectName}", build a value-chain table for "${focus}": upstream feedstocks, key processes/events, related companies, downstream products/applications, and evidence.`,
     ),
     input.t(
-      `基于当前项目内容，为「${focus}」生成一份 Markdown 大纲式思维导图，按原料、工艺、中间体、产品、下游应用、终端行业分层展开。`,
-      `Generate a Markdown outline mind map for "${focus}", organized by feedstocks, processes, intermediates, products, downstream applications, and end-use industries.`,
+      `把「${focus}」做成 Markdown 大纲式知识图谱：原料 → 工艺/中间体 → 产品 → 下游应用 → 终端行业，并标注关键事件。`,
+      `Create a Markdown outline knowledge map for "${focus}": feedstocks → processes/intermediates → products → downstream applications → end-use industries, with key events noted.`,
     ),
     input.t(
-      `写一份研究报告风格的「${input.projectName}」产业链分析，包含核心关系、关键企业、机会、风险和证据缺口。`,
-      `Write a research-report style industry-chain analysis for "${input.projectName}", covering key relationships, companies, opportunities, risks, and evidence gaps.`,
+      `比较「${focus}」和「${secondary}」在产业链中的位置、上下游关系、共同企业和证据缺口。`,
+      `Compare "${focus}" and "${secondary}" by chain position, upstream/downstream links, shared companies, and evidence gaps.`,
     ),
     input.t(
-      `用通俗易懂的方式解释「${focus}」和「${secondary}」的关系。多用短句，少用长句，语气轻松一点，可以适当吐槽，不要说无关话。`,
-      `Explain the relationship between "${focus}" and "${secondary}" in plain language. Use short sentences, keep it relaxed, add mild critique when useful, and answer directly.`,
+      `以「${focus}」为核心写一份研究报告提纲，包含供需、企业/装置、价格/库存线索、机会与风险。`,
+      `Write a research-report outline centered on "${focus}", covering supply/demand, companies/assets, price/inventory signals, opportunities, and risks.`,
     ),
   ];
   return (
@@ -2908,6 +2912,402 @@ function buildWelcomePrompts(input: {
       }),
     )
     .slice(0, 8);
+}
+
+type WelcomePromptEntityCandidate = Pick<
+  ProjectGraphEntityRecord,
+  "id" | "type" | "name" | "normalizedName" | "eventCount"
+> & {
+  entityIds: string[];
+};
+
+type WelcomePromptCoEventPairCandidate = {
+  focus: WelcomePromptEntityCandidate;
+  secondary: WelcomePromptEntityCandidate;
+  commonEventCount: number;
+  score: number;
+  key: string;
+};
+
+const WELCOME_PROMPT_TOP_CHEMICAL_ENTITY_POOL_SIZE = 16;
+const WELCOME_PROMPT_RELATION_ENTITY_POOL_SIZE = 32;
+const WELCOME_PROMPT_CO_EVENT_PAIR_POOL_SIZE = 12;
+const WELCOME_PROMPT_EXCLUDED_TYPE_KEYWORDS = [
+  "企业",
+  "公司",
+  "采购商",
+  "供应商",
+  "生产商",
+  "生产企业",
+  "机构",
+  "组织",
+  "协会",
+  "监管",
+  "政策",
+  "法规",
+  "标准",
+  "来源",
+  "日期",
+  "时间",
+  "数值",
+  "价格",
+  "库存",
+  "开工",
+  "产能",
+  "产量",
+  "消费量",
+  "进口",
+  "出口",
+  "区域",
+  "地区",
+  "港口",
+  "项目",
+  "装置",
+  "产线",
+  "工厂",
+  "园区",
+  "基地",
+  "交易所",
+  "交易中心",
+  "company",
+  "enterprise",
+  "corporation",
+  "supplier",
+  "buyer",
+  "producer",
+  "organization",
+  "institution",
+  "exchange",
+  "policy",
+  "regulation",
+  "standard",
+  "source",
+  "date",
+  "price",
+  "inventory",
+  "capacity",
+  "production",
+  "import",
+  "export",
+  "region",
+  "project",
+  "plant",
+  "facility",
+  "asset",
+];
+const WELCOME_PROMPT_EXCLUDED_NAME_KEYWORDS = [
+  "有限公司",
+  "股份有限公司",
+  "集团",
+  "公司",
+  "交易中心",
+  "交易所",
+  "期货",
+  "协会",
+  "委员会",
+  "研究院",
+  "研究所",
+  "大学",
+  "学院",
+  "政府",
+  "海关",
+  "官网",
+  "报告",
+  "手册",
+  "公告",
+  "新闻",
+  "数据库",
+  "company",
+  "corporation",
+  "group",
+  "exchange",
+  "association",
+  "committee",
+  "institute",
+  "university",
+  "government",
+  "report",
+  "manual",
+];
+
+function pickWelcomePromptPlaceholderEntities(input: {
+  graph: ProjectGraphRecord | null;
+  projectName: string;
+  randomSeed?: number;
+  t: (zh: string, en: string) => string;
+}) {
+  const chemicalCandidates = buildWelcomePromptChemicalCandidates(
+    input.graph?.entities ?? [],
+    input.projectName,
+  );
+  const fallbackCandidates =
+    chemicalCandidates.length > 0
+      ? chemicalCandidates
+      : buildWelcomePromptFallbackCandidates(
+          input.graph?.entities ?? [],
+          input.projectName,
+        );
+  const topCandidates = fallbackCandidates.slice(
+    0,
+    WELCOME_PROMPT_TOP_CHEMICAL_ENTITY_POOL_SIZE,
+  );
+  const relationCandidates = fallbackCandidates.slice(
+    0,
+    WELCOME_PROMPT_RELATION_ENTITY_POOL_SIZE,
+  );
+  const seed = Math.abs(input.randomSeed ?? 0);
+  const coEventPair = pickWelcomePromptCoEventPair({
+    graph: input.graph,
+    candidates: relationCandidates,
+    randomSeed: seed,
+  });
+  const focusEntity = coEventPair?.focus ?? (topCandidates.length
+    ? topCandidates[seed % topCandidates.length]
+    : null);
+  const focusKey = focusEntity ? welcomePromptEntityNameKey(focusEntity) : "";
+  const secondaryPool = topCandidates.filter(
+    (entity) => welcomePromptEntityNameKey(entity) !== focusKey,
+  );
+  const secondaryEntity = coEventPair?.secondary ?? (secondaryPool.length
+    ? secondaryPool[
+        welcomePromptHash(`${seed}:${focusKey}:secondary`) %
+          secondaryPool.length
+      ]
+    : null);
+
+  return {
+    focus:
+      focusEntity?.name ||
+      input.t("高频化工品类实体", "frequent chemical product entities"),
+    secondary:
+      secondaryEntity?.name ||
+      input.t("另一个高频化工品类实体", "another frequent chemical entity"),
+  };
+}
+
+function pickWelcomePromptCoEventPair(input: {
+  graph: ProjectGraphRecord | null;
+  candidates: WelcomePromptEntityCandidate[];
+  randomSeed: number;
+}): Pick<WelcomePromptCoEventPairCandidate, "focus" | "secondary"> | null {
+  if (!input.graph || input.candidates.length < 2) return null;
+
+  const candidateByKey = new Map<string, WelcomePromptEntityCandidate>();
+  const candidateKeyByEntityId = new Map<string, string>();
+  for (const candidate of input.candidates) {
+    const key = welcomePromptEntityNameKey(candidate);
+    if (!key) continue;
+    candidateByKey.set(key, candidate);
+    for (const entityId of new Set([candidate.id, ...candidate.entityIds])) {
+      candidateKeyByEntityId.set(entityId, key);
+    }
+  }
+  if (candidateByKey.size < 2) return null;
+
+  const pairStats = new Map<
+    string,
+    { leftKey: string; rightKey: string; commonEventCount: number }
+  >();
+  const eventEntitySets = buildWelcomePromptEventEntitySets(input.graph);
+  for (const entityIds of eventEntitySets) {
+    const candidateKeys = [...entityIds]
+      .map((entityId) => candidateKeyByEntityId.get(entityId))
+      .filter((key): key is string => Boolean(key));
+    const uniqueCandidateKeys = [...new Set(candidateKeys)].sort();
+    if (uniqueCandidateKeys.length < 2) continue;
+
+    for (let leftIndex = 0; leftIndex < uniqueCandidateKeys.length; leftIndex += 1) {
+      for (
+        let rightIndex = leftIndex + 1;
+        rightIndex < uniqueCandidateKeys.length;
+        rightIndex += 1
+      ) {
+        const leftKey = uniqueCandidateKeys[leftIndex];
+        const rightKey = uniqueCandidateKeys[rightIndex];
+        const pairKey = `${leftKey}::${rightKey}`;
+        const current = pairStats.get(pairKey);
+        if (current) {
+          current.commonEventCount += 1;
+        } else {
+          pairStats.set(pairKey, {
+            leftKey,
+            rightKey,
+            commonEventCount: 1,
+          });
+        }
+      }
+    }
+  }
+
+  const pairs: WelcomePromptCoEventPairCandidate[] = [...pairStats.values()]
+    .map((pair) => {
+      const left = candidateByKey.get(pair.leftKey);
+      const right = candidateByKey.get(pair.rightKey);
+      if (!left || !right) return null;
+      const frequencyScore = (left.eventCount ?? 0) + (right.eventCount ?? 0);
+      return {
+        focus: left,
+        secondary: right,
+        commonEventCount: pair.commonEventCount,
+        score: pair.commonEventCount * 100_000 + frequencyScore,
+        key: `${pair.leftKey}::${pair.rightKey}`,
+      };
+    })
+    .filter((pair): pair is WelcomePromptCoEventPairCandidate => Boolean(pair))
+    .sort(
+      (left, right) =>
+        right.commonEventCount - left.commonEventCount ||
+        right.score - left.score ||
+        left.focus.name.localeCompare(right.focus.name) ||
+        left.secondary.name.localeCompare(right.secondary.name),
+    );
+  if (pairs.length === 0) return null;
+
+  const maxCommonEventCount = pairs[0].commonEventCount;
+  const minCommonEventCount = Math.max(
+    1,
+    maxCommonEventCount <= 2
+      ? 1
+      : Math.ceil(maxCommonEventCount * 0.45),
+  );
+  const highConfidencePairs = pairs
+    .filter((pair) => pair.commonEventCount >= minCommonEventCount)
+    .slice(0, WELCOME_PROMPT_CO_EVENT_PAIR_POOL_SIZE);
+  const pairPool = highConfidencePairs.length
+    ? highConfidencePairs
+    : pairs.slice(0, WELCOME_PROMPT_CO_EVENT_PAIR_POOL_SIZE);
+  const selectedPair =
+    pairPool[
+      welcomePromptHash(`${input.randomSeed}:co-event-pair:${pairPool.length}`) %
+        pairPool.length
+    ];
+  const shouldSwapOrder =
+    welcomePromptHash(`${input.randomSeed}:co-event-pair-order:${selectedPair.key}`) %
+      2 ===
+    1;
+
+  return shouldSwapOrder
+    ? { focus: selectedPair.secondary, secondary: selectedPair.focus }
+    : { focus: selectedPair.focus, secondary: selectedPair.secondary };
+}
+
+function buildWelcomePromptEventEntitySets(graph: ProjectGraphRecord) {
+  const eventEntitySets = new Map<string, Set<string>>();
+  for (const event of graph.events) {
+    const entityIds = eventEntitySets.get(event.id) ?? new Set<string>();
+    for (const entityId of event.entityIds ?? []) {
+      entityIds.add(entityId);
+    }
+    eventEntitySets.set(event.id, entityIds);
+  }
+  for (const edge of graph.edges ?? []) {
+    const entityIds = eventEntitySets.get(edge.eventId) ?? new Set<string>();
+    entityIds.add(edge.entityId);
+    eventEntitySets.set(edge.eventId, entityIds);
+  }
+  return [...eventEntitySets.values()].filter((entityIds) => entityIds.size > 0);
+}
+
+function buildWelcomePromptChemicalCandidates(
+  entities: ProjectGraphEntityRecord[],
+  projectName: string,
+): WelcomePromptEntityCandidate[] {
+  return aggregateWelcomePromptEntities(
+    entities.filter(
+      (entity) =>
+        isChemicalKnowledgeAssetEntityType(entity.type) &&
+        isWelcomePromptUsableEntity(entity, projectName),
+    ),
+  );
+}
+
+function buildWelcomePromptFallbackCandidates(
+  entities: ProjectGraphEntityRecord[],
+  projectName: string,
+): WelcomePromptEntityCandidate[] {
+  return aggregateWelcomePromptEntities(
+    entities.filter((entity) => isWelcomePromptUsableEntity(entity, projectName)),
+  );
+}
+
+function aggregateWelcomePromptEntities(
+  entities: ProjectGraphEntityRecord[],
+): WelcomePromptEntityCandidate[] {
+  const groups = new Map<string, WelcomePromptEntityCandidate>();
+  for (const entity of entities) {
+    const key = welcomePromptEntityNameKey(entity);
+    if (!key) continue;
+    const current = groups.get(key);
+    if (!current) {
+      groups.set(key, { ...entity, entityIds: [entity.id] });
+      continue;
+    }
+    const nextCount = (current.eventCount ?? 0) + (entity.eventCount ?? 0);
+    groups.set(key, {
+      ...current,
+      eventCount: nextCount,
+      entityIds: [...new Set([...current.entityIds, entity.id])],
+      type:
+        isChemicalKnowledgeAssetEntityType(current.type) ||
+        !isChemicalKnowledgeAssetEntityType(entity.type)
+          ? current.type
+          : entity.type,
+    });
+  }
+  return [...groups.values()].sort(
+    (left, right) =>
+      (right.eventCount ?? 0) - (left.eventCount ?? 0) ||
+      left.name.localeCompare(right.name),
+  );
+}
+
+function isWelcomePromptUsableEntity(
+  entity: ProjectGraphEntityRecord,
+  projectName: string,
+) {
+  const name = entity.name.trim();
+  if (!name) return false;
+  const nameKey = normalizeKnowledgeAssetSearchText(name);
+  if (!nameKey) return false;
+  if (nameKey === normalizeKnowledgeAssetSearchText(projectName)) return false;
+  if (name.length > 80) return false;
+  if (/^https?:\/\//i.test(name)) return false;
+  if (/^\d{4}[-/.年]\d{1,2}/.test(name)) return false;
+  if (/^[\d\s.,%+\-~～]+$/.test(name)) return false;
+  if (/^(原料|工艺|产品|下游|终端|企业|实体)[A-ZＡ-Ｚ\d]*$/iu.test(name)) {
+    return false;
+  }
+  const normalizedType = normalizeKnowledgeAssetSearchText(entity.type);
+  const normalizedName = normalizeKnowledgeAssetSearchText(name);
+  if (
+    WELCOME_PROMPT_EXCLUDED_TYPE_KEYWORDS.some((keyword) =>
+      normalizedType.includes(normalizeKnowledgeAssetSearchText(keyword)),
+    )
+  ) {
+    return false;
+  }
+  if (
+    WELCOME_PROMPT_EXCLUDED_NAME_KEYWORDS.some((keyword) =>
+      normalizedName.includes(normalizeKnowledgeAssetSearchText(keyword)),
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function welcomePromptEntityNameKey(
+  entity: Pick<ProjectGraphEntityRecord, "name" | "normalizedName">,
+) {
+  return normalizeKnowledgeAssetSearchText(entity.normalizedName || entity.name);
+}
+
+function welcomePromptHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
 }
 
 function applyPromptTemplate(
@@ -4013,7 +4413,7 @@ function ProjectDocumentsWorkspace(props: {
                       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1">
                         <span className="block break-words font-medium leading-snug">
-                          {document.title}
+                          <RichTextFragment text={document.title} />
                         </span>
                         <span className="block text-xs text-muted-foreground">
                           {document.archivedAt
@@ -5670,7 +6070,7 @@ function ProjectGraphWorkspace(props: {
           </p>
         </div>
         <Badge className="border-primary/20 bg-primary/[0.07] text-primary">
-          {props.project.name}
+          <RichTextFragment text={props.project.name} />
         </Badge>
       </div>
       <div className="min-h-0 flex-1 rounded-2xl border border-border bg-background/90 p-1 shadow-sm">
@@ -5933,7 +6333,7 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
               >
                 <div className="mb-1 flex items-start justify-between gap-2">
                   <div className="min-w-0 truncate text-sm font-semibold">
-                    {citation.heading || t("未命名切片", "Untitled chunk")}
+                    <RichTextFragment text={citation.heading || t("未命名切片", "Untitled chunk")} />
                   </div>
                   <Badge className="shrink-0 border-border bg-muted text-muted-foreground">
                     [{citation.index}]
@@ -5949,7 +6349,7 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
                 </div>
                 <DocumentSourceSummary document={citation.document} compact />
                 <p className="mt-2 line-clamp-4 text-xs leading-5 text-muted-foreground">
-                  {citation.content}
+                  <RichTextFragment text={citation.content} />
                 </p>
               </div>
             ))}
@@ -5973,11 +6373,11 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
                 className="rounded-lg border border-border bg-background/75 p-3"
               >
                 <div className="text-sm font-semibold leading-5">
-                  {event.title}
+                  <RichTextFragment text={event.title} />
                 </div>
                 {event.summary ? (
                   <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">
-                    {event.summary}
+                    <RichTextFragment text={event.summary} />
                   </p>
                 ) : null}
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -6015,7 +6415,7 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
               >
                 <div className="flex items-center gap-1.5">
                   <span className="max-w-[180px] truncate text-xs font-semibold">
-                    {entity.name}
+                    <RichTextFragment text={entity.name} />
                   </span>
                   {entity.type ? (
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -6072,12 +6472,12 @@ function ProcessPanel({ steps }: { steps: ProcessStep[] }) {
                     {index + 1}
                   </span>
                   <div className="truncate text-sm font-semibold">
-                    {step.title}
+                    <RichTextFragment text={step.title} />
                   </div>
                 </div>
                 {step.detail ? (
                   <div className="mt-1 pl-7 text-xs leading-5 text-muted-foreground">
-                    {step.detail}
+                    <RichTextFragment text={step.detail} />
                   </div>
                 ) : null}
               </div>
@@ -6118,11 +6518,46 @@ function RawLogsPanel(props: {
   onClear: () => void;
 }) {
   const { t } = useI18n();
-  const latestLogs = [...props.logs].sort((a, b) => b.sequence - a.sequence);
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [visibleCount, setVisibleCount] = useState(
+    RAW_LOG_INITIAL_VISIBLE_COUNT,
+  );
+  const latestLogs = useMemo(
+    () => [...props.logs].sort((a, b) => b.sequence - a.sequence),
+    [props.logs],
+  );
+  const visibleLogs = latestLogs.slice(0, visibleCount);
   const llmLogCount = props.logs.filter((log) => log.kind === "llm").length;
   const embeddingLogCount = props.logs.filter(
     (log) => log.kind === "embedding",
   ).length;
+
+  useEffect(() => {
+    setVisibleCount(RAW_LOG_INITIAL_VISIBLE_COUNT);
+    setExpandedLogIds((current) => {
+      if (current.size === 0) return current;
+      const availableIds = new Set(props.logs.map((log) => log.id));
+      const next = new Set(
+        [...current].filter((logId) => availableIds.has(logId)),
+      );
+      return next.size === current.size ? current : next;
+    });
+  }, [props.logs]);
+
+  function toggleLog(logId: string) {
+    setExpandedLogIds((current) => {
+      const next = new Set(current);
+      if (next.has(logId)) {
+        next.delete(logId);
+      } else {
+        next.add(logId);
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -6157,6 +6592,14 @@ function RawLogsPanel(props: {
           </Button>
         </div>
       </div>
+      {latestLogs.length > 0 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+          {t(
+            "为避免大模型返回和 embedding 向量过大导致浏览器卡死，日志默认只显示摘要；点击单条日志后再按需展开请求/返回详情。过长内容和大数组会自动折叠为预览。",
+            "To avoid freezing the browser with large model responses or embedding vectors, logs show summaries by default. Expand one item to inspect request/response details; very long content and large arrays are collapsed into previews.",
+          )}
+        </div>
+      ) : null}
       {latestLogs.length === 0 ? (
         <EmptyState
           title={t("暂无原始日志", "No raw logs yet")}
@@ -6166,63 +6609,138 @@ function RawLogsPanel(props: {
           )}
         />
       ) : (
-        latestLogs.map((log) => (
-          <Card
-            key={log.id}
-            className={cn(
-              log.status === "FAILED" && "border-red-200 bg-red-50/60",
-            )}
-          >
-            <CardContent className="space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Badge>{log.kind === "llm" ? "LLM" : "Embedding"}</Badge>
-                    <div className="truncate text-sm font-semibold">
-                      {log.operation}
-                    </div>
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    #{log.sequence} · {formatDate(log.createdAt)} ·{" "}
-                    {log.durationMs} {t("毫秒", "ms")}
-                  </div>
-                </div>
-                <Badge
-                  className={
-                    log.status === "FAILED"
-                      ? "border-red-200 bg-red-50 text-red-700"
-                      : ""
-                  }
-                >
-                  {log.status === "FAILED"
-                    ? t("失败", "Failed")
-                    : t("成功", "Succeeded")}
-                </Badge>
-              </div>
-              <JsonBlock
-                title={t("请求", "Request")}
-                value={log.request}
-                compact
-                preserveRaw
-              />
-              {log.response !== undefined ? (
-                <JsonBlock
-                  title={t("返回", "Response")}
-                  value={log.response}
-                  compact
-                  preserveRaw
-                />
-              ) : null}
-              {log.error ? (
-                <div className="rounded-md bg-red-50 p-2 text-xs leading-5 text-red-700">
-                  {log.error}
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        ))
+        <>
+          {visibleLogs.map((log) => (
+            <RawLogCard
+              key={log.id}
+              log={log}
+              expanded={expandedLogIds.has(log.id)}
+              onToggle={() => toggleLog(log.id)}
+            />
+          ))}
+          {latestLogs.length > visibleCount ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() =>
+                setVisibleCount((count) => count + RAW_LOG_VISIBLE_INCREMENT)
+              }
+            >
+              {t(
+                `再显示 ${Math.min(
+                  RAW_LOG_VISIBLE_INCREMENT,
+                  latestLogs.length - visibleCount,
+                )} 条日志`,
+                `Show ${Math.min(
+                  RAW_LOG_VISIBLE_INCREMENT,
+                  latestLogs.length - visibleCount,
+                )} more log(s)`,
+              )}
+            </Button>
+          ) : null}
+        </>
       )}
     </div>
+  );
+}
+
+function RawLogCard({
+  log,
+  expanded,
+  onToggle,
+}: {
+  log: ModelCallLogRecord;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useI18n();
+  const requestPreview = useMemo(
+    () => formatLogPayloadPreview(log.request),
+    [log.request],
+  );
+  const responsePreview = useMemo(
+    () =>
+      log.response === undefined
+        ? t("无返回体", "No response body")
+        : formatLogPayloadPreview(log.response),
+    [log.response, t],
+  );
+  return (
+    <Card
+      className={cn(log.status === "FAILED" && "border-red-200 bg-red-50/60")}
+    >
+      <CardContent className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Badge>{log.kind === "llm" ? "LLM" : "Embedding"}</Badge>
+              <div className="truncate text-sm font-semibold">
+                {log.operation}
+              </div>
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              #{log.sequence} · {formatDate(log.createdAt)} · {log.durationMs}{" "}
+              {t("毫秒", "ms")}
+            </div>
+          </div>
+          <Badge
+            className={
+              log.status === "FAILED"
+                ? "border-red-200 bg-red-50 text-red-700"
+                : ""
+            }
+          >
+            {log.status === "FAILED" ? t("失败", "Failed") : t("成功", "Succeeded")}
+          </Badge>
+        </div>
+        <button
+          type="button"
+          className="block w-full rounded-md border border-border bg-muted/40 p-2 text-left text-xs leading-5 hover:bg-muted"
+          onClick={onToggle}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-foreground">
+              {expanded ? t("收起详情", "Collapse details") : t("查看详情", "View details")}
+            </span>
+            <span className="text-muted-foreground">{expanded ? "−" : "+"}</span>
+          </div>
+          <div className="mt-1 line-clamp-2 text-muted-foreground">
+            {t("请求：", "Request: ")}
+            {requestPreview}
+          </div>
+          <div className="line-clamp-2 text-muted-foreground">
+            {t("返回：", "Response: ")}
+            {responsePreview}
+          </div>
+        </button>
+        {expanded ? (
+          <div className="space-y-3">
+            <JsonBlock
+              title={t("请求", "Request")}
+              value={log.request}
+              compact
+              preserveRaw
+              maxChars={RAW_LOG_DETAIL_CHAR_LIMIT}
+            />
+            {log.response !== undefined ? (
+              <JsonBlock
+                title={t("返回", "Response")}
+                value={log.response}
+                compact
+                preserveRaw
+                maxChars={RAW_LOG_DETAIL_CHAR_LIMIT}
+              />
+            ) : null}
+            {log.error ? (
+              <div className="rounded-md bg-red-50 p-2 text-xs leading-5 text-red-700">
+                {log.error}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -6378,7 +6896,7 @@ function OverviewPanel(props: {
     <div className="space-y-3">
       <Card>
         <CardContent className="space-y-2">
-          <div className="text-sm font-semibold">{props.document.title}</div>
+          <div className="text-sm font-semibold"><RichTextFragment text={props.document.title} /></div>
           <div className="text-xs text-muted-foreground">
             {t("处理状态", "Processing status")}：{props.document.parseStatus}
           </div>
@@ -6996,12 +7514,12 @@ function ChunkCard(props: {
           <>
             <div className="flex items-center justify-between gap-2">
               <div className="truncate text-sm font-medium">
-                {chunk.heading || t("未命名切片", "Untitled chunk")}
+                <RichTextFragment text={chunk.heading || t("未命名切片", "Untitled chunk")} />
               </div>
               <Badge>{t(`排序 ${chunk.rank}`, `Rank ${chunk.rank}`)}</Badge>
             </div>
             <p className="line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-              {chunk.content}
+              <RichTextFragment text={chunk.content} />
             </p>
             <EmbeddingPreviewBlock
               title={t("切片 Embedding", "Chunk Embedding")}
@@ -7099,10 +7617,10 @@ function EventCard(props: {
               className="w-full text-left text-sm font-semibold hover:underline"
               onClick={() => props.onOpenEvent(event.id)}
             >
-              {event.title}
+              <RichTextFragment text={event.title} />
             </button>
             <p className="line-clamp-3 text-sm text-muted-foreground">
-              {event.summary || event.content}
+              <RichTextFragment text={event.summary || event.content} />
             </p>
             <div className="flex flex-wrap gap-1">
               {(event.entities ?? []).length === 0 ? (
@@ -7118,7 +7636,7 @@ function EventCard(props: {
                     key={entity.id}
                     onClick={() => props.onOpenEntity(entity.id)}
                   >
-                    <Badge>{entity.name}</Badge>
+                    <Badge><RichTextFragment text={entity.name} /></Badge>
                   </button>
                 ))
               )}
@@ -7229,10 +7747,10 @@ function EntityCard(props: {
                 onClick={() => props.onOpenEntity(entity.id)}
                 title={t("查看实体详情", "View entity details")}
               >
-                {entity.name}
+                <RichTextFragment text={entity.name} />
               </button>
               <div className="text-xs text-muted-foreground">
-                {sameNameTypeLabel}
+                <RichTextFragment text={sameNameTypeLabel} />
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap justify-end gap-1">
@@ -7253,7 +7771,7 @@ function EntityCard(props: {
             </div>
           </div>
           <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-            {descriptionPreview}
+            <RichTextFragment text={descriptionPreview} />
           </p>
           {entity.hasSameNameEntities ? (
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -7367,12 +7885,12 @@ function SearchPanel(props: {
               <CardContent className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="truncate text-sm font-medium">
-                    {section.heading || t("结果切片", "Result chunk")}
+                    <RichTextFragment text={section.heading || t("结果切片", "Result chunk")} />
                   </div>
                   <Badge>{section.score.toFixed(3)}</Badge>
                 </div>
                 <p className="line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                  {section.content}
+                  <RichTextFragment text={section.content} />
                 </p>
               </CardContent>
             </Card>
@@ -7687,8 +8205,8 @@ function SettingsPanel(props: {
           />
           <div className="text-xs leading-5 text-muted-foreground">
             {t(
-              "支持占位符：{projectName}、{focus}、{secondary}。留空保存时会恢复默认问题。",
-              "Supported placeholders: {projectName}, {focus}, {secondary}. Saving an empty value restores the defaults.",
+              "支持占位符：{projectName}、{focus}、{secondary}。当模板同时包含 {focus} 和 {secondary} 时，会优先选择在同一事件超边中共同出现、共同事件数较多的一对化工品类实体，并在高相关实体对里轮换；留空保存时会恢复默认问题。",
+              "Supported placeholders: {projectName}, {focus}, {secondary}. When a template contains both {focus} and {secondary}, the app prefers a high-confidence pair of chemical product/category entities that co-occur in the same event hyperedges and rotates among related pairs. Saving an empty value restores the defaults.",
             )}
           </div>
         </div>
@@ -8368,14 +8886,18 @@ function DetailDrawer(props: {
         <div className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
             <h2 className="whitespace-normal break-words text-sm font-semibold leading-5">
-              {drawer.type === "event"
-                ? drawer.detail.event.title
-                : drawer.type === "entity"
-                  ? drawer.detail.entity.name
-                  : t(
-                      `引用 ${drawer.citation.index}`,
-                      `Citation ${drawer.citation.index}`,
-                    )}
+              <RichTextFragment
+                text={
+                  drawer.type === "event"
+                    ? drawer.detail.event.title
+                    : drawer.type === "entity"
+                      ? drawer.detail.entity.name
+                      : t(
+                          `引用 ${drawer.citation.index}`,
+                          `Citation ${drawer.citation.index}`,
+                        )
+                }
+              />
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
               {drawer.type === "event"
@@ -8444,7 +8966,7 @@ function EventDetailPanel({
           ) : (
             detail.entities.map((entity) => (
               <button key={entity.id} onClick={() => onOpenEntity(entity.id)}>
-                <Badge>{entity.name}</Badge>
+                <Badge><RichTextFragment text={entity.name} /></Badge>
               </button>
             ))
           )}
@@ -8455,14 +8977,18 @@ function EventDetailPanel({
           <Card>
             <CardContent>
               <div className="mb-2 text-xs text-muted-foreground">
-                {detail.chunk.heading ||
-                  t(
-                    `排序 ${detail.chunk.rank ?? 0}`,
-                    `Rank ${detail.chunk.rank ?? 0}`,
-                  )}
+                <RichTextFragment
+                  text={
+                    detail.chunk.heading ||
+                    t(
+                      `排序 ${detail.chunk.rank ?? 0}`,
+                      `Rank ${detail.chunk.rank ?? 0}`,
+                    )
+                  }
+                />
               </div>
               <p className="whitespace-pre-wrap text-sm leading-6">
-                {detail.chunk.content}
+                <RichTextFragment text={detail.chunk.content} />
               </p>
             </CardContent>
           </Card>
@@ -8534,10 +9060,10 @@ function EntityDetailPanel({
                 className="w-full rounded-md border border-border p-3 text-left hover:bg-accent"
                 onClick={() => onOpenEvent(event.id)}
               >
-                <div className="text-sm font-medium">{event.title}</div>
+                <div className="text-sm font-medium"><RichTextFragment text={event.title} /></div>
                 <DocumentSourceSummary document={event.document} compact />
                 <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                  {event.summary || event.content}
+                  <RichTextFragment text={event.summary || event.content} />
                 </p>
               </button>
             ))
@@ -8568,9 +9094,9 @@ function SameNameEntityDetailCard({
       <CardContent className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-sm font-medium">{detail.entity.type}</div>
+            <div className="text-sm font-medium"><RichTextFragment text={detail.entity.type} /></div>
             <div className="mt-0.5 break-words text-xs text-muted-foreground">
-              {detail.entity.description || detail.entity.normalizedName}
+              <RichTextFragment text={detail.entity.description || detail.entity.normalizedName} />
             </div>
           </div>
           {isCurrent ? <Badge>{t("当前", "Current")}</Badge> : null}
@@ -8592,7 +9118,7 @@ function SameNameEntityDetailCard({
                 className="w-full rounded border border-border bg-background px-2 py-1.5 text-left text-xs hover:bg-accent"
                 onClick={() => onOpenEvent(event.id)}
               >
-                <span className="line-clamp-2">{event.title}</span>
+                <span className="line-clamp-2"><RichTextFragment text={event.title} /></span>
               </button>
             ))
           )}
@@ -8650,7 +9176,7 @@ function CitationDetailPanel({ citation }: { citation: AnswerCitation }) {
         <Card>
           <CardContent>
             <p className="whitespace-pre-wrap break-words text-sm leading-6">
-              {citation.content}
+              <RichTextFragment text={citation.content} />
             </p>
           </CardContent>
         </Card>
@@ -8721,7 +9247,7 @@ function PanelInfo({
           multiline && "whitespace-pre-wrap leading-6",
         )}
       >
-        {value}
+        <RichTextFragment text={value} />
       </div>
     </div>
   );
@@ -8759,7 +9285,7 @@ function DocumentSourceSummary({
       <span className="font-medium text-foreground/80">
         {t("来源", "Source")}：
       </span>
-      {parts.join(" · ")}
+      <RichTextFragment text={parts.join(" · ")} />
       {document?.sourceUrl ? (
         <>
           {parts.length > 0 ? " · " : ""}
@@ -8823,7 +9349,7 @@ function DocumentSourceDetails({
               </a>
             ) : (
               <span className="break-words text-foreground">
-                {String(value)}
+                <RichTextFragment text={String(value)} />
               </span>
             )}
           </div>
@@ -9172,15 +9698,16 @@ function JsonBlock({
   value,
   compact,
   preserveRaw,
+  maxChars,
 }: {
   title: string;
   value: unknown;
   compact?: boolean;
   preserveRaw?: boolean;
+  maxChars?: number;
 }) {
   const { t } = useI18n();
-  const content =
-    typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  const content = safeStringifyJson(value, { maxChars });
   const renderedValue = preserveRaw ? content : formatDataContent(content, t);
   return (
     <div className="min-w-0">
@@ -10024,11 +10551,174 @@ function loadStoredModelLogs(): ModelCallLogRecord[] {
   try {
     const raw = window.localStorage.getItem(MODEL_LOGS_STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as ModelCallLogRecord[];
-    return Array.isArray(parsed) ? parsed.slice(-MAX_BROWSER_MODEL_LOGS) : [];
+    if (raw.length > MODEL_LOG_STORAGE_SOFT_LIMIT_CHARS) {
+      window.localStorage.removeItem(MODEL_LOGS_STORAGE_KEY);
+      return [];
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(isModelCallLogRecord)
+      .slice(-MAX_BROWSER_MODEL_LOGS)
+      .map(sanitizeBrowserModelLog);
   } catch {
+    try {
+      window.localStorage.removeItem(MODEL_LOGS_STORAGE_KEY);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
     return [];
   }
+}
+
+function isModelCallLogRecord(value: unknown): value is ModelCallLogRecord {
+  if (!isPlainRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.operation === "string" &&
+    (value.kind === "llm" || value.kind === "embedding") &&
+    (value.status === "SUCCEEDED" || value.status === "FAILED") &&
+    typeof value.createdAt === "string" &&
+    typeof value.sequence === "number" &&
+    Number.isFinite(value.sequence) &&
+    typeof value.durationMs === "number" &&
+    Number.isFinite(value.durationMs) &&
+    "request" in value
+  );
+}
+
+function sanitizeBrowserModelLog(log: ModelCallLogRecord): ModelCallLogRecord {
+  return {
+    ...log,
+    request: sanitizeJsonValueForDisplay(log.request),
+    response:
+      log.response === undefined
+        ? undefined
+        : sanitizeJsonValueForDisplay(log.response),
+    error:
+      typeof log.error === "string"
+        ? truncateSafeJsonString(log.error)
+        : log.error,
+  };
+}
+
+function formatLogPayloadPreview(value: unknown): string {
+  return safeStringifyJson(value, { maxChars: RAW_LOG_PREVIEW_CHAR_LIMIT })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type SafeStringifyOptions = {
+  maxChars?: number;
+};
+
+function safeStringifyJson(
+  value: unknown,
+  options: SafeStringifyOptions = {},
+): string {
+  const maxChars = options.maxChars ?? RAW_LOG_DETAIL_CHAR_LIMIT;
+  const content =
+    typeof value === "string"
+      ? truncateSafeJsonString(value)
+      : stringifySafeJsonValue(sanitizeJsonValueForDisplay(value));
+  if (content.length <= maxChars) return content;
+  return `${content.slice(0, maxChars)}\n… [truncated ${content.length - maxChars} chars]`;
+}
+
+function stringifySafeJsonValue(value: unknown): string {
+  const json = JSON.stringify(value, null, 2);
+  return typeof json === "string" ? json : String(value);
+}
+
+function sanitizeJsonValueForDisplay(value: unknown): unknown {
+  return sanitizeSafeJsonValue(value, 0, new WeakSet<object>());
+}
+
+function sanitizeSafeJsonValue(
+  value: unknown,
+  depth: number,
+  seen: WeakSet<object>,
+): unknown {
+  if (value == null || typeof value === "boolean" || typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return truncateSafeJsonString(value);
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (typeof value === "symbol" || typeof value === "function") {
+    return String(value);
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (Array.isArray(value)) {
+    return sanitizeSafeJsonArray(value, depth, seen);
+  }
+  if (typeof value === "object") {
+    if (seen.has(value)) return "[Circular]";
+    if (depth >= SAFE_JSON_MAX_DEPTH) {
+      return { __sagTruncated: true, reason: "max depth reached" };
+    }
+    seen.add(value);
+    try {
+      const entries = Object.entries(value as Record<string, unknown>);
+      const output: Record<string, unknown> = {};
+      for (const [key, entryValue] of entries.slice(0, SAFE_JSON_MAX_OBJECT_KEYS)) {
+        output[key] = sanitizeSafeJsonValue(entryValue, depth + 1, seen);
+      }
+      if (entries.length > SAFE_JSON_MAX_OBJECT_KEYS) {
+        output.__sagTruncatedKeys = entries.length - SAFE_JSON_MAX_OBJECT_KEYS;
+      }
+      return output;
+    } finally {
+      seen.delete(value);
+    }
+  }
+  return String(value);
+}
+
+function sanitizeSafeJsonArray(
+  value: unknown[],
+  depth: number,
+  seen: WeakSet<object>,
+): unknown {
+  if (looksLikeSafeJsonNumericVector(value)) {
+    return {
+      __sagPreview: "numeric-array",
+      length: value.length,
+      sample: value.slice(0, SAFE_JSON_NUMERIC_ARRAY_PREVIEW_ITEMS),
+      omitted: Math.max(0, value.length - SAFE_JSON_NUMERIC_ARRAY_PREVIEW_ITEMS),
+    };
+  }
+  if (depth >= SAFE_JSON_MAX_DEPTH) {
+    return { __sagPreview: "array", length: value.length, omitted: value.length };
+  }
+  const items = value
+    .slice(0, SAFE_JSON_MAX_ARRAY_ITEMS)
+    .map((item) => sanitizeSafeJsonValue(item, depth + 1, seen));
+  if (value.length > SAFE_JSON_MAX_ARRAY_ITEMS) {
+    items.push({ __sagTruncatedItems: value.length - SAFE_JSON_MAX_ARRAY_ITEMS });
+  }
+  return items;
+}
+
+function looksLikeSafeJsonNumericVector(value: unknown[]): value is number[] {
+  if (value.length < SAFE_JSON_MAX_ARRAY_ITEMS) return false;
+  const sampleSize = Math.min(value.length, SAFE_JSON_NUMERIC_ARRAY_PREVIEW_ITEMS);
+  for (let index = 0; index < sampleSize; index += 1) {
+    if (typeof value[index] !== "number") return false;
+  }
+  return true;
+}
+
+function truncateSafeJsonString(value: string): string {
+  if (value.length <= SAFE_JSON_MAX_STRING_LENGTH) return value;
+  return `${value.slice(0, SAFE_JSON_MAX_STRING_LENGTH)}… [truncated ${
+    value.length - SAFE_JSON_MAX_STRING_LENGTH
+  } chars]`;
 }
 
 function loadStoredNumber(
@@ -10096,7 +10786,7 @@ function mergeModelLogs(
 ): ModelCallLogRecord[] {
   const byId = new Map<string, ModelCallLogRecord>();
   for (const log of [...current, ...incoming]) {
-    byId.set(log.id, log);
+    byId.set(log.id, sanitizeBrowserModelLog(log));
   }
   return [...byId.values()]
     .sort((a, b) => a.sequence - b.sequence)
@@ -10104,15 +10794,17 @@ function mergeModelLogs(
 }
 
 function persistModelLogs(logs: ModelCallLogRecord[]) {
+  const sanitizedLogs = logs.map(sanitizeBrowserModelLog);
   for (const limit of [MAX_BROWSER_MODEL_LOGS, 100, 50, 20]) {
     try {
-      window.localStorage.setItem(
-        MODEL_LOGS_STORAGE_KEY,
-        JSON.stringify(logs.slice(-limit)),
-      );
+      const content = JSON.stringify(sanitizedLogs.slice(-limit));
+      if (content.length > MODEL_LOG_STORAGE_SOFT_LIMIT_CHARS) {
+        throw new Error("model log cache is too large");
+      }
+      window.localStorage.setItem(MODEL_LOGS_STORAGE_KEY, content);
       return;
     } catch {
-      // localStorage may exceed quota because embedding responses contain full vectors.
+      // localStorage may exceed quota because responses can contain long text.
     }
   }
   try {

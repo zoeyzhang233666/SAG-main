@@ -107,11 +107,17 @@ graph LR
 export const DEFAULT_MERMAID_PENDING_TEXT = "ChemClaw正在绘制产业链关系图";
 export const DEFAULT_GRAPH_LAYOUT_STYLE = "search_layers";
 export const DEFAULT_LONG_TERM_MEMORY_ENABLED = false;
-export const DEFAULT_WELCOME_PROMPT_TEMPLATES = [
+const LEGACY_DEFAULT_WELCOME_PROMPT_TEMPLATES = [
   "请用表格整理「{focus}」相关的产业链关系：上游原料、工艺/事件、相关企业、下游应用和证据来源。",
   "基于当前项目内容，为「{focus}」生成一份 Markdown 大纲式思维导图，按原料、工艺、中间体、产品、下游应用、终端行业分层展开。",
   "写一份研究报告风格的「{projectName}」产业链分析，包含核心关系、关键企业、机会、风险和证据缺口。",
   "用通俗易懂的方式解释「{focus}」和「{secondary}」的关系。多用短句，少用长句，语气轻松一点，可以适当吐槽，不要说无关话。"
+];
+export const DEFAULT_WELCOME_PROMPT_TEMPLATES = [
+  "基于「{projectName}」项目资料，围绕「{focus}」整理产业链表格：上游原料、关键工艺/事件、相关企业、下游产品/应用和证据来源。",
+  "把「{focus}」做成 Markdown 大纲式知识图谱：原料 → 工艺/中间体 → 产品 → 下游应用 → 终端行业，并标注关键事件。",
+  "比较「{focus}」和「{secondary}」在产业链中的位置、上下游关系、共同企业和证据缺口。",
+  "以「{focus}」为核心写一份研究报告提纲，包含供需、企业/装置、价格/库存线索、机会与风险。"
 ];
 
 export interface AiRuntimeSettings {
@@ -198,7 +204,7 @@ export class AiSettingsService {
       mermaidPendingText: readNonEmptyString(settings.metadata.mermaidPendingText, DEFAULT_MERMAID_PENDING_TEXT),
       mcpSearchMode: readSearchMode(settings.metadata.mcpSearchMode, "fast"),
       graphDefaultLayoutStyle: readGraphLayoutStyle(settings.metadata.graphDefaultLayoutStyle),
-      welcomePromptTemplates: readStringArray(settings.metadata.welcomePromptTemplates, DEFAULT_WELCOME_PROMPT_TEMPLATES),
+      welcomePromptTemplates: readWelcomePromptTemplates(settings.metadata.welcomePromptTemplates),
       longTermMemoryEnabled: readBoolean(settings.metadata.longTermMemoryEnabled, DEFAULT_LONG_TERM_MEMORY_ENABLED)
     };
   }
@@ -222,7 +228,7 @@ export class AiSettingsService {
       ? readNonEmptyString(current.metadata.mermaidPendingText, DEFAULT_MERMAID_PENDING_TEXT)
       : normalizeMultilineText(input.mermaidPendingText, DEFAULT_MERMAID_PENDING_TEXT);
     const welcomePromptTemplates = input.welcomePromptTemplates == null
-      ? readStringArray(current.metadata.welcomePromptTemplates, DEFAULT_WELCOME_PROMPT_TEMPLATES)
+      ? readWelcomePromptTemplates(current.metadata.welcomePromptTemplates)
       : normalizePromptTemplates(input.welcomePromptTemplates);
     const updated = await upsertAiProviderSettings({
       embeddingBaseUrl: input.embeddingBaseUrl.trim(),
@@ -328,7 +334,7 @@ function toPublicSettings(settings: AiProviderSettingsRecord): PublicAiProviderS
     mermaidPendingText: readNonEmptyString(settings.metadata.mermaidPendingText, DEFAULT_MERMAID_PENDING_TEXT),
     mcpSearchMode: readSearchMode(settings.metadata.mcpSearchMode, "fast"),
     graphDefaultLayoutStyle: readGraphLayoutStyle(settings.metadata.graphDefaultLayoutStyle),
-    welcomePromptTemplates: readStringArray(settings.metadata.welcomePromptTemplates, DEFAULT_WELCOME_PROMPT_TEMPLATES),
+    welcomePromptTemplates: readWelcomePromptTemplates(settings.metadata.welcomePromptTemplates),
     longTermMemoryEnabled: readBoolean(settings.metadata.longTermMemoryEnabled, DEFAULT_LONG_TERM_MEMORY_ENABLED),
     updatedAt: settings.updatedAt
   };
@@ -371,6 +377,18 @@ function readStringArray(value: unknown, fallback: string[]): string[] {
   return items.length > 0 ? items : fallback;
 }
 
+function readWelcomePromptTemplates(value: unknown): string[] {
+  const templates = readStringArray(value, DEFAULT_WELCOME_PROMPT_TEMPLATES);
+  return samePromptTemplates(templates, LEGACY_DEFAULT_WELCOME_PROMPT_TEMPLATES)
+    ? DEFAULT_WELCOME_PROMPT_TEMPLATES
+    : templates;
+}
+
+function samePromptTemplates(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => item.trim() === right[index]?.trim());
+}
+
 function readBoolean(value: unknown, fallback: boolean): boolean {
   if (typeof value === "boolean") {
     return value;
@@ -404,7 +422,10 @@ function normalizeMultilineText(value: string | undefined, fallback: string): st
 
 function normalizePromptTemplates(values: string[]): string[] {
   const normalized = values.map((value) => value.replace(/\r\n/g, "\n").trim()).filter(Boolean);
-  return normalized.length > 0 ? normalized : DEFAULT_WELCOME_PROMPT_TEMPLATES;
+  if (normalized.length === 0) return DEFAULT_WELCOME_PROMPT_TEMPLATES;
+  return samePromptTemplates(normalized, LEGACY_DEFAULT_WELCOME_PROMPT_TEMPLATES)
+    ? DEFAULT_WELCOME_PROMPT_TEMPLATES
+    : normalized;
 }
 
 export const aiSettingsService = new AiSettingsService();

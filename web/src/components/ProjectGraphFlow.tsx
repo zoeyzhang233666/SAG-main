@@ -4,6 +4,7 @@ import {
   BackgroundVariant,
   BaseEdge,
   Controls,
+  Handle,
   MiniMap,
   Position,
   ReactFlow,
@@ -12,6 +13,7 @@ import {
   type EdgeProps,
   type Node,
   type NodeMouseHandler,
+  type NodeProps,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -26,6 +28,7 @@ import type {
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import type { SupportedLanguage } from "../i18n";
+import { RichTextFragment } from "./RichText";
 
 type GraphNodeData = {
   label: string;
@@ -52,6 +55,9 @@ const EVENT_ANGLE_OFFSET = -Math.PI / 2 + Math.PI / 12;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const FOCUS_ENTITY_LIMIT = 30;
 const FOCUS_EVENT_LIMIT = 24;
+const SHOWCASE_ENTITY_LIMIT = 34;
+const SHOWCASE_EVENT_LIMIT = 12;
+const SHOWCASE_TOP_CANDIDATE_LIMIT = 18;
 const QUESTION_NODE_ID = "__sag_question__";
 const QUESTION_NODE_WIDTH = 310;
 const EDGE_DASH_PATTERN = "8 8";
@@ -64,6 +70,27 @@ type GraphPosition = {
   radius: number;
   root?: boolean;
 };
+
+type GraphShowcaseMode = "overview" | "frequency" | "relations" | "events";
+type ActiveGraphMode = GraphShowcaseMode | "manual";
+
+type GraphShowcase = {
+  mode: GraphShowcaseMode;
+  title: string;
+  entityIds: string[];
+  eventIds: string[];
+  linkedNodeIds: string[];
+};
+
+const GRAPH_SHOWCASE_BUTTONS: Array<{
+  mode: GraphShowcaseMode;
+  zh: string;
+  en: string;
+}> = [
+  { mode: "frequency", zh: "高频化工品", en: "Core chemicals" },
+  { mode: "relations", zh: "产业链关系", en: "Co-event pairs" },
+  { mode: "events", zh: "高关联事件", en: "Key events" },
+];
 
 export type GraphLayoutStyle = "search_layers" | "entity_inner" | "columns";
 
@@ -135,7 +162,13 @@ function ProjectGraphCanvas(props: {
   );
   const [entityTypeQuery, setEntityTypeQuery] = useState("");
   const [entityTypeFilterCollapsed, setEntityTypeFilterCollapsed] =
-    useState(false);
+    useState(true);
+  const [activeGraphMode, setActiveGraphMode] =
+    useState<ActiveGraphMode>("overview");
+  const [showcaseSeed, setShowcaseSeed] = useState(() =>
+    Math.floor(Math.random() * 1_000_000),
+  );
+  const [showcaseRevision, setShowcaseRevision] = useState(0);
   const [layoutStyle, setLayoutStyle] = useState<GraphLayoutStyle>(() =>
     normalizeGraphLayoutStyle(props.defaultLayoutStyle),
   );
@@ -145,6 +178,7 @@ function ProjectGraphCanvas(props: {
   const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
   const { fitView } = useReactFlow<GraphNode, GraphEdge>();
   const graphEdgeTypes = useMemo(() => ({ bus: BusEdge }), []);
+  const graphNodeTypes = useMemo(() => ({ rich: RichGraphNode }), []);
   const clickTimerRef = useRef<number | null>(null);
   const shouldFitViewRef = useRef(true);
 
@@ -186,6 +220,25 @@ function ProjectGraphCanvas(props: {
     }
     return map;
   }, [entityById, props.graph.edges]);
+  const activeShowcase = useMemo(
+    () =>
+      activeGraphMode === "manual"
+        ? null
+        : buildGraphShowcase({
+            graph: props.graph,
+            mode: activeGraphMode,
+            seed: showcaseSeed + showcaseRevision * 9973,
+            language: props.language,
+          }),
+    [
+      activeGraphMode,
+      props.graph,
+      props.language,
+      showcaseRevision,
+      showcaseSeed,
+    ],
+  );
+
   const positionByNodeId = useMemo(
     () => buildCircularPositionMap(props.graph),
     [props.graph],
@@ -315,6 +368,30 @@ function ProjectGraphCanvas(props: {
     ],
   );
 
+  function applyShowcase(showcase: GraphShowcase | null) {
+    if (!showcase) return;
+    shouldFitViewRef.current = true;
+    setExpandedEntityIds(new Set());
+    setExpandedEventIds(new Set());
+    setFocusedEntityIds(new Set(showcase.entityIds));
+    setFocusedEventIds(new Set(showcase.eventIds));
+    setSelectedNodeId(null);
+    setActiveQueryLabel(showcase.title);
+    setQueryLinkedNodeIds(
+      new Set(
+        showcase.linkedNodeIds.length > 0
+          ? showcase.linkedNodeIds
+          : [...showcase.eventIds, ...showcase.entityIds].slice(0, 6),
+      ),
+    );
+    setSelectedEntityTypes(
+      buildSelectedEntityTypes(showcase.entityIds, entityById),
+    );
+    setEntityTypeQuery("");
+    setSuggestionsOpen(false);
+    setLayoutRevision((current) => current + 1);
+  }
+
   useEffect(() => {
     setNodes(graphModel.nodes);
     setEdges(graphModel.edges);
@@ -327,19 +404,10 @@ function ProjectGraphCanvas(props: {
   }, [fitView, graphModel.edges, graphModel.nodes, setEdges, setNodes]);
 
   useEffect(() => {
-    shouldFitViewRef.current = true;
-    setExpandedEntityIds(
-      new Set(props.graph.entities[0] ? [props.graph.entities[0].id] : []),
-    );
-    setExpandedEventIds(new Set());
-    setFocusedEntityIds(new Set());
-    setFocusedEventIds(new Set());
-    setSelectedNodeId(null);
-    setActiveQueryLabel("");
-    setQueryLinkedNodeIds(new Set());
-    setSelectedEntityTypes(new Set());
-    setEntityTypeQuery("");
-  }, [graphIdentity, props.graph.entities]);
+    if (props.focus) return;
+    if (!activeShowcase) return;
+    applyShowcase(activeShowcase);
+  }, [activeShowcase, graphIdentity, props.focus?.key]);
 
   useEffect(() => {
     const availableTypes = new Set(
@@ -386,11 +454,13 @@ function ProjectGraphCanvas(props: {
       }
       if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
     }
+    setActiveGraphMode("manual");
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
     setFocusedEntityIds(entityIds);
     setFocusedEventIds(new Set(eventIds));
     setSelectedNodeId(null);
+    setSelectedEntityTypes(buildSelectedEntityTypes([...entityIds], entityById));
     setGraphQuery(props.focus.query);
     setActiveQueryLabel(
       `${graphText(props.language, "当前搜索", "Search")} · ${props.focus.query}`,
@@ -495,19 +565,26 @@ function ProjectGraphCanvas(props: {
 
   function resetGraph() {
     shouldFitViewRef.current = true;
-    setExpandedEntityIds(
-      new Set(props.graph.entities[0] ? [props.graph.entities[0].id] : []),
-    );
-    setExpandedEventIds(new Set());
-    setFocusedEntityIds(new Set());
-    setFocusedEventIds(new Set());
-    setSelectedNodeId(null);
-    setActiveQueryLabel("");
-    setQueryLinkedNodeIds(new Set());
-    setSelectedEntityTypes(new Set());
-    setEntityTypeQuery("");
     setGraphQuery("");
-    setLayoutRevision((current) => current + 1);
+    setActiveGraphMode("overview");
+    setShowcaseSeed(Math.floor(Math.random() * 1_000_000));
+    setShowcaseRevision((current) => current + 1);
+  }
+
+  function showGraphPreset(mode: GraphShowcaseMode) {
+    shouldFitViewRef.current = true;
+    setGraphQuery("");
+    setActiveGraphMode(mode);
+    setShowcaseSeed(Math.floor(Math.random() * 1_000_000));
+    setShowcaseRevision((current) => current + 1);
+  }
+
+  function rotateGraphShowcase() {
+    shouldFitViewRef.current = true;
+    setGraphQuery("");
+    setActiveGraphMode((current) => (current === "manual" ? "overview" : current));
+    setShowcaseSeed(Math.floor(Math.random() * 1_000_000));
+    setShowcaseRevision((current) => current + 1);
   }
 
   function autoLayoutCurrentGraph() {
@@ -545,11 +622,13 @@ function ProjectGraphCanvas(props: {
         entityIds.add(entityId);
       }
     }
+    setActiveGraphMode("manual");
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
     setFocusedEntityIds(entityIds);
     setFocusedEventIds(eventIds);
     setSelectedNodeId(null);
+    setSelectedEntityTypes(buildSelectedEntityTypes([...entityIds], entityById));
     setGraphQuery(suggestion.label);
     setActiveQueryLabel(
       `${graphText(props.language, "当前搜索", "Search")} · ${suggestion.label}`,
@@ -606,8 +685,29 @@ function ProjectGraphCanvas(props: {
         .sag-graph-flow .react-flow__node {
           z-index: 2 !important;
         }
-        .sag-graph-flow .react-flow__node-default {
+        .sag-graph-flow .react-flow__node {
           background-clip: padding-box;
+        }
+        .sag-rich-graph-node {
+          min-width: 0;
+        }
+        .sag-rich-graph-label {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .sag-rich-graph-label-inline {
+          white-space: nowrap;
+        }
+        .sag-rich-graph-label-question {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          white-space: normal;
+        }
+        .sag-rich-graph-handle {
+          opacity: 0;
+          pointer-events: none;
         }
       `}</style>
       <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 rounded-xl border border-border bg-background/90 p-2 shadow-[0_10px_30px_rgba(24,36,58,0.08)] backdrop-blur">
@@ -625,6 +725,25 @@ function ProjectGraphCanvas(props: {
         />
         <Button type="button" variant="outline" size="sm" onClick={resetGraph}>
           {graphText(props.language, "重置", "Reset")}
+        </Button>
+        {GRAPH_SHOWCASE_BUTTONS.map((item) => (
+          <Button
+            key={item.mode}
+            type="button"
+            variant={activeGraphMode === item.mode ? "default" : "outline"}
+            size="sm"
+            onClick={() => showGraphPreset(item.mode)}
+            title={graphText(
+              props.language,
+              "不依赖问答上下文，按数据库真实关系生成精选子图",
+              "Build a curated subgraph from real project graph relations without a chat context",
+            )}
+          >
+            {graphText(props.language, item.zh, item.en)}
+          </Button>
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={rotateGraphShowcase}>
+          {graphText(props.language, "换一批", "Shuffle")}
         </Button>
         <select
           value={layoutStyle}
@@ -691,7 +810,7 @@ function ProjectGraphCanvas(props: {
                   onClick={() => revealSuggestion(suggestion)}
                 >
                   <span className="min-w-0 truncate text-sm">
-                    {suggestion.label}
+                    <RichTextFragment text={suggestion.label} />
                   </span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
                     {suggestion.kind === "entity"
@@ -732,6 +851,7 @@ function ProjectGraphCanvas(props: {
         nodes={nodes}
         edges={edges}
         edgeTypes={graphEdgeTypes}
+        nodeTypes={graphNodeTypes}
         defaultEdgeOptions={{ zIndex: 0 }}
         elevateEdgesOnSelect={false}
         onNodesChange={onNodesChange}
@@ -764,6 +884,35 @@ function ProjectGraphCanvas(props: {
           maskColor="rgba(238,242,247,0.72)"
         />
       </ReactFlow>
+    </div>
+  );
+}
+
+function RichGraphNode({ data }: NodeProps<GraphNode>) {
+  const nodeData = data as GraphNodeData;
+  const isQuestion = nodeData.kind === "question";
+  return (
+    <div className="sag-rich-graph-node" title={nodeData.label}>
+      <Handle
+        type="target"
+        position={Position.Top}
+        isConnectable={false}
+        className="sag-rich-graph-handle"
+      />
+      <div
+        className={cn(
+          "sag-rich-graph-label",
+          isQuestion ? "sag-rich-graph-label-question" : "sag-rich-graph-label-inline",
+        )}
+      >
+        <RichTextFragment text={nodeData.label} />
+      </div>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        isConnectable={false}
+        className="sag-rich-graph-handle"
+      />
     </div>
   );
 }
@@ -1181,7 +1330,7 @@ function buildVisibleGraph(input: {
         style: {
           stroke: entityColor,
           strokeWidth: 1.35,
-          opacity: 0,
+          opacity: 0.36,
           strokeDasharray: EDGE_DASH_PATTERN,
           animation: EDGE_DASH_ANIMATION,
           strokeLinecap: "round",
@@ -1281,7 +1430,7 @@ function createGraphNode(input: {
   const targetPosition = Position.Top;
   return {
     id: input.id,
-    type: "default",
+    type: "rich",
     position: { x: input.x, y: input.y },
     sourcePosition,
     targetPosition,
@@ -2116,7 +2265,7 @@ function EntityTypeFilterPanel(props: {
                     style={{ backgroundColor: entityTypeDotColor(option.type) }}
                   />
                   <span className="truncate" title={option.label}>
-                    {option.label}
+                    <RichTextFragment text={option.label} />
                   </span>
                 </span>
                 <span className="ml-1 shrink-0 text-[11px] text-muted-foreground">
@@ -2197,6 +2346,611 @@ function hexToRgba(hex: string, alpha: number) {
   const green = Number.parseInt(normalized.slice(2, 4), 16);
   const blue = Number.parseInt(normalized.slice(4, 6), 16);
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function buildSelectedEntityTypes(
+  entityIds: Iterable<string>,
+  entityById: Map<string, ProjectGraphEntityRecord>,
+) {
+  const types = new Set<string>();
+  for (const entityId of entityIds) {
+    const entity = entityById.get(entityId);
+    if (entity) types.add(normalizeEntityType(entity.type));
+  }
+  return types;
+}
+
+function buildGraphShowcase(input: {
+  graph: ProjectGraphRecord;
+  mode: GraphShowcaseMode;
+  seed: number;
+  language: SupportedLanguage;
+}): GraphShowcase {
+  const graphIndex = indexProjectGraph(input.graph);
+  const chemicalEntities = input.graph.entities
+    .filter((entity) => isChemicalGraphEntity(entity))
+    .sort(compareEntities);
+
+  if (chemicalEntities.length === 0) {
+    return buildFallbackShowcase(input.graph, input.mode, input.language);
+  }
+
+  if (input.mode === "relations") {
+    return buildRelationShowcase({ ...input, graphIndex, chemicalEntities });
+  }
+  if (input.mode === "events") {
+    return buildEventShowcase({ ...input, graphIndex, chemicalEntities });
+  }
+  if (input.mode === "frequency") {
+    return buildFrequencyShowcase({ ...input, graphIndex, chemicalEntities });
+  }
+  return buildOverviewShowcase({ ...input, graphIndex, chemicalEntities });
+}
+
+type GraphIndex = {
+  entityById: Map<string, ProjectGraphEntityRecord>;
+  eventById: Map<string, ProjectGraphEventRecord>;
+  entityIdsByEventId: Map<string, string[]>;
+  eventIdsByEntityId: Map<string, string[]>;
+};
+
+function indexProjectGraph(graph: ProjectGraphRecord): GraphIndex {
+  const entityById = new Map(graph.entities.map((entity) => [entity.id, entity]));
+  const eventById = new Map(graph.events.map((event) => [event.id, event]));
+  const entityIdsByEventId = new Map<string, string[]>();
+  const eventIdsByEntityId = new Map<string, string[]>();
+
+  for (const edge of graph.edges) {
+    const entityIds = entityIdsByEventId.get(edge.eventId) ?? [];
+    entityIds.push(edge.entityId);
+    entityIdsByEventId.set(edge.eventId, entityIds);
+
+    const eventIds = eventIdsByEntityId.get(edge.entityId) ?? [];
+    eventIds.push(edge.eventId);
+    eventIdsByEntityId.set(edge.entityId, eventIds);
+  }
+
+  for (const [eventId, entityIds] of entityIdsByEventId.entries()) {
+    entityIdsByEventId.set(
+      eventId,
+      uniqueStrings(entityIds).sort((a, b) =>
+        compareEntities(entityById.get(a), entityById.get(b)),
+      ),
+    );
+  }
+  for (const [entityId, eventIds] of eventIdsByEntityId.entries()) {
+    eventIdsByEntityId.set(
+      entityId,
+      uniqueStrings(eventIds).sort((a, b) =>
+        compareEvents(eventById.get(a), eventById.get(b)),
+      ),
+    );
+  }
+
+  return { entityById, eventById, entityIdsByEventId, eventIdsByEntityId };
+}
+
+function buildOverviewShowcase(input: {
+  graph: ProjectGraphRecord;
+  graphIndex: GraphIndex;
+  chemicalEntities: ProjectGraphEntityRecord[];
+  mode: GraphShowcaseMode;
+  seed: number;
+  language: SupportedLanguage;
+}): GraphShowcase {
+  const pair = pickCoEventPair(input);
+  const anchorEntityIds = new Set<string>();
+  const candidateEventIds = new Set<string>();
+
+  if (pair) {
+    for (const entityId of pair.entityIds) anchorEntityIds.add(entityId);
+    for (const eventId of pair.eventIds.slice(0, 8)) candidateEventIds.add(eventId);
+  }
+
+  for (const entity of seededShuffle(
+    input.chemicalEntities.slice(0, Math.min(24, input.chemicalEntities.length)),
+    input.seed + 11,
+  ).slice(0, 8)) {
+    anchorEntityIds.add(entity.id);
+    for (const eventId of (input.graphIndex.eventIdsByEntityId.get(entity.id) ?? []).slice(0, 4)) {
+      candidateEventIds.add(eventId);
+    }
+  }
+
+  const eventIds = rankShowcaseEvents(
+    [...candidateEventIds],
+    input.graphIndex,
+    anchorEntityIds,
+  ).slice(0, SHOWCASE_EVENT_LIMIT);
+  const entityIds = collectShowcaseEntities({
+    eventIds,
+    anchorEntityIds,
+    graphIndex: input.graphIndex,
+    limit: SHOWCASE_ENTITY_LIMIT,
+    includeRelatedEntityLimit: 8,
+  });
+
+  const anchorNames = [...anchorEntityIds]
+    .map((entityId) => input.graphIndex.entityById.get(entityId)?.name)
+    .filter(Boolean)
+    .slice(0, 3) as string[];
+  return {
+    mode: "overview",
+    title: graphText(
+      input.language,
+      `精选知识总览 · ${anchorNames.join("、") || "核心化工品"}`,
+      `Curated overview · ${anchorNames.join(", ") || "core chemicals"}`,
+    ),
+    entityIds,
+    eventIds,
+    linkedNodeIds: uniqueStrings([
+      ...(pair?.entityIds ?? []),
+      ...eventIds.slice(0, 4),
+      ...entityIds.slice(0, 4),
+    ]),
+  };
+}
+
+function buildFrequencyShowcase(input: {
+  graph: ProjectGraphRecord;
+  graphIndex: GraphIndex;
+  chemicalEntities: ProjectGraphEntityRecord[];
+  mode: GraphShowcaseMode;
+  seed: number;
+  language: SupportedLanguage;
+}): GraphShowcase {
+  const anchors = seededShuffle(
+    input.chemicalEntities.slice(0, Math.min(SHOWCASE_TOP_CANDIDATE_LIMIT, input.chemicalEntities.length)),
+    input.seed + 23,
+  )
+    .slice(0, 9)
+    .sort(compareEntities);
+  const anchorEntityIds = new Set(anchors.map((entity) => entity.id));
+  const candidateEventIds = new Set<string>();
+  for (const entity of anchors) {
+    for (const eventId of (input.graphIndex.eventIdsByEntityId.get(entity.id) ?? []).slice(0, 6)) {
+      candidateEventIds.add(eventId);
+    }
+  }
+  const eventIds = rankShowcaseEvents(
+    [...candidateEventIds],
+    input.graphIndex,
+    anchorEntityIds,
+  ).slice(0, 10);
+  const entityIds = collectShowcaseEntities({
+    eventIds,
+    anchorEntityIds,
+    graphIndex: input.graphIndex,
+    limit: SHOWCASE_ENTITY_LIMIT,
+    includeRelatedEntityLimit: 6,
+  });
+  return {
+    mode: "frequency",
+    title: graphText(
+      input.language,
+      `高频化工品 · ${anchors.slice(0, 3).map((entity) => entity.name).join("、")}`,
+      `Core chemicals · ${anchors.slice(0, 3).map((entity) => entity.name).join(", ")}`,
+    ),
+    entityIds,
+    eventIds,
+    linkedNodeIds: uniqueStrings([...anchors.slice(0, 4).map((entity) => entity.id), ...eventIds.slice(0, 3)]),
+  };
+}
+
+function buildRelationShowcase(input: {
+  graph: ProjectGraphRecord;
+  graphIndex: GraphIndex;
+  chemicalEntities: ProjectGraphEntityRecord[];
+  mode: GraphShowcaseMode;
+  seed: number;
+  language: SupportedLanguage;
+}): GraphShowcase {
+  const pair = pickCoEventPair(input);
+  if (!pair) {
+    return buildFrequencyShowcase(input);
+  }
+
+  const anchorEntityIds = new Set(pair.entityIds);
+  const eventIds = pair.eventIds.slice(0, Math.min(10, SHOWCASE_EVENT_LIMIT));
+  const entityIds = collectShowcaseEntities({
+    eventIds,
+    anchorEntityIds,
+    graphIndex: input.graphIndex,
+    limit: 30,
+    includeRelatedEntityLimit: 4,
+  });
+  const [leftName, rightName] = pair.entityIds.map(
+    (entityId) => input.graphIndex.entityById.get(entityId)?.name ?? "",
+  );
+  return {
+    mode: "relations",
+    title: graphText(
+      input.language,
+      `产业链关系 · ${leftName} ↔ ${rightName}（共同事件 ${pair.sharedEventCount} 个）`,
+      `Co-event pair · ${leftName} ↔ ${rightName} (${pair.sharedEventCount} shared events)`,
+    ),
+    entityIds,
+    eventIds,
+    linkedNodeIds: uniqueStrings([...pair.entityIds, ...eventIds.slice(0, 4)]),
+  };
+}
+
+function buildEventShowcase(input: {
+  graph: ProjectGraphRecord;
+  graphIndex: GraphIndex;
+  chemicalEntities: ProjectGraphEntityRecord[];
+  mode: GraphShowcaseMode;
+  seed: number;
+  language: SupportedLanguage;
+}): GraphShowcase {
+  const chemicalEntityIdSet = new Set(input.chemicalEntities.map((entity) => entity.id));
+  const eventCandidates = input.graph.events
+    .map((event) => {
+      const entityIds = input.graphIndex.entityIdsByEventId.get(event.id) ?? [];
+      const chemicalCount = entityIds.filter((entityId) => chemicalEntityIdSet.has(entityId)).length;
+      const score = chemicalCount * 6 + entityIds.length * 2 - event.rank * 0.02;
+      return { event, score, chemicalCount, entityCount: entityIds.length };
+    })
+    .filter((candidate) => candidate.chemicalCount > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        right.chemicalCount - left.chemicalCount ||
+        right.entityCount - left.entityCount ||
+        compareEvents(left.event, right.event),
+    );
+
+  const selectedEvents = seededShuffle(
+    eventCandidates.slice(0, Math.min(16, eventCandidates.length)),
+    input.seed + 41,
+  )
+    .slice(0, 6)
+    .sort((left, right) => compareEvents(left.event, right.event));
+  const eventIds = selectedEvents.map((candidate) => candidate.event.id);
+  const anchorEntityIds = new Set<string>();
+  for (const eventId of eventIds) {
+    for (const entityId of input.graphIndex.entityIdsByEventId.get(eventId) ?? []) {
+      const entity = input.graphIndex.entityById.get(entityId);
+      if (entity && isChemicalGraphEntity(entity)) anchorEntityIds.add(entityId);
+    }
+  }
+  const entityIds = collectShowcaseEntities({
+    eventIds,
+    anchorEntityIds,
+    graphIndex: input.graphIndex,
+    limit: SHOWCASE_ENTITY_LIMIT,
+    includeRelatedEntityLimit: 10,
+  });
+  const firstEventTitle = truncateGraphLabel(selectedEvents[0]?.event.title ?? "核心事件", 18);
+  return {
+    mode: "events",
+    title: graphText(
+      input.language,
+      `高关联事件视角 · ${firstEventTitle}`,
+      `Key-event view · ${firstEventTitle}`,
+    ),
+    entityIds,
+    eventIds,
+    linkedNodeIds: uniqueStrings([...eventIds.slice(0, 5), ...entityIds.slice(0, 5)]),
+  };
+}
+
+type CoEventPairCandidate = {
+  entityIds: [string, string];
+  eventIds: string[];
+  sharedEventCount: number;
+  score: number;
+};
+
+function pickCoEventPair(input: {
+  graph: ProjectGraphRecord;
+  graphIndex: GraphIndex;
+  chemicalEntities: ProjectGraphEntityRecord[];
+  seed: number;
+}) {
+  const candidates = buildCoEventPairCandidates(input);
+  if (candidates.length === 0) return null;
+  return seededShuffle(
+    candidates.slice(0, Math.min(SHOWCASE_TOP_CANDIDATE_LIMIT, candidates.length)),
+    input.seed + 53,
+  )[0];
+}
+
+function buildCoEventPairCandidates(input: {
+  graph: ProjectGraphRecord;
+  graphIndex: GraphIndex;
+  chemicalEntities: ProjectGraphEntityRecord[];
+}): CoEventPairCandidate[] {
+  const chemicalEntityIdSet = new Set(input.chemicalEntities.map((entity) => entity.id));
+  const pairEventIds = new Map<string, Set<string>>();
+
+  for (const event of input.graph.events) {
+    const chemicalIds = uniqueStrings(
+      (input.graphIndex.entityIdsByEventId.get(event.id) ?? []).filter((entityId) =>
+        chemicalEntityIdSet.has(entityId),
+      ),
+    )
+      .sort((left, right) =>
+        compareEntities(
+          input.graphIndex.entityById.get(left),
+          input.graphIndex.entityById.get(right),
+        ),
+      )
+      .slice(0, 10);
+    for (let leftIndex = 0; leftIndex < chemicalIds.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < chemicalIds.length; rightIndex += 1) {
+        const leftId = chemicalIds[leftIndex];
+        const rightId = chemicalIds[rightIndex];
+        const key = leftId < rightId ? `${leftId}|||${rightId}` : `${rightId}|||${leftId}`;
+        const current = pairEventIds.get(key) ?? new Set<string>();
+        current.add(event.id);
+        pairEventIds.set(key, current);
+      }
+    }
+  }
+
+  return [...pairEventIds.entries()]
+    .map(([key, eventIdSet]) => {
+      const [leftId, rightId] = key.split("|||") as [string, string];
+      const left = input.graphIndex.entityById.get(leftId);
+      const right = input.graphIndex.entityById.get(rightId);
+      const eventIds = rankShowcaseEvents(
+        [...eventIdSet],
+        input.graphIndex,
+        new Set([leftId, rightId]),
+      );
+      const sharedEventCount = eventIds.length;
+      return {
+        entityIds: [leftId, rightId] as [string, string],
+        eventIds,
+        sharedEventCount,
+        score:
+          sharedEventCount * 100 +
+          (left?.eventCount ?? 0) +
+          (right?.eventCount ?? 0) -
+          averageEventRank(eventIds, input.graphIndex) * 0.05,
+      };
+    })
+    .filter((candidate) => candidate.sharedEventCount > 0)
+    .sort((left, right) => right.score - left.score);
+}
+
+function rankShowcaseEvents(
+  eventIds: string[],
+  graphIndex: GraphIndex,
+  anchorEntityIds: Set<string>,
+) {
+  return uniqueStrings(eventIds).sort((leftId, rightId) => {
+    const leftEvent = graphIndex.eventById.get(leftId);
+    const rightEvent = graphIndex.eventById.get(rightId);
+    return (
+      scoreShowcaseEvent(rightId, graphIndex, anchorEntityIds) -
+        scoreShowcaseEvent(leftId, graphIndex, anchorEntityIds) ||
+      compareEvents(leftEvent, rightEvent)
+    );
+  });
+}
+
+function scoreShowcaseEvent(
+  eventId: string,
+  graphIndex: GraphIndex,
+  anchorEntityIds: Set<string>,
+) {
+  const entityIds = graphIndex.entityIdsByEventId.get(eventId) ?? [];
+  const anchorHits = entityIds.filter((entityId) => anchorEntityIds.has(entityId)).length;
+  const chemicalHits = entityIds.filter((entityId) => {
+    const entity = graphIndex.entityById.get(entityId);
+    return entity ? isChemicalGraphEntity(entity) : false;
+  }).length;
+  const event = graphIndex.eventById.get(eventId);
+  return anchorHits * 40 + chemicalHits * 8 + entityIds.length * 2 - (event?.rank ?? 0) * 0.02;
+}
+
+function averageEventRank(eventIds: string[], graphIndex: GraphIndex) {
+  if (eventIds.length === 0) return 0;
+  return (
+    eventIds.reduce(
+      (total, eventId) => total + (graphIndex.eventById.get(eventId)?.rank ?? 0),
+      0,
+    ) / eventIds.length
+  );
+}
+
+function collectShowcaseEntities(input: {
+  eventIds: string[];
+  anchorEntityIds: Set<string>;
+  graphIndex: GraphIndex;
+  limit: number;
+  includeRelatedEntityLimit: number;
+}) {
+  const chemicalIds = new Set<string>(input.anchorEntityIds);
+  const relatedIds = new Set<string>();
+
+  for (const eventId of input.eventIds) {
+    for (const entityId of input.graphIndex.entityIdsByEventId.get(eventId) ?? []) {
+      const entity = input.graphIndex.entityById.get(entityId);
+      if (!entity) continue;
+      if (isChemicalGraphEntity(entity)) {
+        chemicalIds.add(entityId);
+      } else if (!isLowValueGraphEntity(entity)) {
+        relatedIds.add(entityId);
+      }
+    }
+  }
+
+  const chemicalEntityIds = [...chemicalIds]
+    .filter((entityId) => input.graphIndex.entityById.has(entityId))
+    .sort((leftId, rightId) =>
+      compareEntities(
+        input.graphIndex.entityById.get(leftId),
+        input.graphIndex.entityById.get(rightId),
+      ),
+    )
+    .slice(0, Math.max(0, input.limit - input.includeRelatedEntityLimit));
+  const relatedEntityIds = [...relatedIds]
+    .filter((entityId) => input.graphIndex.entityById.has(entityId))
+    .sort((leftId, rightId) =>
+      compareEntities(
+        input.graphIndex.entityById.get(leftId),
+        input.graphIndex.entityById.get(rightId),
+      ),
+    )
+    .slice(0, Math.min(input.includeRelatedEntityLimit, input.limit - chemicalEntityIds.length));
+
+  return uniqueStrings([...chemicalEntityIds, ...relatedEntityIds]).slice(0, input.limit);
+}
+
+function buildFallbackShowcase(
+  graph: ProjectGraphRecord,
+  mode: GraphShowcaseMode,
+  language: SupportedLanguage,
+): GraphShowcase {
+  const entityIds = graph.entities.slice(0, 18).map((entity) => entity.id);
+  const entityIdSet = new Set(entityIds);
+  const eventIds = graph.events
+    .filter((event) => event.entityIds.some((entityId) => entityIdSet.has(entityId)))
+    .slice(0, 8)
+    .map((event) => event.id);
+  return {
+    mode,
+    title: graphText(language, "精选知识总览", "Curated overview"),
+    entityIds,
+    eventIds,
+    linkedNodeIds: uniqueStrings([...eventIds.slice(0, 4), ...entityIds.slice(0, 4)]),
+  };
+}
+
+function isChemicalGraphEntity(entity: ProjectGraphEntityRecord) {
+  const type = normalizeGraphText(entity.type);
+  const name = normalizeGraphText(entity.name);
+  const positiveTypeKeywords = [
+    "化工",
+    "化学",
+    "产品",
+    "原料",
+    "中间体",
+    "能源品种",
+    "品种",
+    "材料",
+    "单体",
+    "聚合物",
+    "树脂",
+    "橡胶",
+    "塑料",
+    "溶剂",
+    "助剂",
+    "添加剂",
+    "催化剂",
+    "燃料",
+    "油品",
+    "芳烃",
+    "烯烃",
+    "醇",
+    "酸",
+    "酯",
+    "酮",
+  ];
+  const negativeTypeKeywords = [
+    "企业",
+    "公司",
+    "集团",
+    "机构",
+    "组织",
+    "交易所",
+    "交易中心",
+    "国家",
+    "地区",
+    "城市",
+    "政策",
+    "法规",
+    "报告",
+    "文档",
+    "文件",
+    "项目",
+    "装置",
+    "工艺",
+    "产业链",
+    "行业",
+    "市场",
+    "价格",
+    "指标",
+    "单位",
+    "标准",
+  ];
+  const negativeNameKeywords = [
+    "有限公司",
+    "股份",
+    "集团",
+    "交易所",
+    "交易中心",
+    "委员会",
+    "协会",
+    "研究院",
+    "报告",
+    "项目",
+    "装置",
+    "产业链",
+    "市场",
+  ];
+
+  if (negativeTypeKeywords.some((keyword) => type.includes(normalizeGraphText(keyword)))) {
+    return false;
+  }
+  if (negativeNameKeywords.some((keyword) => name.includes(normalizeGraphText(keyword)))) {
+    return false;
+  }
+  return positiveTypeKeywords.some((keyword) => type.includes(normalizeGraphText(keyword)));
+}
+
+function isLowValueGraphEntity(entity: ProjectGraphEntityRecord) {
+  const type = normalizeGraphText(entity.type);
+  const name = normalizeGraphText(entity.name);
+  const keywords = [
+    "报告",
+    "文档",
+    "文件",
+    "指标",
+    "单位",
+    "价格",
+    "市场",
+    "行业",
+    "产业链",
+    "项目",
+    "装置",
+    "工艺",
+    "标准",
+    "术语",
+  ];
+  return keywords.some((keyword) =>
+    type.includes(normalizeGraphText(keyword)) || name.includes(normalizeGraphText(keyword)),
+  );
+}
+
+function seededShuffle<T>(items: T[], seed: number): T[] {
+  const result = [...items];
+  let state = Math.max(1, Math.floor(Math.abs(seed)) % 2147483647);
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    state = (state * 48271) % 2147483647;
+    const swapIndex = state % (index + 1);
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+function uniqueStrings(values: Iterable<string>) {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+function truncateGraphLabel(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength)}…`;
 }
 
 function MetricChip({ label, value }: { label: string; value: number }) {
