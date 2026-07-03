@@ -144,6 +144,262 @@ docker compose stop
 
 `docker compose stop` 不会删除数据库数据。不要随意执行带 `down -v` 的命令，因为 `-v` 可能删除数据库数据。
 
+## 局域网 / 临时外网分享给同事试用
+
+本节适用于下面这个场景：
+
+```text
+你自己的电脑运行项目
+↓
+同事打开网页试用
+↓
+同事可以查看、智能问答、新增/导入数据
+↓
+同事不能删除、归档、清空会话，也不能修改 AI 设置
+```
+
+> [!IMPORTANT]
+> 这只是 MVP 试用权限，不是正式的用户注册登录系统。正式给客户长期使用时，仍建议做账号、角色、客户数据隔离、日志和用量限制。
+
+### 1. 带权限补丁的 server.ts
+
+带权限补丁的文件：
+
+```text
+src/api/server.ts
+```
+
+这个补丁的权限设计是：
+
+| 身份 | 能做什么 | 不能做什么 |
+|---|---|---|
+| 管理员 | 全部功能 | 无 |
+| 同事 / 试用用户 | 查看、智能问答、新增项目、上传/导入数据、普通编辑 | 删除、归档、清空会话、修改 AI 设置 |
+
+### 2. 在 .env 里设置两个访问口令
+
+打开项目根目录的 `.env` 文件，加入：
+
+```env
+PUBLIC_SHARE_TOKEN=boss-2026-demo-123456
+ADMIN_SHARE_TOKEN=admin-2026-owner-abcdef
+```
+
+含义：
+
+```text
+PUBLIC_SHARE_TOKEN：给同事用
+ADMIN_SHARE_TOKEN：你自己用，不能发给别人
+```
+
+实际使用时，建议把上面的示例口令改成长一点、随机一点。
+
+### 3. 用生产模式启动项目
+
+不要用 `npm run dev` 给同事看。建议使用生产模式，只开放一个 4173 端口。
+
+在项目根目录执行：
+
+```powershell
+docker compose up -d
+npm run build
+npm start
+```
+
+看到类似下面的输出，说明启动成功：
+
+```text
+Server listening at http://127.0.0.1:4173
+Server listening at http://172.30.16.1:4173
+Server listening at http://192.168.110.69:4173
+```
+
+其中：
+
+```text
+http://127.0.0.1:4173
+```
+
+只能你自己的电脑打开。
+
+类似下面这种地址：
+
+```text
+http://192.168.110.69:4173
+```
+
+才是同一个局域网里其他电脑可以尝试打开的地址。你实际看到的 IP 可能不一样，以终端输出为准。
+
+### 4. 你自己用管理员入口
+
+如果你的局域网地址是：
+
+```text
+http://192.168.110.69:4173
+```
+
+你的管理员入口就是：
+
+```text
+http://192.168.110.69:4173/share-login?token=admin-2026-owner-abcdef
+```
+
+管理员可以上传、删除、修改、设置模型等。
+
+### 5. 发给同事的局域网链接
+
+发给同事这个链接：
+
+```text
+http://192.168.110.69:4173/share-login?token=boss-2026-demo-123456
+```
+
+同事必须和你在同一个 Wi-Fi 或公司局域网内。
+
+同事可以：
+
+```text
+查看项目
+智能问答
+新增项目
+上传/导入数据
+普通编辑
+```
+
+同事不能：
+
+```text
+删除数据
+归档项目
+清空会话
+修改 AI 设置
+```
+
+### 6. 如果同事在局域网打不开
+
+先检查以下几项：
+
+1. 你的 `npm start` 窗口不能关闭。
+2. 你的电脑和同事电脑要在同一个 Wi-Fi / 公司局域网。
+3. 同事要访问 `192.168.x.x:4173` 这种地址，不要访问 `127.0.0.1`。
+4. Windows 防火墙需要允许 Node.js 通过“专用网络”。
+5. 不要随便允许“公用网络”，只允许公司或家庭内网这种专用网络。
+
+可以在 PowerShell 里用下面命令查看你电脑的局域网 IP：
+
+```powershell
+ipconfig
+```
+
+找到类似：
+
+```text
+IPv4 地址 . . . . . . . . . . . . : 192.168.110.69
+```
+
+### 7. 同事不在同一个局域网时，用 cloudflared 临时外网链接
+
+如果同事不在同一个局域网，局域网地址就打不开。这时可以用 Cloudflare Tunnel 临时生成外网链接。
+
+你下载的文件是：
+
+```text
+D:\cloudflared-windows-amd64.exe
+```
+
+不要直接双击它。它是命令行工具，需要在 PowerShell 里运行。
+
+正确命令是：
+
+```powershell
+& "D:\cloudflared-windows-amd64.exe" tunnel --url http://localhost:4173
+```
+
+注意前面的 `&` 不能省。PowerShell 运行带引号的 exe 路径时，需要用 `&` 调用。
+
+如果你之前这样运行：
+
+```powershell
+.\cloudflared.exe tunnel --url http://localhost:4173
+```
+
+但是当前目录不是 exe 所在目录，就会报错：
+
+```text
+无法将“.\cloudflared.exe”项识别为 cmdlet、函数、脚本文件或可运行程序的名称
+```
+
+这是因为 PowerShell 当前所在的文件夹里没有 `cloudflared.exe`。
+
+运行成功后，终端会出现类似：
+
+```text
+https://xxxxx.trycloudflare.com
+```
+
+这就是临时外网地址。
+
+然后发给同事：
+
+```text
+https://xxxxx.trycloudflare.com/share-login?token=boss-2026-demo-123456
+```
+
+你自己管理员入口是：
+
+```text
+https://xxxxx.trycloudflare.com/share-login?token=admin-2026-owner-abcdef
+```
+
+> [!WARNING]
+> cloudflared 适合临时演示和 MVP 试用。你的电脑、`npm start` 窗口、Docker Desktop、cloudflared 窗口都必须保持运行。不要把它当成正式客户系统长期使用。
+
+### 8. 结束试用时怎么关闭
+
+如果用了 cloudflared，先在 cloudflared 的 PowerShell 窗口按：
+
+```text
+Ctrl + C
+```
+
+再到 `npm start` 的 PowerShell 窗口按：
+
+```text
+Ctrl + C
+```
+
+如果还要停止数据库：
+
+```powershell
+docker compose stop
+```
+
+不要随便执行：
+
+```powershell
+docker compose down -v
+```
+
+因为 `-v` 可能会删除数据库数据。
+
+### 9. 试用前建议自测
+
+用无痕窗口打开同事链接，测试：
+
+| 操作 | 预期结果 |
+|---|---|
+| 打开网页 | 可以 |
+| 智能问答 | 可以 |
+| 新增项目 | 可以 |
+| 上传 / 导入数据 | 可以 |
+| 删除项目 | 不可以 |
+| 删除文档 | 不可以 |
+| 归档项目 | 不可以 |
+| 清空会话 | 不可以 |
+| 修改 AI 设置 | 不可以 |
+
+只要删除、归档、清空、改设置被拒绝，就说明权限补丁生效。
+
 ### 常见问题
 
 #### 浏览器打不开 `http://localhost:5173`

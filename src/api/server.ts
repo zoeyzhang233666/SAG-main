@@ -179,6 +179,91 @@ export function buildHttpServer() {
     service: "sag"
   }));
 
+  /**
+   * 局域网 / 临时分享权限保护：
+   *
+   * - ADMIN_SHARE_TOKEN：管理员口令，拥有全部权限。
+   * - PUBLIC_SHARE_TOKEN：上司/试用口令，可以查看、问答、新增、导入和普通编辑。
+   *   但是不能删除、归档、清空会话，也不能修改 AI 设置。
+   *
+   * 不设置这两个环境变量时，项目保持原来的无登录模式。
+   */
+  const viewerShareToken = process.env.PUBLIC_SHARE_TOKEN?.trim() ?? "";
+  const adminShareToken = process.env.ADMIN_SHARE_TOKEN?.trim() ?? "";
+
+  app.get("/share-login", async (request, reply) => {
+    const query = request.query as { token?: string };
+    const token = String(query.token ?? "").trim();
+
+    if (!viewerShareToken || !adminShareToken) {
+      return reply.code(500).type("text/html; charset=utf-8").send(`
+        <h2>分享模式未配置</h2>
+        <p>请先在项目根目录的 .env 文件里设置 PUBLIC_SHARE_TOKEN 和 ADMIN_SHARE_TOKEN。</p>
+      `);
+    }
+
+    if (token !== viewerShareToken && token !== adminShareToken) {
+      return reply.code(403).type("text/html; charset=utf-8").send(`
+        <h2>访问口令无效</h2>
+        <p>请联系管理员重新获取访问链接。</p>
+      `);
+    }
+
+    const cookieParts = [
+      `sag_share_token=${encodeURIComponent(token)}`,
+      "Path=/",
+      "HttpOnly",
+      "SameSite=Lax",
+      "Max-Age=2592000"
+    ];
+
+    if (request.headers["x-forwarded-proto"] === "https") {
+      cookieParts.push("Secure");
+    }
+
+    reply.header("Set-Cookie", cookieParts.join("; "));
+    return reply.redirect("/");
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    // 两个口令都不设置时，不启用分享权限保护，项目保持原样。
+    if (!viewerShareToken && !adminShareToken) {
+      return;
+    }
+
+    const pathOnly = request.url.split("?")[0] ?? "/";
+
+    if (pathOnly === "/health" || pathOnly === "/share-login") {
+      return;
+    }
+
+    const token = getCookieValue(request, "sag_share_token");
+    const isAdmin = Boolean(adminShareToken && token === adminShareToken);
+    const isViewer = Boolean(viewerShareToken && token === viewerShareToken);
+
+    if (!isAdmin && !isViewer) {
+      return reply.code(401).type("text/html; charset=utf-8").send(`
+        <h2>需要授权访问</h2>
+        <p>请使用管理员提供的访问链接进入系统。</p>
+      `);
+    }
+
+    if (isAdmin) {
+      return;
+    }
+
+    if (isViewerAllowedRequest(request.method, pathOnly)) {
+      return;
+    }
+
+    return reply.code(403).send({
+      error: {
+        code: "VIEWER_FORBIDDEN",
+        message: "当前账号可以查看、问答和新增数据，但不能删除、归档、清空会话或修改系统 AI 设置。"
+      }
+    });
+  });
+
   app.get("/api/model-call-logs", async (request) => {
     const query = request.query as { after?: string };
     const after = query.after ? Number(query.after) : 0;
@@ -816,6 +901,53 @@ function getErrorMessage(error: unknown): string {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function getCookieValue(request: FastifyRequest, name: string): string | null {
+  const cookieHeader = request.headers.cookie;
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const part of cookieHeader.split(";")) {
+    const [rawKey, ...rawValue] = part.trim().split("=");
+
+    if (rawKey === name) {
+      return decodeURIComponent(rawValue.join("="));
+    }
+  }
+
+  return null;
+}
+
+function isViewerAllowedRequest(method: string, pathOnly: string): boolean {
+  // 上司/试用用户可以打开页面、查看数据、问答、新建项目、上传/导入数据、普通编辑。
+  // 但是不允许任何真正删除、归档、清空会话，或修改 AI 设置的操作。
+
+  if (method === "DELETE") {
+    return false;
+  }
+
+  if (method === "POST") {
+    if (/^\/api\/projects\/[^/]+\/archive$/.test(pathOnly)) {
+      return false;
+    }
+
+    if (/^\/api\/documents\/[^/]+\/archive$/.test(pathOnly)) {
+      return false;
+    }
+
+    if (/^\/api\/mcp\/sessions\/[^/]+\/clear$/.test(pathOnly)) {
+      return false;
+    }
+  }
+
+  if (method === "PUT" && pathOnly === "/api/settings/ai") {
+    return false;
+  }
+
+  return true;
 }
 
 export async function startHttpServer(): Promise<void> {

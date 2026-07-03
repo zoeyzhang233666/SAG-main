@@ -15,6 +15,9 @@
 ## 用法
 
 ```bash
+# 可选预处理：先把长 Markdown 稳定拆成子 agent 任务
+node tools/import-prep/split-markdown-for-agents.mjs <源Markdown.md> <章节JSON输出目录> --clean
+
 # 1) 把每节 AI 输出的 JSON 存成 01-xxx.json、02-xxx.json…… 放进同一目录
 # 2) 在目录里放 meta.json（文档标题 + 来源信息，整篇只填一次）
 # 3) 合并 + 校验 + 重排
@@ -24,6 +27,90 @@ node tools/import-prep/merge-and-validate.mjs "tools/import-prep/示例-化工�
 
 通过后会在目录里生成 `<标题>-simple-import.json`，到 SAG 网页
 "粘贴或上传网页版 AI 的数据"上传它即可。
+
+### Markdown 拆分预处理
+
+当源文件是很长的 Markdown，先运行：
+
+```powershell
+node tools/import-prep/split-markdown-for-agents.mjs `
+  "C:\path\to\source.md" `
+  "C:\path\to\输出目录" `
+  --clean
+```
+
+脚本会在输出目录下生成 `_sections/`：
+
+- `_sections/01.md`、`_sections/02.md`……：给子 agent 逐个读取的章节原文
+- `_sections/agent-tasks.md`：派工清单，列出每个 `md` 应输出到哪个 `01.json`、`02.json`
+- `_sections/manifest.json`：机器可读清单，便于 workflow 或脚本读取
+
+顶层输出目录仍然只放 `meta.json` 和子 agent 生成的 `01.json`、`02.json`……，
+所以最后照常运行 `merge-and-validate.mjs <输出目录>` 即可。
+
+常用选项：
+
+| 选项 | 作用 |
+| --- | --- |
+| `--max-chars 6500` | 单个子 agent 任务的目标最大字符数；超长章节会按段落/句子边界拆分 |
+| `--min-chars 900` | 很短的小标题块会自动并入相邻任务，减少碎片 |
+| `--context-chars 900` | 超长章节被拆开时，给后续分片加入可见的原文重叠摘录，帮助识别承接主语 |
+| `--max-heading-level 6` | 参与拆分的最大标题层级；例如设为 `3` 可把更深小标题并入上级 |
+| `--sections-dir <目录>` | 自定义 `_sections` 输出位置 |
+| `--clean` | 清理上次生成的 `_sections/NN.md`、`agent-tasks.md`、`manifest.json` 后重建 |
+
+推荐 workflow 方式：先让主流程运行拆分脚本，再把 `_sections/agent-tasks.md` 交给子 agent 并行处理。
+子 agent 只负责严格按抽取 Prompt 读一个 `NN.md`、写一个同名 `NN.json`，不再参与拆分逻辑。
+
+为避免语义被切断，脚本只在段落、列表、表格块等边界拆分；如果一个标题块仍然过长，
+后续分片开头会带可见的重叠原文，包括该标题块开头和上一分片尾部。
+这些重叠文字是从原文复制出来的，可以作为 `chunk.content` 证据保留，方便用户以后回看；
+但 `[SAG ...]` 这类脚本生成的边界标记不要写进 `chunk.content`。
+
+### 断点续跑与单文件校验
+
+跑完一批子 agent 后，先做轻量校验：
+
+```powershell
+node tools/import-prep/validate-section-jsons.mjs "C:\path\to\输出目录"
+```
+
+它会读取 `_sections/manifest.json`，逐个检查 `01.json`、`02.json`……：
+
+- 文件是否存在
+- JSON 是否能解析（支持剥离代码块、修复结尾多余逗号）
+- 是否有 `chunks`
+- 每个 chunk 是否有 `content`
+- 每个事件是否有 `event.title`
+- 每个事件是否至少有一个 `entity.name`
+
+需要生成报告时：
+
+```powershell
+node tools/import-prep/validate-section-jsons.mjs `
+  "C:\path\to\输出目录" `
+  --report "C:\path\to\输出目录\_sections\validation-report.md" `
+  --json-report "C:\path\to\输出目录\_sections\validation-report.json" `
+  --no-fail
+```
+
+查看进度并生成剩余任务清单：
+
+```powershell
+node tools/import-prep/report-progress.mjs `
+  "C:\path\to\输出目录" `
+  --batch-size 20 `
+  --no-fail
+```
+
+它会生成：
+
+- `_sections/remaining-agent-tasks.md`：只包含缺失或无效的任务
+- `_sections/remaining-batches/remaining-batch-001.md`……：按批拆好的剩余任务
+
+推荐给能力较弱但速度快的模型使用 batch 文件，而不是完整 `agent-tasks.md`。
+例如每次只给它 `remaining-batch-001.md`，完成后再跑 `report-progress.mjs`，
+让脚本决定下一批，不让模型自己判断全局状态。
 
 ### 选项
 
