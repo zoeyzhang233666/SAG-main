@@ -9,6 +9,7 @@ export default defineConfig({
     proxy: {
       "/api": "http://127.0.0.1:4173",
       "/health": "http://127.0.0.1:4173",
+      "/share-login": "http://127.0.0.1:4173",
       "/sources": "http://127.0.0.1:4173",
       "/ingest": "http://127.0.0.1:4173",
       "/search": "http://127.0.0.1:4173",

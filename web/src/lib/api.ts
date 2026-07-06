@@ -340,6 +340,23 @@ export const api = {
     });
   },
 
+  async createStructuredImportJob(input: {
+    sourceId: string;
+    title?: string;
+    fileName?: string;
+    format?: ManualImportFormat;
+    content: string;
+  }) {
+    return request<{ job: UploadJobRecord }>("/api/documents/import-structured/jobs", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+
+  async getStructuredImportJob(jobId: string) {
+    return request<{ job: UploadJobRecord }>(`/api/documents/import-structured/jobs/${jobId}`);
+  },
+
   async getUploadJob(jobId: string) {
     return request<{ job: UploadJobRecord }>(`/api/documents/upload/jobs/${jobId}`);
   },

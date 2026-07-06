@@ -90,6 +90,16 @@ export interface ProjectStatsRecord {
   entityCount: number;
 }
 
+export interface ProjectGraphChunkRecord {
+  id: string;
+  sourceId: string;
+  documentId?: string | null;
+  heading?: string | null;
+  content: string;
+  rank: number;
+  eventCount: number;
+}
+
 export interface ProjectGraphEntityRecord {
   id: string;
   sourceId: string;
@@ -103,16 +113,22 @@ export interface ProjectGraphEventRecord {
   id: string;
   sourceId: string;
   documentId?: string | null;
+  chunkId?: string | null;
   title: string;
   rank: number;
   entityIds: string[];
 }
 
 export interface ProjectGraphRecord {
+  chunks: ProjectGraphChunkRecord[];
   entities: ProjectGraphEntityRecord[];
   events: ProjectGraphEventRecord[];
   edges: Array<{
     entityId: string;
+    eventId: string;
+  }>;
+  chunkEventEdges: Array<{
+    chunkId: string;
     eventId: string;
   }>;
 }

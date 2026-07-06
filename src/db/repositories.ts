@@ -16,6 +16,7 @@ import type {
   McpMessageRole,
   McpSessionRecord,
   McpToolCallRecord,
+  ProjectGraphChunkRecord,
   ProjectGraphEntityRecord,
   ProjectGraphEventRecord,
   ProjectGraphRecord,
@@ -1141,6 +1142,41 @@ export async function getProjectGraph(input: {
   sourceId: string;
   tenantId: string;
 }): Promise<ProjectGraphRecord> {
+  const chunksResult = await pool.query(
+    `
+      select
+        c.id,
+        c.source_id,
+        c.document_id,
+        c.heading,
+        c.content,
+        c.rank,
+        count(distinct e.id)::int as event_count
+      from source_chunks c
+      join documents d on d.id = c.document_id
+      join sources s on s.id = c.source_id
+      left join events e
+        on e.chunk_id = c.id
+       and e.deleted_at is null
+      where c.source_id = $1
+        and s.tenant_id = $2
+        and d.archived_at is null
+      group by c.id
+      order by c.rank, c.id
+    `,
+    [input.sourceId, input.tenantId]
+  );
+
+  const chunks: ProjectGraphChunkRecord[] = chunksResult.rows.map((row) => ({
+    id: String(row.id),
+    sourceId: String(row.source_id),
+    documentId: row.document_id == null ? null : String(row.document_id),
+    heading: row.heading == null ? null : String(row.heading),
+    content: String(row.content ?? ""),
+    rank: Number(row.rank ?? 0),
+    eventCount: Number(row.event_count ?? 0)
+  }));
+
   const entitiesResult = await pool.query(
     `
       select
@@ -1174,17 +1210,13 @@ export async function getProjectGraph(input: {
     eventCount: Number(row.event_count ?? 0)
   }));
 
-  if (entities.length === 0) {
-    return { entities: [], events: [], edges: [] };
-  }
-
-  const entityIds = entities.map((entity) => entity.id);
   const eventsResult = await pool.query(
     `
       select
         e.id,
         e.source_id,
         e.document_id,
+        e.chunk_id,
         e.title,
         e.rank,
         coalesce(
@@ -1194,23 +1226,23 @@ export async function getProjectGraph(input: {
       from events e
       join documents d on d.id = e.document_id
       join sources s on s.id = e.source_id
-      join event_entities ee on ee.event_id = e.id
-      join entities ent on ent.id = ee.entity_id
+      left join event_entities ee on ee.event_id = e.id
+      left join entities ent on ent.id = ee.entity_id
       where e.source_id = $1
         and s.tenant_id = $2
         and d.archived_at is null
         and e.deleted_at is null
-        and ee.entity_id = any($3::uuid[])
       group by e.id
       order by e.rank, e.id
     `,
-    [input.sourceId, input.tenantId, entityIds]
+    [input.sourceId, input.tenantId]
   );
 
   const events: ProjectGraphEventRecord[] = eventsResult.rows.map((row) => ({
     id: String(row.id),
     sourceId: String(row.source_id),
     documentId: row.document_id == null ? null : String(row.document_id),
+    chunkId: row.chunk_id == null ? null : String(row.chunk_id),
     title: String(row.title),
     rank: Number(row.rank ?? 0),
     entityIds: Array.isArray(row.entity_ids) ? row.entity_ids.map(String) : []
@@ -1219,8 +1251,14 @@ export async function getProjectGraph(input: {
     entityId,
     eventId: event.id
   })));
+  const chunkEventEdges = events
+    .filter((event) => event.chunkId)
+    .map((event) => ({
+      chunkId: String(event.chunkId),
+      eventId: event.id
+    }));
 
-  return { entities, events, edges };
+  return { chunks, entities, events, edges, chunkEventEdges };
 }
 
 export async function getDocumentDetail(input: {

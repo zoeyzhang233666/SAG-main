@@ -132,6 +132,16 @@ export interface ProjectStatsRecord {
   entityCount: number;
 }
 
+export interface ProjectGraphChunkRecord {
+  id: string;
+  sourceId: string;
+  documentId?: string | null;
+  heading?: string | null;
+  content: string;
+  rank: number;
+  eventCount: number;
+}
+
 export interface ProjectGraphEntityRecord {
   id: string;
   sourceId: string;
@@ -145,16 +155,22 @@ export interface ProjectGraphEventRecord {
   id: string;
   sourceId: string;
   documentId?: string | null;
+  chunkId?: string | null;
   title: string;
   rank: number;
   entityIds: string[];
 }
 
 export interface ProjectGraphRecord {
+  chunks: ProjectGraphChunkRecord[];
   entities: ProjectGraphEntityRecord[];
   events: ProjectGraphEventRecord[];
   edges: Array<{
     entityId: string;
+    eventId: string;
+  }>;
+  chunkEventEdges: Array<{
+    chunkId: string;
     eventId: string;
   }>;
 }
@@ -178,6 +194,7 @@ export interface ModelCallLogRecord {
 }
 
 export type UploadJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+export type UploadJobKind = "upload" | "structured-import";
 
 export type UploadJobStage =
   | "QUEUED"
@@ -193,6 +210,7 @@ export type UploadJobStage =
 
 export interface UploadJobRecord {
   id: string;
+  kind?: UploadJobKind;
   sourceId: string;
   fileName: string;
   title: string;
@@ -202,6 +220,7 @@ export interface UploadJobRecord {
   progress: number;
   chunkCount?: number;
   eventCount?: number;
+  documentCount?: number;
   currentChunk?: number;
   totalChunks?: number;
   documentId?: string;

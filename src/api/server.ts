@@ -485,6 +485,22 @@ export function buildHttpServer() {
     return reply.code(201).send(result);
   });
 
+  app.post("/api/documents/import-structured/jobs", async (request, reply) => {
+    const input = structuredImportSchema.parse(request.body);
+    const job = await webuiService.createStructuredImportJob(input);
+    return reply.code(202).send({ job });
+  });
+
+  app.get("/api/documents/import-structured/jobs/:jobId", async (request, reply) => {
+    const params = request.params as { jobId: string };
+    z.string().uuid().parse(params.jobId);
+    const job = webuiService.getUploadJob(params.jobId);
+    if (!job) {
+      return reply.code(404).send(notFound("IMPORT_JOB_NOT_FOUND", "导入任务不存在"));
+    }
+    return { job };
+  });
+
   app.get("/api/documents/upload/jobs/:jobId", async (request, reply) => {
     const params = request.params as { jobId: string };
     z.string().uuid().parse(params.jobId);

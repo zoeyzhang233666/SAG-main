@@ -18,6 +18,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:setup": "npm run db:migrate && npm run seed",
+    "db:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-db.ps1",
+    "db:restore": "powershell -ExecutionPolicy Bypass -File scripts/restore-db.ps1",
     "seed": "tsx src/db/seed.ts",
     "mcp": "tsx scripts/run-mcp.ts",
     "demo:ingest": "tsx scripts/demo-ingest.ts",

@@ -64,12 +64,37 @@ Core features:
 - **Project management**: each project has its own documents, conversations, graph, and MCP configuration.
 - **Multi-document upload**: upload multiple Markdown / TXT files at once, with processing stages and progress.
 - **Document processing results**: inspect chunks, events, entities, embedding data, keyword title search, and paginated browsing.
+- **Structured import**: import AI-generated CSV / Markdown / JSON. Large JSON files are handled as background jobs with progress, batched embeddings, and batched database writes.
 - **Conversational retrieval**: ask multi-turn questions over the current project, with streaming output and stop generation.
 - **Source citations**: answers can show numbered citations; click a number to view the original chunk.
 - **Search trace visualization**: the right panel shows SAG's internal retrieval steps and latency in real time.
 - **Raw logs**: browser cache stores raw LLM / Embedding / Rerank requests and responses.
 - **Knowledge graph**: explore project relations with event and entity nodes; drag, zoom, expand, and open details.
 - **MCP integration**: each project exposes its own MCP configuration so external agents can call the current project directly.
+
+
+### Large JSON Imports Do Not Block the Browser
+
+In the “Paste or upload AI-generated data” dialog, choose a `.json`, `.csv`, or `.md` file and click “Submit import job”. The WebUI no longer keeps one large HTTP request open until everything finishes. Instead, SAG will:
+
+1. create a background import job;
+2. show parsing, embedding, and database-writing progress in the processing queue;
+3. generate embeddings in batches, so a file with thousands of chunks does not try to send tens of thousands of embedding texts at once;
+4. write to PostgreSQL in batches while preserving the document structure from the original JSON, so one large document stays one document and does not need to be split manually.
+
+After the job completes, the document list refreshes automatically.
+
+For very large files or strict remote embedding rate limits, you can tune the batch sizes in `.env` and restart `npm run dev`:
+
+```env
+# Number of chunks processed per batch. Default: 25. Smaller is safer but slower.
+STRUCTURED_IMPORT_CHUNK_BATCH_SIZE=25
+
+# Number of texts sent to the embedding client per request. Default: 64. Try 16 or 32 for unstable remote APIs.
+STRUCTURED_IMPORT_EMBEDDING_BATCH_SIZE=64
+```
+
+> Simple JSON / CSV files do not contain database IDs or embeddings. Those fields are regenerated during import. If a remote embedding API is configured, the import uses that embedding endpoint; otherwise it falls back to deterministic local embeddings.
 
 ## Tech Stack
 
@@ -170,6 +195,35 @@ Default development URLs:
 WebUI: http://localhost:5173
 API:   http://localhost:4173
 ```
+
+
+### If share tokens are enabled, log in with the same hostname first
+
+If `.env` contains `PUBLIC_SHARE_TOKEN` or `ADMIN_SHARE_TOKEN`, the API enables share-access protection. Opening `http://localhost:5173` directly may show a `401` request failure because the browser has not received the login cookie yet.
+
+In development mode, open this URL first:
+
+```text
+http://localhost:5173/share-login?token=your-admin-token
+```
+
+Then open:
+
+```text
+http://localhost:5173/
+```
+
+> [!IMPORTANT]
+> `localhost` and `127.0.0.1` are different cookie hosts in the browser. If you log in through `http://127.0.0.1:4173/share-login?...` and then open `http://localhost:5173/`, the browser will not send the cookie and the API will still return 401. Use one hostname consistently.
+
+For local-only usage without login protection, leave both tokens empty or remove them from `.env`:
+
+```env
+PUBLIC_SHARE_TOKEN=
+ADMIN_SHARE_TOKEN=
+```
+
+Restart `npm run dev` after changing `.env`.
 
 ### 7. Build and Start Production
 
@@ -389,3 +443,78 @@ The Vite WebUI uses `5173` by default. If the port is occupied, Vite will show t
 - ChemCloud custom code, configuration, business data, product design, prompts, interface information, and internal documentation are confidential company assets.
 - SAG and other third-party open-source components remain subject to their respective licenses. The repository [LICENSE](LICENSE) records the applicable open-source origin and does not waive confidentiality requirements for ChemCloud custom work or business materials.
 - External publication, deployment, demonstration, licensing, or delivery requires prior review and written authorization from ChemCloud.
+
+
+### Syncing data between multiple computers
+
+If the project folder is synced with Nutstore, OneDrive, Dropbox, or another cloud-drive tool, remember that the cloud drive normally syncs only the project files. It does **not** automatically sync the PostgreSQL data stored inside Docker.
+
+Uploaded data, parsed documents, embeddings, projects, and settings are stored in PostgreSQL. The default `docker-compose.yml` uses a Docker volume:
+
+```yaml
+volumes:
+  - sag_lite_pgdata:/var/lib/postgresql/data
+```
+
+That volume lives inside Docker Desktop, outside the project folder. Data uploaded on your office computer goes into the office computer's Docker database. After the project files sync to your home computer, the home computer still has its own separate Docker database.
+
+#### Recommended: sync a PostgreSQL backup file
+
+This is safer than syncing the raw PostgreSQL data directory and usually much faster than Web UI JSON export/import because it does not re-ingest documents or rebuild embeddings.
+
+On the computer that has the newest data, stop `npm run dev`, then run:
+
+```powershell
+npm run db:backup
+```
+
+This creates:
+
+```text
+backups/sag_lite.dump
+```
+
+After your cloud drive finishes syncing that file, switch to the other computer and run:
+
+```powershell
+npm run db:restore
+```
+
+Then start the app again:
+
+```powershell
+npm run dev
+```
+
+> [!WARNING]
+> `npm run db:restore` overwrites the local database with the backup. If both computers have unsynced new data, one side can be overwritten. The safe workflow is: back up on the current computer, wait for cloud sync to finish, then restore on the next computer.
+
+#### Best for real-time use: one shared PostgreSQL database
+
+If you want changes made on one computer to appear immediately on the other computer, use a single shared PostgreSQL database, for example on a server, NAS, always-on machine, or a hosted PostgreSQL service that supports pgvector. Set both computers' `.env` `DATABASE_URL` to the same database.
+
+#### Not recommended: syncing the raw PostgreSQL data directory
+
+Do not simply put the raw PostgreSQL data directory into a cloud-synced folder. PostgreSQL data files are live binary database files, not normal JSON files. If one computer syncs a partially written database or two computers run the database at the same time, the database can be corrupted.
+
+### Why are cited-asset counts different from the search candidate pool?
+
+The right-side “cited assets” panel now counts only assets grounded in the final answer:
+
+```text
+Chunks = chunks cited by the final answer
+Events = events directly linked to those cited chunks
+Entities = entities directly linked to those events
+```
+
+Coarse-ranked, expanded, or otherwise candidate events from the retrieval trace are no longer counted as cited assets. They are search-process candidates, not final-answer evidence.
+
+For Q&A-driven graph focus, the hypergraph now follows the evidence chain:
+
+```text
+Columns: current search → chunks → events → entities
+Search-centered: search in the center, chunks inner ring, events middle ring, entities outer ring
+Entity-inner: search in the center, entities inner ring, chunks middle ring, events outer ring
+```
+
+This makes the graph start from the cited source chunks before showing their related events and entities.

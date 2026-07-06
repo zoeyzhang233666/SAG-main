@@ -39,8 +39,10 @@ const MAX_STRUCTURED_IMPORT_BYTES = 50 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".md", ".txt"]);
 
 type UploadJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+type UploadJobKind = "upload" | "structured-import";
 
 export interface UploadJobRecord {
+  kind?: UploadJobKind;
   id: string;
   sourceId: string;
   fileName: string;
@@ -51,6 +53,7 @@ export interface UploadJobRecord {
   progress: number;
   chunkCount?: number;
   eventCount?: number;
+  documentCount?: number;
   currentChunk?: number;
   totalChunks?: number;
   documentId?: string;
@@ -196,25 +199,19 @@ export class WebuiService {
     format?: ManualImportFormat;
     content: string;
   }, tenantId = config.DEFAULT_TENANT_ID) {
-    const bytes = Buffer.byteLength(input.content, "utf8");
-    if (bytes === 0) {
-      throw new Error("导入内容为空");
-    }
-    if (bytes > MAX_STRUCTURED_IMPORT_BYTES) {
-      throw new Error(`导入内容超过 ${MAX_STRUCTURED_IMPORT_BYTES} 字节限制`);
-    }
-    const documents = parseManualKnowledgeDocuments(input.content, {
-      format: input.format,
-      fileName: input.fileName,
-      fallbackTitle: input.title?.trim() || input.fileName?.replace(/\.[^.]+$/, "")
+    const structuredImport = validateStructuredImportInput(input);
+    const documents = parseManualKnowledgeDocuments(structuredImport.content, {
+      format: structuredImport.format,
+      fileName: structuredImport.fileName,
+      fallbackTitle: structuredImport.title
     });
     const results = [];
     for (const document of documents) {
       results.push(await manualIngestionService.ingest({
-        sourceId: input.sourceId,
+        sourceId: structuredImport.sourceId,
         document,
-        fileName: input.fileName,
-        format: input.format ?? "auto"
+        fileName: structuredImport.fileName,
+        format: structuredImport.format ?? "auto"
       }, tenantId));
     }
     const first = results[0];
@@ -234,6 +231,35 @@ export class WebuiService {
     };
   }
 
+  async createStructuredImportJob(input: {
+    sourceId: string;
+    title?: string;
+    fileName?: string;
+    format?: ManualImportFormat;
+    content: string;
+  }, tenantId = config.DEFAULT_TENANT_ID) {
+    const structuredImport = validateStructuredImportInput(input);
+    const now = new Date().toISOString();
+    const job: UploadJobRecord = {
+      id: randomUUID(),
+      kind: "structured-import",
+      sourceId: structuredImport.sourceId,
+      fileName: structuredImport.fileName,
+      title: structuredImport.title || structuredImport.fileName.replace(/\.[^.]+$/, "") || "结构化导入",
+      status: "QUEUED",
+      stage: "QUEUED",
+      message: `等待导入（${formatBytes(structuredImport.importBytes)}）`,
+      progress: 0,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.uploadJobs.set(job.id, job);
+    queueMicrotask(() => {
+      void this.runStructuredImportJob(job.id, structuredImport, tenantId);
+    });
+    return job;
+  }
+
   async createUploadJob(input: {
     title?: string;
     fileName: string;
@@ -250,6 +276,7 @@ export class WebuiService {
     const now = new Date().toISOString();
     const job: UploadJobRecord = {
       id: randomUUID(),
+      kind: "upload",
       sourceId: upload.sourceId,
       fileName: upload.fileName,
       title: upload.title,
@@ -273,6 +300,97 @@ export class WebuiService {
 
   getUploadJob(jobId: string) {
     return this.uploadJobs.get(jobId) ?? null;
+  }
+
+  private async runStructuredImportJob(jobId: string, input: {
+    title: string;
+    fileName: string;
+    content: string;
+    sourceId: string;
+    format?: ManualImportFormat;
+    importBytes: number;
+  }, tenantId: string) {
+    this.updateUploadJob(jobId, {
+      status: "RUNNING",
+      stage: "PARSING",
+      message: "正在解析结构化导入文件",
+      progress: 5
+    });
+    try {
+      const documents = parseManualKnowledgeDocuments(input.content, {
+        format: input.format,
+        fileName: input.fileName,
+        fallbackTitle: input.title
+      });
+      if (documents.length === 0) {
+        throw new Error("没有可导入的文档");
+      }
+      const totalChunks = documents.reduce((sum, document) => sum + document.chunks.length, 0);
+      let completedChunks = 0;
+      const results = [];
+      this.updateUploadJob(jobId, {
+        status: "RUNNING",
+        stage: "PARSING",
+        message: `解析完成：${documents.length} 个文档，${totalChunks} 个切片`,
+        progress: 8,
+        documentCount: documents.length,
+        totalChunks,
+        currentChunk: 0
+      });
+
+      for (const [documentIndex, document] of documents.entries()) {
+        const result = await manualIngestionService.ingest({
+          sourceId: input.sourceId,
+          document,
+          fileName: input.fileName,
+          format: input.format ?? "auto"
+        }, tenantId, (update) => {
+          const documentProgress = Math.max(0, Math.min(100, update.progress));
+          const overallProgress = totalChunks > 0
+            ? 8 + ((completedChunks + ((update.currentChunk ?? 0) || 0)) / totalChunks) * 90
+            : 8 + ((documentIndex + documentProgress / 100) / documents.length) * 90;
+          this.updateUploadJob(jobId, {
+            status: "RUNNING",
+            ...update,
+            message: documents.length > 1
+              ? `[${documentIndex + 1}/${documents.length}] ${update.message}`
+              : update.message,
+            progress: Math.min(99, overallProgress),
+            documentCount: documents.length,
+            currentChunk: completedChunks + (update.currentChunk ?? 0),
+            totalChunks
+          });
+        });
+        completedChunks += result.chunkCount;
+        results.push(result);
+      }
+
+      const first = results[0];
+      if (!first) {
+        throw new Error("没有可导入的文档");
+      }
+      this.updateUploadJob(jobId, {
+        status: "COMPLETED",
+        stage: "COMPLETED",
+        message: `导入完成：${documents.length} 个文档，${completedChunks} 个切片`,
+        progress: 100,
+        documentId: first.documentId,
+        traceId: first.traceId,
+        chunkCount: results.reduce((sum, result) => sum + result.chunkCount, 0),
+        eventCount: results.reduce((sum, result) => sum + result.eventCount, 0),
+        documentCount: documents.length,
+        currentChunk: completedChunks,
+        totalChunks
+      });
+    } catch (error) {
+      this.updateUploadJob(jobId, {
+        status: "FAILED",
+        stage: "FAILED",
+        message: "导入失败",
+        progress: 100,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 
   private async runUploadJob(jobId: string, input: {
@@ -502,6 +620,44 @@ export class WebuiService {
 }
 
 export const webuiService = new WebuiService();
+
+function validateStructuredImportInput(input: {
+  sourceId?: string;
+  title?: string;
+  fileName?: string;
+  format?: ManualImportFormat;
+  content: string;
+}) {
+  const importBytes = Buffer.byteLength(input.content, "utf8");
+  if (importBytes === 0) {
+    throw new Error("导入内容为空");
+  }
+  if (importBytes > MAX_STRUCTURED_IMPORT_BYTES) {
+    throw new Error(`导入内容超过 ${MAX_STRUCTURED_IMPORT_BYTES} 字节限制`);
+  }
+  if (!input.sourceId) {
+    throw new Error("导入数据必须先选择项目");
+  }
+  const fileName = input.fileName?.trim() || "structured-import.json";
+  return {
+    sourceId: input.sourceId,
+    title: input.title?.trim() || fileName.replace(/\.[^.]+$/, "") || "结构化导入",
+    fileName,
+    format: input.format ?? "auto",
+    content: input.content,
+    importBytes
+  };
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 function validateUploadInput(input: {
   title?: string;

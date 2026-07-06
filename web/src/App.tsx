@@ -123,6 +123,11 @@ type AnswerCitation = {
   query?: string;
   document?: DocumentRecord | null;
 };
+type ChunkDrawerDetail = {
+  citation: AnswerCitation;
+  events: Array<EventRecord & { entities: EntityRecord[] }>;
+  entities: EntityRecord[];
+};
 type DetailDrawer =
   | { type: "event"; detail: EventDetailRecord }
   | {
@@ -131,11 +136,13 @@ type DetailDrawer =
       sameNameDetails?: EntityDetailRecord[];
     }
   | { type: "citation"; citation: AnswerCitation }
+  | { type: "chunk"; detail: ChunkDrawerDetail }
   | null;
 type ActiveDetailDrawer = Exclude<DetailDrawer, null>;
 type GraphFocus = {
   key: string;
   query: string;
+  chunkIds: string[];
   eventIds: string[];
   entityIds: string[];
   primaryEntityId?: string;
@@ -1000,20 +1007,20 @@ function AppShell() {
     }
     setError("");
     setStatus(
-      t("正在导入网页版 AI 表格数据...", "Importing structured AI data..."),
+      t("正在提交后台导入任务...", "Submitting background import job..."),
     );
     try {
-      const response = await api.importStructuredKnowledge({
+      const response = await api.createStructuredImportJob({
         sourceId: selectedProjectId,
         ...input,
       });
-      await loadProjectWorkspace(selectedProjectId);
-      setSelectedDocumentId(response.documentId);
-      setResultView("overview");
+      refreshedUploadJobsRef.current.delete(response.job.id);
+      setUploadJobs((current) => [response.job, ...current].slice(0, 20));
+      setIsUploadQueueExpanded(true);
       setStatus(
         t(
-          `导入完成：${response.documentCount ?? 1} 个文档，${response.chunkCount} 个切片，${response.eventCount} 个事件`,
-          `Import complete: ${response.documentCount ?? 1} document(s), ${response.chunkCount} chunks and ${response.eventCount} events`,
+          `已提交后台导入任务：${response.job.title || response.job.fileName}，可在处理队列查看进度`,
+          `Background import job submitted: ${response.job.title || response.job.fileName}. Track it in the processing queue.`,
         ),
       );
     } catch (err) {
@@ -1695,6 +1702,63 @@ function AppShell() {
     }
   }
 
+  async function openChunkDetail(
+    chunkId: string,
+    options?: { pushHistory?: boolean },
+  ) {
+    const previousDrawer = drawer;
+    const graphChunk = projectGraph?.chunks.find((item) => item.id === chunkId);
+    const localChunk = graphChunk ?? chunks.find((item) => item.id === chunkId);
+    const baseCitation: AnswerCitation = {
+      index: localChunk?.rank ?? 0,
+      chunkId,
+      sourceId: localChunk?.sourceId ?? selectedProject?.id ?? "",
+      documentId: localChunk?.documentId ?? undefined,
+      heading: localChunk?.heading ?? undefined,
+      content: localChunk?.content ?? "",
+      rank: localChunk?.rank,
+    };
+    if (options?.pushHistory) {
+      rememberCurrentDrawerForBackNavigation(previousDrawer);
+    } else {
+      setDrawerHistory([]);
+    }
+    setDrawer({
+      type: "chunk",
+      detail: { citation: baseCitation, events: [], entities: [] },
+    });
+
+    try {
+      const assets = await api.getChunkAssets([chunkId]);
+      const chunk = assets.chunks.find((item) => item.id === chunkId);
+      const enrichedCitation: AnswerCitation = {
+        ...baseCitation,
+        sourceId: chunk?.sourceId ?? baseCitation.sourceId,
+        documentId: chunk?.documentId ?? baseCitation.documentId,
+        heading: chunk?.heading || baseCitation.heading,
+        content: chunk?.content || baseCitation.content,
+        rank: chunk?.rank ?? baseCitation.rank,
+        document: chunk?.document ?? baseCitation.document,
+      };
+      setDrawer((current) =>
+        current?.type === "chunk" &&
+        current.detail.citation.chunkId === chunkId
+          ? {
+              type: "chunk",
+              detail: {
+                citation: enrichedCitation,
+                events: assets.events,
+                entities: assets.entities,
+              },
+            }
+          : current,
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+
   async function updateChunkAsset(
     chunkId: string,
     input: {
@@ -2063,6 +2127,7 @@ function AppShell() {
                 graph={projectGraph}
                 focus={graphFocus}
                 defaultLayoutStyle={aiSettings?.graphDefaultLayoutStyle}
+                onOpenChunk={(chunkId) => void openChunkDetail(chunkId)}
                 onOpenEvent={(eventId) => void openEventDetail(eventId)}
                 onOpenEntity={(entityId) => void openEntityDetail(entityId)}
               />
@@ -2129,6 +2194,9 @@ function AppShell() {
           canGoBack={drawerHistory.length > 0}
           onBack={goBackDetailDrawer}
           onClose={closeDetailDrawer}
+          onOpenChunk={(chunkId) =>
+            void openChunkDetail(chunkId, { pushHistory: true })
+          }
           onOpenEvent={(eventId) =>
             void openEventDetail(eventId, { pushHistory: true })
           }
@@ -4595,8 +4663,8 @@ function ProjectDocumentsWorkspace(props: {
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {t(
-                  "默认自动识别简化 JSON v2、18 列 CSV、Markdown 表格，也兼容完整备份 JSON / CSV。简化格式包含来源字段和关系说明，但不包含数据库 ID 和 embedding；重新导入时系统会重新生成这些字段。相同“切片编号”的多行会合并为一个事件和多个实体。此导入过程不会调用远程 API。",
-                  "The default is auto detect for simple JSON v2, 18-column CSV, Markdown tables, and full backup JSON / CSV. Simple files include source fields and relation notes, but not database IDs or embeddings; those are regenerated on import. Rows with the same chunk ID are merged into one event with multiple entities. No remote API is called.",
+                  "默认自动识别简化 JSON v2、18 列 CSV、Markdown 表格，也兼容完整备份 JSON / CSV。大文件会作为后台任务导入，处理队列会显示进度；系统会分批生成 embedding 并写入数据库。简化格式不包含数据库 ID 和 embedding；重新导入时会重新生成这些字段。相同“切片编号”的多行会合并为一个事件和多个实体。",
+                  "The default is auto detect for simple JSON v2, 18-column CSV, Markdown tables, and full backup JSON / CSV. Large files are imported as background jobs with progress in the processing queue; embeddings and database writes are processed in batches. Simple files do not include database IDs or embeddings; those are regenerated on import. Rows with the same chunk ID are merged into one event with multiple entities.",
                 )}
               </p>
             </div>
@@ -4770,7 +4838,7 @@ function ProjectDocumentsWorkspace(props: {
                 {isManualImporting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
-                {t("导入项目", "Import into project")}
+                {t("提交导入任务", "Submit import job")}
               </Button>
             </div>
           </div>
@@ -6018,6 +6086,7 @@ function ProjectGraphWorkspace(props: {
   graph: ProjectGraphRecord | null;
   focus: GraphFocus | null;
   defaultLayoutStyle?: string;
+  onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
 }) {
@@ -6079,6 +6148,7 @@ function ProjectGraphWorkspace(props: {
           focus={props.focus}
           defaultLayoutStyle={props.defaultLayoutStyle}
           language={language}
+          onOpenChunk={props.onOpenChunk}
           onOpenEvent={props.onOpenEvent}
           onOpenEntity={props.onOpenEntity}
         />
@@ -6361,8 +6431,8 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
         {overview.events.length === 0 ? (
           <EmptyLine
             text={t(
-              "当前 trace 未返回事件快照。",
-              "The current trace did not return event snapshots.",
+              "引用切片没有直接关联事件。",
+              "The cited chunks have no directly linked events.",
             )}
           />
         ) : (
@@ -6402,8 +6472,8 @@ function KnowledgeAssetsPanel({ detail }: { detail: McpSessionDetail | null }) {
         {overview.entities.length === 0 ? (
           <EmptyLine
             text={t(
-              "当前 trace 未返回实体快照。",
-              "The current trace did not return entity snapshots.",
+              "引用事件没有直接关联实体。",
+              "The cited events have no directly linked entities.",
             )}
           />
         ) : (
@@ -8857,6 +8927,7 @@ function DetailDrawer(props: {
   canGoBack: boolean;
   onBack: () => void;
   onClose: () => void;
+  onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
 }) {
@@ -8892,10 +8963,13 @@ function DetailDrawer(props: {
                     ? drawer.detail.event.title
                     : drawer.type === "entity"
                       ? drawer.detail.entity.name
-                      : t(
-                          `引用 ${drawer.citation.index}`,
-                          `Citation ${drawer.citation.index}`,
-                        )
+                      : drawer.type === "chunk"
+                        ? drawer.detail.citation.heading ||
+                          t("切片详情", "Chunk details")
+                        : t(
+                            `引用 ${drawer.citation.index}`,
+                            `Citation ${drawer.citation.index}`,
+                          )
                 }
               />
             </h2>
@@ -8904,7 +8978,9 @@ function DetailDrawer(props: {
                 ? t("事件详情", "Event details")
                 : drawer.type === "entity"
                   ? t("实体详情", "Entity details")
-                  : t("引用原文", "Source citation")}
+                  : drawer.type === "chunk"
+                    ? t("切片详情", "Chunk details")
+                    : t("引用原文", "Source citation")}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -8929,6 +9005,12 @@ function DetailDrawer(props: {
               detail={drawer.detail}
               sameNameDetails={drawer.sameNameDetails}
               onOpenEvent={props.onOpenEvent}
+            />
+          ) : drawer.type === "chunk" ? (
+            <ChunkDetailPanel
+              detail={drawer.detail}
+              onOpenEvent={props.onOpenEvent}
+              onOpenEntity={props.onOpenEntity}
             />
           ) : (
             <CitationDetailPanel citation={drawer.citation} />
@@ -9133,6 +9215,70 @@ function SameNameEntityDetailCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function ChunkDetailPanel({
+  detail,
+  onOpenEvent,
+  onOpenEntity,
+}: {
+  detail: ChunkDrawerDetail;
+  onOpenEvent: (eventId: string) => void;
+  onOpenEntity: (entityId: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-4">
+      <CitationDetailPanel citation={detail.citation} />
+      <PanelSection
+        title={t(
+          `关联事件（${detail.events.length}）`,
+          `Related events (${detail.events.length})`,
+        )}
+      >
+        <div className="space-y-2">
+          {detail.events.length === 0 ? (
+            <EmptyLine text={t("暂无关联事件。", "No related events.")} />
+          ) : (
+            detail.events.map((event) => (
+              <button
+                key={event.id}
+                className="w-full rounded-md border border-border p-3 text-left hover:bg-accent"
+                onClick={() => onOpenEvent(event.id)}
+              >
+                <div className="text-sm font-medium">
+                  <RichTextFragment text={event.title} />
+                </div>
+                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                  <RichTextFragment text={event.summary || event.content} />
+                </p>
+              </button>
+            ))
+          )}
+        </div>
+      </PanelSection>
+      <PanelSection
+        title={t(
+          `关联实体（${detail.entities.length}）`,
+          `Related entities (${detail.entities.length})`,
+        )}
+      >
+        <div className="flex flex-wrap gap-2">
+          {detail.entities.length === 0 ? (
+            <EmptyLine text={t("暂无关联实体。", "No related entities.")} />
+          ) : (
+            detail.entities.map((entity) => (
+              <button key={entity.id} onClick={() => onOpenEntity(entity.id)}>
+                <Badge>
+                  <RichTextFragment text={entity.name} />
+                </Badge>
+              </button>
+            ))
+          )}
+        </div>
+      </PanelSection>
+    </div>
   );
 }
 
@@ -9506,26 +9652,14 @@ function buildKnowledgeAssetOverview(
       .filter((message) => message.role === "assistant")
       .flatMap(getMessageCitations),
   );
-  const events = new Map<string, KnowledgeAssetOverview["events"][number]>();
-  const entities = new Map<
-    string,
-    KnowledgeAssetOverview["entities"][number]
-  >();
-  let searchCount = 0;
-
-  for (const toolCall of detail.toolCalls) {
-    if (toolCall.toolName !== "sag_search") continue;
-    searchCount += 1;
-    const parsed = parseToolResponse(toolCall.result);
-    const trace = extractSearchTrace(parsed);
-    collectEventSnapshots(trace, events);
-    collectEntitySnapshots(trace, entities);
-  }
+  const searchCount = detail.toolCalls.filter(
+    (toolCall) => toolCall.toolName === "sag_search",
+  ).length;
 
   return {
     citations,
-    events: [...events.values()],
-    entities: [...entities.values()],
+    events: [],
+    entities: [],
     searchCount,
   };
 }
@@ -9550,8 +9684,8 @@ function mergeKnowledgeAssetOverview(
         }
       : citation;
   });
-  const events = new Map(base.events.map((event) => [event.id, event]));
-  const entities = new Map(base.entities.map((entity) => [entity.id, entity]));
+  const events = new Map<string, KnowledgeAssetOverview["events"][number]>();
+  const entities = new Map<string, KnowledgeAssetOverview["entities"][number]>();
   for (const event of chunkAssets.events) {
     if (!events.has(event.id)) {
       events.set(event.id, {
@@ -11226,19 +11360,27 @@ function extractSearchTrace(value: unknown): Record<string, unknown> | null {
 
 function buildGraphFocus(value: unknown, query: string): GraphFocus | null {
   const trace = extractSearchTrace(value);
-  if (!trace) return null;
+  const sections = extractSearchSections(value);
+  const chunkIds = uniqueStrings(
+    sections.map((section) =>
+      isPlainRecord(section) && typeof section.chunkId === "string"
+        ? section.chunkId
+        : "",
+    ),
+  ).slice(0, 12);
 
-  const rerankedEventIds = stringArray(trace.rerankedEventIds);
-  const eventIds = (
-    Array.isArray(trace.rerankedEventIds)
+  const rerankedEventIds = trace ? stringArray(trace.rerankedEventIds) : [];
+  const eventIds = (trace
+    ? Array.isArray(trace.rerankedEventIds)
       ? rerankedEventIds
       : firstNonEmptyStringArray(
           trace.textEventIds,
           trace.queryEventIds,
           trace.entityEventIds,
         )
+    : []
   ).slice(0, 30);
-  const recalledEntities = Array.isArray(trace.recalledEntities)
+  const recalledEntities = trace && Array.isArray(trace.recalledEntities)
     ? trace.recalledEntities.filter(isPlainRecord)
     : [];
   const normalizedQuery = normalizeKeyword(query).replace(/\s+/g, "");
@@ -11250,7 +11392,7 @@ function buildGraphFocus(value: unknown, query: string): GraphFocus | null {
       typeof entity.id === "string" ? entity.id : "",
     ),
   ).slice(0, 8);
-  if (eventIds.length === 0 && entityIds.length === 0) {
+  if (chunkIds.length === 0 && eventIds.length === 0 && entityIds.length === 0) {
     return null;
   }
 
@@ -11276,11 +11418,23 @@ function buildGraphFocus(value: unknown, query: string): GraphFocus | null {
   return {
     key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     query,
+    chunkIds,
     eventIds,
     entityIds,
     primaryEntityId:
       typeof primaryEntity?.id === "string" ? primaryEntity.id : entityIds[0],
   };
+}
+
+function extractSearchSections(value: unknown): unknown[] {
+  if (isPlainRecord(value) && Array.isArray(value.sections)) {
+    return value.sections;
+  }
+  const parsed = parseToolResponse(value);
+  if (isPlainRecord(parsed) && Array.isArray(parsed.sections)) {
+    return parsed.sections;
+  }
+  return [];
 }
 
 function stringArray(value: unknown): string[] {

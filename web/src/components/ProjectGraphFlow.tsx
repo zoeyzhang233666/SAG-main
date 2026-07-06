@@ -21,6 +21,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { RefreshCw, Search } from "lucide-react";
 import type {
+  ProjectGraphChunkRecord,
   ProjectGraphEntityRecord,
   ProjectGraphEventRecord,
   ProjectGraphRecord,
@@ -32,7 +33,7 @@ import { RichTextFragment } from "./RichText";
 
 type GraphNodeData = {
   label: string;
-  kind: "entity" | "event" | "question";
+  kind: "chunk" | "entity" | "event" | "question";
   expanded: boolean;
   entityType?: string;
   entityTypeColor?: string;
@@ -42,6 +43,7 @@ type GraphNode = Node<GraphNodeData>;
 type GraphEdge = Edge;
 
 const ROOT_ENTITY_LIMIT = 8;
+const CHUNK_NODE_WIDTH = 190;
 const ENTITY_NODE_WIDTH = 170;
 const EVENT_NODE_WIDTH = 180;
 const NODE_HEIGHT = 44;
@@ -99,12 +101,14 @@ export function ProjectGraphFlow(props: {
   focus?: {
     key: string;
     query: string;
+    chunkIds: string[];
     eventIds: string[];
     entityIds: string[];
     primaryEntityId?: string;
   } | null;
   defaultLayoutStyle?: string;
   language: SupportedLanguage;
+  onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
 }) {
@@ -120,12 +124,14 @@ function ProjectGraphCanvas(props: {
   focus?: {
     key: string;
     query: string;
+    chunkIds: string[];
     eventIds: string[];
     entityIds: string[];
     primaryEntityId?: string;
   } | null;
   defaultLayoutStyle?: string;
   language: SupportedLanguage;
+  onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
 }) {
@@ -142,6 +148,9 @@ function ProjectGraphCanvas(props: {
     () => new Set(props.graph.entities[0] ? [props.graph.entities[0].id] : []),
   );
   const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [focusedChunkIds, setFocusedChunkIds] = useState<Set<string>>(
     new Set(),
   );
   const [focusedEntityIds, setFocusedEntityIds] = useState<Set<string>>(
@@ -162,7 +171,7 @@ function ProjectGraphCanvas(props: {
   );
   const [entityTypeQuery, setEntityTypeQuery] = useState("");
   const [entityTypeFilterCollapsed, setEntityTypeFilterCollapsed] =
-    useState(true);
+    useState(false);
   const [activeGraphMode, setActiveGraphMode] =
     useState<ActiveGraphMode>("overview");
   const [showcaseSeed, setShowcaseSeed] = useState(() =>
@@ -186,10 +195,40 @@ function ProjectGraphCanvas(props: {
     () => new Map(props.graph.entities.map((entity) => [entity.id, entity])),
     [props.graph.entities],
   );
+  const chunkById = useMemo(
+    () => new Map((props.graph.chunks ?? []).map((chunk) => [chunk.id, chunk])),
+    [props.graph.chunks],
+  );
   const eventById = useMemo(
     () => new Map(props.graph.events.map((event) => [event.id, event])),
     [props.graph.events],
   );
+  const eventIdsByChunkId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const edges = props.graph.chunkEventEdges ?? [];
+    for (const edge of edges) {
+      const eventIds = map.get(edge.chunkId) ?? [];
+      eventIds.push(edge.eventId);
+      map.set(edge.chunkId, eventIds);
+    }
+    for (const [chunkId, eventIds] of map.entries()) {
+      eventIds.sort((a, b) =>
+        compareEvents(eventById.get(a), eventById.get(b)),
+      );
+      map.set(chunkId, eventIds);
+    }
+    return map;
+  }, [eventById, props.graph.chunkEventEdges]);
+  const chunkIdByEventId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const event of props.graph.events) {
+      if (event.chunkId) map.set(event.id, event.chunkId);
+    }
+    for (const edge of props.graph.chunkEventEdges ?? []) {
+      map.set(edge.eventId, edge.chunkId);
+    }
+    return map;
+  }, [props.graph.chunkEventEdges, props.graph.events]);
   const eventIdsByEntityId = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const edge of props.graph.edges) {
@@ -250,8 +289,12 @@ function ProjectGraphCanvas(props: {
   const graphIdentity = useMemo(
     () =>
       [
+        (props.graph.chunks ?? []).map((chunk) => chunk.id).join(","),
         props.graph.entities.map((entity) => entity.id).join(","),
         props.graph.events.map((event) => event.id).join(","),
+        (props.graph.chunkEventEdges ?? [])
+          .map((edge) => `${edge.chunkId}:${edge.eventId}`)
+          .join(","),
         props.graph.edges
           .map((edge) => `${edge.entityId}:${edge.eventId}`)
           .join(","),
@@ -265,16 +308,22 @@ function ProjectGraphCanvas(props: {
         initialEntityIds,
         expandedEntityIds,
         expandedEventIds,
+        focusedChunkIds,
         focusedEntityIds,
         focusedEventIds,
+        eventIdsByChunkId,
+        chunkIdByEventId,
         eventIdsByEntityId,
         entityIdsByEventId,
       }),
     [
+      chunkIdByEventId,
       entityIdsByEventId,
+      eventIdsByChunkId,
       eventIdsByEntityId,
       expandedEntityIds,
       expandedEventIds,
+      focusedChunkIds,
       focusedEntityIds,
       focusedEventIds,
       initialEntityIds,
@@ -332,13 +381,18 @@ function ProjectGraphCanvas(props: {
         initialEntityIds,
         expandedEntityIds,
         expandedEventIds,
+        focusedChunkIds,
         focusedEntityIds,
         focusedEventIds,
+        chunkById,
         entityById,
         eventById,
+        eventIdsByChunkId,
+        chunkIdByEventId,
         eventIdsByEntityId,
         entityIdsByEventId,
         edges: props.graph.edges,
+        chunkEventEdges: props.graph.chunkEventEdges ?? [],
         positionByNodeId,
         selectedNodeId,
         activeQueryLabel,
@@ -349,16 +403,21 @@ function ProjectGraphCanvas(props: {
       }),
     [
       activeQueryLabel,
+      chunkById,
+      chunkIdByEventId,
       entityById,
       entityIdsByEventId,
       eventById,
+      eventIdsByChunkId,
       eventIdsByEntityId,
       expandedEntityIds,
       expandedEventIds,
+      focusedChunkIds,
       focusedEntityIds,
       focusedEventIds,
       initialEntityIds,
       positionByNodeId,
+      props.graph.chunkEventEdges,
       props.graph.edges,
       queryLinkedNodeIds,
       selectedEntityTypes,
@@ -373,6 +432,7 @@ function ProjectGraphCanvas(props: {
     shouldFitViewRef.current = true;
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
+    setFocusedChunkIds(new Set());
     setFocusedEntityIds(new Set(showcase.entityIds));
     setFocusedEventIds(new Set(showcase.eventIds));
     setSelectedNodeId(null);
@@ -440,9 +500,19 @@ function ProjectGraphCanvas(props: {
 
   useEffect(() => {
     if (!props.focus) return;
-    const eventIds = props.focus.eventIds
+    const chunkIds = props.focus.chunkIds
+      .filter((id) => chunkById.has(id))
+      .slice(0, 12);
+    const eventIdsFromChunks = uniqueGraphIds(
+      chunkIds.flatMap((chunkId) => eventIdsByChunkId.get(chunkId) ?? []),
+    );
+    const directEventIds = props.focus.eventIds
       .filter((id) => eventById.has(id))
       .slice(0, FOCUS_EVENT_LIMIT);
+    const eventIds = uniqueGraphIds([
+      ...eventIdsFromChunks,
+      ...directEventIds,
+    ]).slice(0, FOCUS_EVENT_LIMIT);
     const directEntityIds = props.focus.entityIds
       .filter((id) => entityById.has(id))
       .slice(0, FOCUS_ENTITY_LIMIT);
@@ -457,6 +527,7 @@ function ProjectGraphCanvas(props: {
     setActiveGraphMode("manual");
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
+    setFocusedChunkIds(new Set(chunkIds));
     setFocusedEntityIds(entityIds);
     setFocusedEventIds(new Set(eventIds));
     setSelectedNodeId(null);
@@ -466,12 +537,25 @@ function ProjectGraphCanvas(props: {
       `${graphText(props.language, "当前搜索", "Search")} · ${props.focus.query}`,
     );
     setQueryLinkedNodeIds(
-      new Set(eventIds.length > 0 ? eventIds : directEntityIds),
+      new Set(
+        chunkIds.length > 0
+          ? chunkIds
+          : eventIds.length > 0
+            ? eventIds
+            : directEntityIds,
+      ),
     );
     setSuggestionsOpen(false);
     setLayoutRevision((current) => current + 1);
     shouldFitViewRef.current = true;
-  }, [entityById, entityIdsByEventId, eventById, props.focus?.key]);
+  }, [
+    chunkById,
+    entityById,
+    entityIdsByEventId,
+    eventById,
+    eventIdsByChunkId,
+    props.focus?.key,
+  ]);
 
 
   useEffect(() => {
@@ -490,6 +574,10 @@ function ProjectGraphCanvas(props: {
     }
 
     setSelectedNodeId(node.id);
+    if (data.kind === "chunk") {
+      props.onOpenChunk(node.id);
+      return;
+    }
     if (data.kind === "entity") {
       props.onOpenEntity(node.id);
       clickTimerRef.current = window.setTimeout(() => {
@@ -516,6 +604,10 @@ function ProjectGraphCanvas(props: {
     }
     if (data.kind === "entity") {
       props.onOpenEntity(node.id);
+      return;
+    }
+    if (data.kind === "chunk") {
+      props.onOpenChunk(node.id);
       return;
     }
     props.onOpenEvent(node.id);
@@ -601,15 +693,30 @@ function ProjectGraphCanvas(props: {
   }
 
   function revealSuggestion(suggestion: GraphSuggestion) {
+    const chunkIds = new Set<string>();
     const entityIds = new Set<string>();
     const eventIds = new Set<string>();
-    if (suggestion.kind === "entity") {
+    if (suggestion.kind === "chunk") {
+      chunkIds.add(suggestion.id);
+      for (const eventId of eventIdsByChunkId.get(suggestion.id) ?? []) {
+        eventIds.add(eventId);
+        const chunkId = chunkIdByEventId.get(eventId);
+        if (chunkId) chunkIds.add(chunkId);
+        for (const entityId of entityIdsByEventId.get(eventId) ?? []) {
+          entityIds.add(entityId);
+          if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
+        }
+        if (eventIds.size >= FOCUS_EVENT_LIMIT) break;
+      }
+    } else if (suggestion.kind === "entity") {
       entityIds.add(suggestion.id);
       for (const eventId of (eventIdsByEntityId.get(suggestion.id) ?? []).slice(
         0,
         FOCUS_EVENT_LIMIT,
       )) {
         eventIds.add(eventId);
+        const chunkId = chunkIdByEventId.get(eventId);
+        if (chunkId) chunkIds.add(chunkId);
         for (const entityId of entityIdsByEventId.get(eventId) ?? []) {
           entityIds.add(entityId);
           if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
@@ -618,6 +725,8 @@ function ProjectGraphCanvas(props: {
       }
     } else {
       eventIds.add(suggestion.id);
+      const chunkId = chunkIdByEventId.get(suggestion.id);
+      if (chunkId) chunkIds.add(chunkId);
       for (const entityId of entityIdsByEventId.get(suggestion.id) ?? []) {
         entityIds.add(entityId);
       }
@@ -625,6 +734,7 @@ function ProjectGraphCanvas(props: {
     setActiveGraphMode("manual");
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
+    setFocusedChunkIds(chunkIds);
     setFocusedEntityIds(entityIds);
     setFocusedEventIds(eventIds);
     setSelectedNodeId(null);
@@ -633,7 +743,7 @@ function ProjectGraphCanvas(props: {
     setActiveQueryLabel(
       `${graphText(props.language, "当前搜索", "Search")} · ${suggestion.label}`,
     );
-    setQueryLinkedNodeIds(new Set([suggestion.id]));
+    setQueryLinkedNodeIds(new Set(chunkIds.size > 0 ? [...chunkIds] : [suggestion.id]));
     setSuggestionsOpen(false);
     setLayoutRevision((current) => current + 1);
     shouldFitViewRef.current = true;
@@ -711,6 +821,10 @@ function ProjectGraphCanvas(props: {
         }
       `}</style>
       <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 rounded-xl border border-border bg-background/90 p-2 shadow-[0_10px_30px_rgba(24,36,58,0.08)] backdrop-blur">
+        <MetricChip
+          label={graphText(props.language, "切片", "Chunks")}
+          value={(props.graph.chunks ?? []).length}
+        />
         <MetricChip
           label={graphText(props.language, "实体", "Entities")}
           value={props.graph.entities.length}
@@ -793,8 +907,8 @@ function ProjectGraphCanvas(props: {
           }}
           placeholder={graphText(
             props.language,
-            "搜索实体或事件，支持模糊匹配",
-            "Search entities or events with fuzzy matching",
+            "搜索切片、实体或事件，支持模糊匹配",
+            "Search chunks, entities or events with fuzzy matching",
           )}
           className="h-9 w-full rounded-lg border border-input bg-background/95 pl-9 pr-3 text-sm shadow-lg outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-ring"
         />
@@ -813,9 +927,11 @@ function ProjectGraphCanvas(props: {
                     <RichTextFragment text={suggestion.label} />
                   </span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {suggestion.kind === "entity"
-                      ? graphText(props.language, "实体", "Entity")
-                      : graphText(props.language, "事件", "Event")}
+                    {suggestion.kind === "chunk"
+                      ? graphText(props.language, "切片", "Chunk")
+                      : suggestion.kind === "entity"
+                        ? graphText(props.language, "实体", "Entity")
+                        : graphText(props.language, "事件", "Event")}
                   </span>
                 </button>
               ))
@@ -877,9 +993,11 @@ function ProjectGraphCanvas(props: {
             const data = node.data as GraphNodeData;
             return data.kind === "question"
               ? "#22a06b"
-              : data.kind === "entity"
-                ? data.entityTypeColor ?? "#df5b25"
-                : "#1b6fcc";
+              : data.kind === "chunk"
+                ? "#1b6fcc"
+                : data.kind === "entity"
+                  ? data.entityTypeColor ?? "#df5b25"
+                  : "#4f46e5";
           }}
           maskColor="rgba(238,242,247,0.72)"
         />
@@ -1015,6 +1133,7 @@ type EntityTypeOption = {
 
 type VisibleGraphScope = {
   hasFocusedGraph: boolean;
+  visibleChunkIds: Set<string>;
   visibleEntityIds: Set<string>;
   visibleEventIds: Set<string>;
 };
@@ -1086,27 +1205,67 @@ function buildVisibleGraphScope(input: {
   initialEntityIds: Set<string>;
   expandedEntityIds: Set<string>;
   expandedEventIds: Set<string>;
+  focusedChunkIds: Set<string>;
   focusedEntityIds: Set<string>;
   focusedEventIds: Set<string>;
+  eventIdsByChunkId: Map<string, string[]>;
+  chunkIdByEventId: Map<string, string>;
   eventIdsByEntityId: Map<string, string[]>;
   entityIdsByEventId: Map<string, string[]>;
 }): VisibleGraphScope {
   const hasFocusedGraph =
-    input.focusedEntityIds.size > 0 || input.focusedEventIds.size > 0;
+    input.focusedChunkIds.size > 0 ||
+    input.focusedEntityIds.size > 0 ||
+    input.focusedEventIds.size > 0;
+  const visibleChunkIds = new Set(hasFocusedGraph ? input.focusedChunkIds : []);
   const visibleEntityIds = new Set(
     hasFocusedGraph ? input.focusedEntityIds : input.initialEntityIds,
   );
   const visibleEventIds = new Set(hasFocusedGraph ? input.focusedEventIds : []);
 
+  for (const chunkId of visibleChunkIds) {
+    for (const eventId of input.eventIdsByChunkId.get(chunkId) ?? []) {
+      visibleEventIds.add(eventId);
+    }
+  }
+
+  for (const eventId of visibleEventIds) {
+    const chunkId = input.chunkIdByEventId.get(eventId);
+    if (chunkId && hasFocusedGraph) {
+      visibleChunkIds.add(chunkId);
+    }
+    for (const entityId of input.entityIdsByEventId.get(eventId) ?? []) {
+      visibleEntityIds.add(entityId);
+    }
+  }
+
   for (const entityId of input.expandedEntityIds) {
     visibleEntityIds.add(entityId);
     for (const eventId of input.eventIdsByEntityId.get(entityId) ?? []) {
       visibleEventIds.add(eventId);
+      const chunkId = input.chunkIdByEventId.get(eventId);
+      if (chunkId && hasFocusedGraph) {
+        visibleChunkIds.add(chunkId);
+      }
     }
   }
 
   for (const eventId of input.expandedEventIds) {
     visibleEventIds.add(eventId);
+    const chunkId = input.chunkIdByEventId.get(eventId);
+    if (chunkId && hasFocusedGraph) {
+      visibleChunkIds.add(chunkId);
+    }
+    for (const entityId of input.entityIdsByEventId.get(eventId) ?? []) {
+      visibleEntityIds.add(entityId);
+    }
+  }
+
+  for (const eventId of visibleEventIds) {
+    const chunkId = input.chunkIdByEventId.get(eventId);
+    if (chunkId && hasFocusedGraph) {
+      visibleChunkIds.add(chunkId);
+    }
     for (const entityId of input.entityIdsByEventId.get(eventId) ?? []) {
       visibleEntityIds.add(entityId);
     }
@@ -1114,6 +1273,7 @@ function buildVisibleGraphScope(input: {
 
   return {
     hasFocusedGraph,
+    visibleChunkIds,
     visibleEntityIds,
     visibleEventIds,
   };
@@ -1122,6 +1282,7 @@ function buildVisibleGraphScope(input: {
 function cloneVisibleGraphScope(scope: VisibleGraphScope): VisibleGraphScope {
   return {
     hasFocusedGraph: scope.hasFocusedGraph,
+    visibleChunkIds: new Set(scope.visibleChunkIds),
     visibleEntityIds: new Set(scope.visibleEntityIds),
     visibleEventIds: new Set(scope.visibleEventIds),
   };
@@ -1174,13 +1335,20 @@ function resolveQuestionLinkedNodeIds(input: {
   layoutStyle: GraphLayoutStyle;
   queryLinkedNodeIds: Set<string>;
   visibleNodeIds: Set<string>;
+  visibleChunkIds: string[];
   visibleEntityIds: string[];
 }) {
   if (input.layoutStyle === "entity_inner") {
-    return input.visibleEntityIds.filter((entityId) =>
+    const entityIds = input.visibleEntityIds.filter((entityId) =>
       input.visibleNodeIds.has(entityId),
     );
+    if (entityIds.length > 0) return entityIds;
   }
+
+  const chunkIds = input.visibleChunkIds.filter((chunkId) =>
+    input.visibleNodeIds.has(chunkId),
+  );
+  if (chunkIds.length > 0) return chunkIds;
 
   return [...input.queryLinkedNodeIds].filter((nodeId) =>
     input.visibleNodeIds.has(nodeId),
@@ -1191,13 +1359,18 @@ function buildVisibleGraph(input: {
   initialEntityIds: Set<string>;
   expandedEntityIds: Set<string>;
   expandedEventIds: Set<string>;
+  focusedChunkIds: Set<string>;
   focusedEntityIds: Set<string>;
   focusedEventIds: Set<string>;
+  chunkById: Map<string, ProjectGraphChunkRecord>;
   entityById: Map<string, ProjectGraphEntityRecord>;
   eventById: Map<string, ProjectGraphEventRecord>;
+  eventIdsByChunkId: Map<string, string[]>;
+  chunkIdByEventId: Map<string, string>;
   eventIdsByEntityId: Map<string, string[]>;
   entityIdsByEventId: Map<string, string[]>;
   edges: ProjectGraphRecord["edges"];
+  chunkEventEdges: ProjectGraphRecord["chunkEventEdges"];
   positionByNodeId: Map<string, GraphPosition>;
   selectedNodeId: string | null;
   activeQueryLabel: string;
@@ -1206,7 +1379,7 @@ function buildVisibleGraph(input: {
   layoutStyle: GraphLayoutStyle;
   layoutRevision: number;
 }): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const { hasFocusedGraph, visibleEntityIds, visibleEventIds } =
+  const { hasFocusedGraph, visibleChunkIds, visibleEntityIds, visibleEventIds } =
     buildVisibleGraphScope(input);
 
   applyEntityVisibilityRules({
@@ -1219,6 +1392,11 @@ function buildVisibleGraph(input: {
   });
 
   const nodes: GraphNode[] = [];
+  const chunkIds = [...visibleChunkIds]
+    .filter((id) => input.chunkById.has(id))
+    .sort((a, b) =>
+      compareChunks(input.chunkById.get(a), input.chunkById.get(b)),
+    );
   const entityIds = orderEntityIdsByTypeCluster(
     [...visibleEntityIds].filter((id) => input.entityById.has(id)),
     input.entityById,
@@ -1230,6 +1408,7 @@ function buildVisibleGraph(input: {
     );
   const focusedPositions = hasFocusedGraph
     ? buildFocusedPositionMap(
+        chunkIds,
         entityIds,
         eventIds,
         input.layoutRevision,
@@ -1249,6 +1428,25 @@ function buildVisibleGraph(input: {
         x: position.x,
         y: position.y,
         root: true,
+      }),
+    );
+  }
+
+  for (const chunkId of chunkIds) {
+    const chunk = input.chunkById.get(chunkId);
+    if (!chunk) continue;
+    const position =
+      focusedPositions?.get(chunk.id) ??
+      input.positionByNodeId.get(chunk.id) ??
+      fallbackPosition();
+    nodes.push(
+      createGraphNode({
+        id: chunk.id,
+        label: chunk.heading || trimGraphLabel(chunk.content),
+        kind: "chunk",
+        expanded: false,
+        x: position.x,
+        y: position.y,
       }),
     );
   }
@@ -1295,6 +1493,37 @@ function buildVisibleGraph(input: {
 
   const visibleNodeIds = new Set(nodes.map((node) => node.id));
   const visibleNodeById = new Map(nodes.map((node) => [node.id, node]));
+  const chunkEdges: GraphEdge[] = input.chunkEventEdges
+    .filter(
+      (edge) =>
+        visibleNodeIds.has(edge.chunkId) && visibleNodeIds.has(edge.eventId),
+    )
+    .map((edge) => {
+      const visualLink = orientTopToBottomEdge({
+        sourceId: edge.chunkId,
+        targetId: edge.eventId,
+        nodeById: visibleNodeById,
+      });
+      return {
+        id: `${edge.chunkId}-${edge.eventId}`,
+        type: "bus",
+        source: visualLink.source,
+        target: visualLink.target,
+        animated: false,
+        data: { preferredAxis: "horizontal", busOffset: 66 },
+        interactionWidth: 14,
+        zIndex: 0,
+        style: {
+          stroke: "#1b6fcc",
+          strokeWidth: 1.45,
+          opacity: 0.38,
+          strokeDasharray: EDGE_DASH_PATTERN,
+          animation: EDGE_DASH_ANIMATION,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+        },
+      };
+    });
   const edges: GraphEdge[] = input.edges
     .filter(
       (edge) =>
@@ -1343,6 +1572,7 @@ function buildVisibleGraph(input: {
       layoutStyle: input.layoutStyle,
       queryLinkedNodeIds: input.queryLinkedNodeIds,
       visibleNodeIds,
+      visibleChunkIds: chunkIds,
       visibleEntityIds: entityIds,
     });
     for (const nodeId of questionLinkedNodeIds) {
@@ -1374,7 +1604,7 @@ function buildVisibleGraph(input: {
 
   return applySelectionStyles({
     nodes,
-    edges,
+    edges: [...chunkEdges, ...edges],
     selectedNodeId: input.selectedNodeId,
   });
 }
@@ -1419,9 +1649,11 @@ function createGraphNode(input: {
       ? QUESTION_NODE_WIDTH
       : input.root
         ? ENTITY_NODE_WIDTH + 20
-        : input.kind === "entity"
-          ? ENTITY_NODE_WIDTH
-          : EVENT_NODE_WIDTH;
+        : input.kind === "chunk"
+          ? CHUNK_NODE_WIDTH
+          : input.kind === "entity"
+            ? ENTITY_NODE_WIDTH
+            : EVENT_NODE_WIDTH;
   const entityType =
     input.kind === "entity" ? normalizeEntityType(input.entityType) : "";
   const entityTypeColor =
@@ -1447,32 +1679,44 @@ function createGraphNode(input: {
       border:
         input.kind === "question"
           ? "1.5px solid #22a06b"
-          : input.kind === "entity" && entityTypeColor
-            ? input.expanded
-              ? `1.7px solid ${entityTypeColor}`
-              : `1px solid ${hexToRgba(entityTypeColor, 0.55)}`
-            : input.expanded
-              ? "1.5px solid #1b6fcc"
-              : "1px solid #dce4ee",
+          : input.kind === "chunk"
+            ? "1px solid rgba(27, 111, 204, 0.45)"
+            : input.kind === "entity" && entityTypeColor
+              ? input.expanded
+                ? `1.7px solid ${entityTypeColor}`
+                : `1px solid ${hexToRgba(entityTypeColor, 0.55)}`
+              : input.expanded
+                ? "1.5px solid #1b6fcc"
+                : "1px solid #dce4ee",
       background:
         input.kind === "question"
           ? "linear-gradient(145deg, #ecfdf5, #f0fdf8)"
-          : input.kind === "entity" && entityTypeColor
-            ? `linear-gradient(145deg, ${entityTypeCardBackground(entityTypeColor, 0.88)}, ${entityTypeCardBackground(entityTypeColor, 0.96)})`
-            : "#f5f9ff",
+          : input.kind === "chunk"
+            ? "linear-gradient(145deg, #eff6ff, #f8fbff)"
+            : input.kind === "entity" && entityTypeColor
+              ? `linear-gradient(145deg, ${entityTypeCardBackground(entityTypeColor, 0.88)}, ${entityTypeCardBackground(entityTypeColor, 0.96)})`
+              : "#f5f9ff",
       color: "#18243a",
       fontSize: 12,
       fontWeight:
-        input.kind === "question" ? 700 : input.kind === "entity" ? 650 : 520,
+        input.kind === "question"
+          ? 700
+          : input.kind === "entity"
+            ? 650
+            : input.kind === "chunk"
+              ? 600
+              : 520,
       padding: input.kind === "question" ? "12px 14px" : "8px 10px",
       boxShadow:
         input.kind === "question"
           ? "0 14px 34px rgba(34, 160, 107, 0.16)"
-          : input.kind === "entity" && entityTypeColor
-            ? input.expanded || input.root
-              ? `0 12px 30px ${hexToRgba(entityTypeColor, 0.22)}`
-              : `0 4px 12px ${hexToRgba(entityTypeColor, 0.1)}`
-            : "0 4px 12px rgba(24, 36, 58, 0.07)",
+          : input.kind === "chunk"
+            ? "0 8px 20px rgba(27, 111, 204, 0.12)"
+            : input.kind === "entity" && entityTypeColor
+              ? input.expanded || input.root
+                ? `0 12px 30px ${hexToRgba(entityTypeColor, 0.22)}`
+                : `0 4px 12px ${hexToRgba(entityTypeColor, 0.1)}`
+              : "0 4px 12px rgba(24, 36, 58, 0.07)",
       overflow: "hidden",
       textOverflow: "ellipsis",
       whiteSpace: input.kind === "question" ? "normal" : "nowrap",
@@ -1556,54 +1800,55 @@ function applySelectionStyles(input: {
 function getNodeAccentColor(node: GraphNode) {
   const data = node.data as GraphNodeData;
   if (data.kind === "question") return "#22a06b";
+  if (data.kind === "chunk") return "#1b6fcc";
   if (data.kind === "entity") return data.entityTypeColor ?? "#df5b25";
-  return "#1b6fcc";
+  return "#4f46e5";
 }
 
 function buildFocusedPositionMap(
+  chunkIds: string[],
   entityIds: string[],
   eventIds: string[],
   revision: number,
   layoutStyle: GraphLayoutStyle,
 ) {
   if (layoutStyle === "columns") {
-    return buildColumnFocusedPositionMap(entityIds, eventIds, revision);
+    return buildColumnFocusedPositionMap(chunkIds, entityIds, eventIds, revision);
   }
   if (layoutStyle === "entity_inner") {
     return buildSquareFocusedPositionMap({
-      innerIds: entityIds,
-      outerIds: eventIds,
-      innerNodeWidth: ENTITY_NODE_WIDTH,
-      outerNodeWidth: EVENT_NODE_WIDTH,
+      layers: [
+        { ids: entityIds, nodeWidth: ENTITY_NODE_WIDTH },
+        { ids: chunkIds, nodeWidth: CHUNK_NODE_WIDTH },
+        { ids: eventIds, nodeWidth: EVENT_NODE_WIDTH },
+      ],
       revision,
     });
   }
-  return buildSearchLayerFocusedPositionMap(entityIds, eventIds, revision);
+  return buildSearchLayerFocusedPositionMap(chunkIds, entityIds, eventIds, revision);
 }
 
 function buildSearchLayerFocusedPositionMap(
+  chunkIds: string[],
   entityIds: string[],
   eventIds: string[],
   revision: number,
 ) {
-  // Search-centered mode: put matched events on the inner square ring and
-  // related entities on the outer square ring. This keeps the layout
-  // column-like, but wraps around the current-search card instead of
-  // forming circular rings.
+  // Search-centered mode: put cited chunks on the inner ring, events on the
+  // middle ring, and entities on the outer ring. This makes the visual graph
+  // follow the evidence path: question -> chunk -> event -> entity.
   return buildSquareFocusedPositionMap({
-    innerIds: eventIds,
-    outerIds: entityIds,
-    innerNodeWidth: EVENT_NODE_WIDTH,
-    outerNodeWidth: ENTITY_NODE_WIDTH,
+    layers: [
+      { ids: chunkIds, nodeWidth: CHUNK_NODE_WIDTH },
+      { ids: eventIds, nodeWidth: EVENT_NODE_WIDTH },
+      { ids: entityIds, nodeWidth: ENTITY_NODE_WIDTH },
+    ],
     revision,
   });
 }
 
 function buildSquareFocusedPositionMap(input: {
-  innerIds: string[];
-  outerIds: string[];
-  innerNodeWidth: number;
-  outerNodeWidth: number;
+  layers: Array<{ ids: string[]; nodeWidth: number }>;
   revision: number;
 }) {
   const positions = new Map<string, GraphPosition>();
@@ -1616,32 +1861,23 @@ function buildSquareFocusedPositionMap(input: {
     root: true,
   });
 
-  const innerRingCount = placeOnSquareRings({
-    ids: input.innerIds,
-    positions,
-    startHalfWidth: 420,
-    startHalfHeight: 215,
-    ringGapX: 280,
-    ringGapY: 158,
-    slotSpacingX: Math.max(235, input.innerNodeWidth + 70),
-    slotSpacingY: 112,
-    nodeWidth: input.innerNodeWidth,
-    nodeHeight: NODE_HEIGHT,
-    revision: input.revision,
-  });
-
-  placeOnSquareRings({
-    ids: input.outerIds,
-    positions,
-    startHalfWidth: 420 + Math.max(1, innerRingCount) * 280,
-    startHalfHeight: 215 + Math.max(1, innerRingCount) * 158,
-    ringGapX: 270,
-    ringGapY: 148,
-    slotSpacingX: Math.max(220, input.outerNodeWidth + 55),
-    slotSpacingY: 106,
-    nodeWidth: input.outerNodeWidth,
-    nodeHeight: NODE_HEIGHT,
-    revision: input.revision + 2,
+  let occupiedRingCount = 0;
+  input.layers.forEach((layer, layerIndex) => {
+    if (layer.ids.length === 0) return;
+    const ringCount = placeOnSquareRings({
+      ids: layer.ids,
+      positions,
+      startHalfWidth: 420 + occupiedRingCount * 280,
+      startHalfHeight: 215 + occupiedRingCount * 158,
+      ringGapX: 275,
+      ringGapY: 152,
+      slotSpacingX: Math.max(220, layer.nodeWidth + 65),
+      slotSpacingY: 108,
+      nodeWidth: layer.nodeWidth,
+      nodeHeight: NODE_HEIGHT,
+      revision: input.revision + layerIndex * 2,
+    });
+    occupiedRingCount += Math.max(1, ringCount);
   });
 
   return positions;
@@ -1722,22 +1958,26 @@ function squareRingPoints(input: {
 }
 
 function buildColumnFocusedPositionMap(
+  chunkIds: string[],
   entityIds: string[],
   eventIds: string[],
   _revision: number,
 ) {
   const positions = new Map<string, GraphPosition>();
-  const entityColumns = Math.min(5, Math.max(1, entityIds.length));
+  const chunkColumns = Math.min(4, Math.max(1, chunkIds.length));
   const eventColumns = Math.min(4, Math.max(1, eventIds.length));
-  const entityGapX = 210;
+  const entityColumns = Math.min(5, Math.max(1, entityIds.length));
+  const chunkGapX = 245;
   const eventGapX = 240;
+  const entityGapX = 210;
   const rowGap = 96;
-  const eventStartY = 78;
+  const chunkStartY = 80;
+  const chunkRows = Math.max(1, Math.ceil(chunkIds.length / chunkColumns));
+  const eventStartY =
+    chunkStartY + (chunkIds.length > 0 ? chunkRows * (rowGap + 10) : 0) + 24;
   const eventRows = Math.max(1, Math.ceil(eventIds.length / eventColumns));
-  const lastEventRowY = eventStartY + (eventRows - 1) * (rowGap + 12);
-  const eventEntityGap = 56;
-  const entityStartY = lastEventRowY + NODE_HEIGHT + eventEntityGap;
-  // Keep entity order stable so entities of the same type stay clustered.
+  const entityStartY =
+    eventStartY + (eventIds.length > 0 ? eventRows * (rowGap + 12) : 0) + 44;
 
   positions.set(QUESTION_NODE_ID, {
     x: -QUESTION_NODE_WIDTH / 2,
@@ -1747,6 +1987,17 @@ function buildColumnFocusedPositionMap(
     root: true,
   });
 
+  chunkIds.forEach((id, index) => {
+    const row = Math.floor(index / chunkColumns);
+    const column = index % chunkColumns;
+    positions.set(id, {
+      x: (column - (chunkColumns - 1) / 2) * chunkGapX - CHUNK_NODE_WIDTH / 2,
+      y: chunkStartY + row * (rowGap + 10),
+      angle: Math.PI / 2,
+      radius: row + 1,
+    });
+  });
+
   eventIds.forEach((id, index) => {
     const row = Math.floor(index / eventColumns);
     const column = index % eventColumns;
@@ -1754,7 +2005,7 @@ function buildColumnFocusedPositionMap(
       x: (column - (eventColumns - 1) / 2) * eventGapX - EVENT_NODE_WIDTH / 2,
       y: eventStartY + row * (rowGap + 12),
       angle: Math.PI / 2,
-      radius: row + 1,
+      radius: chunkRows + row + 2,
     });
   });
 
@@ -1766,7 +2017,7 @@ function buildColumnFocusedPositionMap(
         (column - (entityColumns - 1) / 2) * entityGapX - ENTITY_NODE_WIDTH / 2,
       y: entityStartY + row * rowGap,
       angle: 0,
-      radius: eventRows + row + 2,
+      radius: chunkRows + eventRows + row + 3,
     });
   });
 
@@ -1976,6 +2227,25 @@ function orderEntitiesByTypeCluster(entities: ProjectGraphEntityRecord[]) {
   });
 }
 
+function compareChunks(
+  a?: ProjectGraphChunkRecord,
+  b?: ProjectGraphChunkRecord,
+) {
+  return (
+    (a?.rank ?? 0) - (b?.rank ?? 0) ||
+    (a?.heading ?? a?.content ?? "").localeCompare(b?.heading ?? b?.content ?? "")
+  );
+}
+
+function trimGraphLabel(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > 42 ? `${normalized.slice(0, 42)}...` : normalized;
+}
+
+function uniqueGraphIds(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
 function compareEntities(
   a?: ProjectGraphEntityRecord,
   b?: ProjectGraphEntityRecord,
@@ -1999,7 +2269,7 @@ function compareEvents(
 type GraphSuggestion = {
   id: string;
   label: string;
-  kind: "entity" | "event";
+  kind: "chunk" | "entity" | "event";
   score: number;
   weight: number;
 };
@@ -2011,6 +2281,21 @@ function rankGraphSuggestions(
   const normalizedQuery = normalizeGraphText(query);
   if (!normalizedQuery) return [];
   const suggestions: GraphSuggestion[] = [];
+  for (const chunk of graph.chunks ?? []) {
+    const score = graphMatchScore(
+      `${chunk.heading ?? ""} ${chunk.content.slice(0, 220)}`,
+      normalizedQuery,
+    );
+    if (score > 0) {
+      suggestions.push({
+        id: chunk.id,
+        label: chunk.heading || trimGraphLabel(chunk.content),
+        kind: "chunk",
+        score,
+        weight: chunk.eventCount,
+      });
+    }
+  }
   for (const entity of graph.entities) {
     const score = graphMatchScore(
       `${entity.name} ${entity.type}`,
@@ -2041,10 +2326,16 @@ function rankGraphSuggestions(
   return suggestions.sort(
     (left, right) =>
       right.score - left.score ||
-      Number(right.kind === "entity") - Number(left.kind === "entity") ||
+      graphSuggestionKindWeight(right.kind) - graphSuggestionKindWeight(left.kind) ||
       right.weight - left.weight ||
       left.label.localeCompare(right.label),
   );
+}
+
+function graphSuggestionKindWeight(kind: GraphSuggestion["kind"]) {
+  if (kind === "chunk") return 3;
+  if (kind === "entity") return 2;
+  return 1;
 }
 
 function graphMatchScore(label: string, normalizedQuery: string): number {
