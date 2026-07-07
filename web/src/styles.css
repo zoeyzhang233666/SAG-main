@@ -1310,6 +1310,70 @@ select {
   padding-inline: 0.12em;
 }
 
+
+.chem-formula-xarrow {
+  display: inline-grid;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  justify-items: center;
+  min-width: 2.6em;
+  margin-inline: 0.18em;
+  vertical-align: middle;
+  line-height: 1.05;
+}
+
+.chem-formula-xarrow-label,
+.chem-formula-stack-top,
+.chem-formula-stack-bottom {
+  max-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.68em;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.chem-formula-xarrow-line {
+  font-size: 1.45em;
+  line-height: 0.85;
+  transform: scaleX(1.35);
+  transform-origin: center;
+}
+
+.chem-formula-xarrow-below {
+  margin-top: 0.05em;
+}
+
+.chem-formula-stack {
+  display: inline-grid;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  justify-items: center;
+  margin-inline: 0.1em;
+  vertical-align: middle;
+  line-height: 1.05;
+}
+
+.chem-formula-stack-body {
+  line-height: 1.05;
+}
+
+.sag-rich-graph-label .chem-formula-block {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.sag-rich-graph-label .chem-formula-xarrow-label,
+.sag-rich-graph-label .chem-formula-stack-top,
+.sag-rich-graph-label .chem-formula-stack-bottom {
+  max-width: 5.5em;
+}
+
 .chem-message-user .chem-markdown .chem-formula {
   color: #fff;
 }

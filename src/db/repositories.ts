@@ -1103,38 +1103,82 @@ export async function getProjectStats(input: {
   sourceId: string;
   tenantId: string;
 }): Promise<ProjectStatsRecord> {
-  const result = await pool.query(
+  const sourceResult = await pool.query(
     `
-      select
-        count(distinct d.id)::int as document_count,
-        count(distinct c.id)::int as chunk_count,
-        count(distinct e.id)::int as event_count,
-        count(distinct ent.id)::int as entity_count
-      from sources s
-      left join documents d
-        on d.source_id = s.id
-       and d.archived_at is null
-      left join source_chunks c
-        on c.document_id = d.id
-      left join events e
-        on e.document_id = d.id
-       and e.deleted_at is null
-      left join event_entities ee
-        on ee.event_id = e.id
-      left join entities ent
-        on ent.id = ee.entity_id
-      where s.id = $1
-        and s.tenant_id = $2
-      group by s.id
+      select id
+      from sources
+      where id = $1
+        and tenant_id = $2
+      limit 1
     `,
     [input.sourceId, input.tenantId]
   );
-  const row = result.rows[0];
+
+  if (!sourceResult.rows[0]) {
+    return {
+      documentCount: 0,
+      chunkCount: 0,
+      eventCount: 0,
+      entityCount: 0
+    };
+  }
+
+  const documentsResult = await pool.query(
+    `
+      select id
+      from documents
+      where source_id = $1
+        and archived_at is null
+    `,
+    [input.sourceId]
+  );
+  const documentIds = documentsResult.rows.map((row) => String(row.id));
+
+  const entitiesResult = await pool.query(
+    `
+      select count(*)::int as count
+      from entities
+      where source_id = $1
+    `,
+    [input.sourceId]
+  );
+
+  if (documentIds.length === 0) {
+    return {
+      documentCount: 0,
+      chunkCount: 0,
+      eventCount: 0,
+      entityCount: Number(entitiesResult.rows[0]?.count ?? 0)
+    };
+  }
+
+  const [chunksResult, eventsResult] = await Promise.all([
+    pool.query(
+      `
+        select count(*)::int as count
+        from source_chunks
+        where source_id = $1
+          and document_id = any($2::uuid[])
+      `,
+      [input.sourceId, documentIds]
+    ),
+    pool.query(
+      `
+        select count(*)::int as count
+        from events
+        where source_id = $1
+          and document_id = any($2::uuid[])
+          and deleted_at is null
+      `,
+      [input.sourceId, documentIds]
+    )
+  ]);
+
   return {
-    documentCount: Number(row?.document_count ?? 0),
-    chunkCount: Number(row?.chunk_count ?? 0),
-    eventCount: Number(row?.event_count ?? 0),
-    entityCount: Number(row?.entity_count ?? 0)
+    documentCount: documentIds.length,
+    chunkCount: Number(chunksResult.rows[0]?.count ?? 0),
+    eventCount: Number(eventsResult.rows[0]?.count ?? 0),
+    entityCount: Number(entitiesResult.rows[0]?.count ?? 0)
   };
 }
 
@@ -1308,6 +1352,28 @@ export async function listChunksByDocument(input: {
   return result.rows.map(chunkFromRow);
 }
 
+export async function listChunksByProject(input: {
+  sourceId: string;
+  tenantId: string;
+  includeArchived?: boolean;
+}): Promise<ChunkRecord[]> {
+  const archiveSql = input.includeArchived ? "" : "and s.archived_at is null and (d.id is null or d.archived_at is null)";
+  const result = await pool.query(
+    `
+      select c.*, c.embedding::text as embedding_preview
+      from source_chunks c
+      join sources s on s.id = c.source_id
+      left join documents d on d.id = c.document_id
+      where c.source_id = $1
+        and s.tenant_id = $2
+        ${archiveSql}
+      order by coalesce(d.created_at, c.created_at), c.rank, c.id
+    `,
+    [input.sourceId, input.tenantId]
+  );
+  return result.rows.map(chunkFromRow);
+}
+
 export async function updateChunk(input: {
   chunkId: string;
   tenantId: string;
@@ -1435,6 +1501,54 @@ export async function listEventsByDocument(input: {
     entities: Array.isArray(row.entities)
       ? row.entities.map((entityRow: Record<string, unknown>) => entityFromRow(entityRow))
     : []
+  }));
+}
+
+export async function listEventsByProject(input: {
+  sourceId: string;
+  tenantId: string;
+  includeArchived?: boolean;
+}): Promise<Array<EventRecord & { entityCount: number; entities: EntityRecord[] }>> {
+  const archiveSql = input.includeArchived ? "" : "and s.archived_at is null and (d.id is null or d.archived_at is null)";
+  const result = await pool.query(
+    `
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
+             e.content, e.rank, e.title_embedding::text as title_embedding_preview,
+             e.content_embedding::text as content_embedding_preview,
+             count(ee.entity_id)::int as entity_count,
+             coalesce(
+               jsonb_agg(
+                 distinct jsonb_build_object(
+                   'id', ent.id,
+                   'source_id', ent.source_id,
+                   'type', ent.type,
+                   'name', ent.name,
+                   'normalized_name', ent.normalized_name,
+                   'description', ent.description
+                 )
+               ) filter (where ent.id is not null),
+               '[]'::jsonb
+             ) as entities
+      from events e
+      join sources s on s.id = e.source_id
+      left join documents d on d.id = e.document_id
+      left join event_entities ee on ee.event_id = e.id
+      left join entities ent on ent.id = ee.entity_id
+      where e.source_id = $1
+        and s.tenant_id = $2
+        and e.deleted_at is null
+        ${archiveSql}
+      group by e.id, d.created_at
+      order by coalesce(d.created_at, now()), e.rank, e.id
+    `,
+    [input.sourceId, input.tenantId]
+  );
+  return result.rows.map((row) => ({
+    ...eventFromRow(row),
+    entityCount: Number(row.entity_count ?? 0),
+    entities: Array.isArray(row.entities)
+      ? row.entities.map((entityRow: Record<string, unknown>) => entityFromRow(entityRow))
+      : []
   }));
 }
 

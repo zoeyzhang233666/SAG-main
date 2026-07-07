@@ -212,6 +212,8 @@ function AppShell() {
   const [chunks, setChunks] = useState<ChunkRecord[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [entities, setEntities] = useState<EntityRecord[]>([]);
+  const [projectChunks, setProjectChunks] = useState<ChunkRecord[]>([]);
+  const [projectEvents, setProjectEvents] = useState<EventRecord[]>([]);
   const [projectEntities, setProjectEntities] = useState<EntityRecord[]>([]);
   const [sessionsByProjectId, setSessionsByProjectId] = useState<
     Record<string, McpSessionRecord[]>
@@ -428,6 +430,8 @@ function AppShell() {
       setSelectedDocument(null);
       setProjectStats(null);
       setProjectGraph(null);
+      setProjectChunks([]);
+      setProjectEvents([]);
       setProjectEntities([]);
       setMcpDetail(null);
       return;
@@ -526,50 +530,110 @@ function AppShell() {
     try {
       setError("");
       const [
-        documentsResponse,
-        sessionsResponse,
-        statsResponse,
-        graphResponse,
-        projectEntitiesResponse,
-      ] = await Promise.all([
+        documentsResult,
+        sessionsResult,
+        statsResult,
+        graphResult,
+        projectChunksResult,
+        projectEventsResult,
+        projectEntitiesResult,
+      ] = await Promise.allSettled([
         api.listDocuments(projectId, showArchivedDocuments),
         api.listMcpSessions(projectId),
         api.getProjectStats(projectId),
         api.getProjectGraph(projectId),
+        api.listProjectChunks(projectId),
+        api.listProjectEvents(projectId),
         api.listProjectEntities(projectId),
       ]);
-      setDocuments(documentsResponse.documents);
-      setSessionsByProjectId((current) => ({
-        ...current,
-        [projectId]: sessionsResponse.sessions,
-      }));
-      setProjectStats(statsResponse.stats);
-      setProjectGraph(graphResponse.graph);
-      setProjectEntities(projectEntitiesResponse.entities);
-      if (
-        documentsResponse.documents[0] &&
-        !documentsResponse.documents.some(
-          (item) => item.id === selectedDocumentId,
-        )
-      ) {
-        setSelectedDocumentId(documentsResponse.documents[0].id);
+
+      const loadErrors: string[] = [];
+      const loadedDocuments =
+        documentsResult.status === "fulfilled"
+          ? documentsResult.value.documents
+          : [];
+      const loadedSessions =
+        sessionsResult.status === "fulfilled" ? sessionsResult.value.sessions : [];
+
+      if (documentsResult.status === "fulfilled") {
+        setDocuments(loadedDocuments);
+      } else {
+        setDocuments([]);
+        loadErrors.push(getErrorMessage(documentsResult.reason));
       }
-      if (!documentsResponse.documents[0]) {
+
+      if (sessionsResult.status === "fulfilled") {
+        setSessionsByProjectId((current) => ({
+          ...current,
+          [projectId]: loadedSessions,
+        }));
+      } else {
+        loadErrors.push(getErrorMessage(sessionsResult.reason));
+      }
+
+      if (statsResult.status === "fulfilled") {
+        setProjectStats(statsResult.value.stats);
+      } else {
+        setProjectStats(null);
+        loadErrors.push(getErrorMessage(statsResult.reason));
+      }
+
+      if (graphResult.status === "fulfilled") {
+        setProjectGraph(graphResult.value.graph);
+      } else {
+        setProjectGraph(null);
+        loadErrors.push(getErrorMessage(graphResult.reason));
+      }
+
+      if (projectChunksResult.status === "fulfilled") {
+        setProjectChunks(projectChunksResult.value.chunks);
+      } else {
+        setProjectChunks([]);
+        loadErrors.push(getErrorMessage(projectChunksResult.reason));
+      }
+
+      if (projectEventsResult.status === "fulfilled") {
+        setProjectEvents(projectEventsResult.value.events);
+      } else {
+        setProjectEvents([]);
+        loadErrors.push(getErrorMessage(projectEventsResult.reason));
+      }
+
+      if (projectEntitiesResult.status === "fulfilled") {
+        setProjectEntities(projectEntitiesResult.value.entities);
+      } else {
+        setProjectEntities([]);
+        loadErrors.push(getErrorMessage(projectEntitiesResult.reason));
+      }
+
+      if (
+        loadedDocuments[0] &&
+        !loadedDocuments.some((item) => item.id === selectedDocumentId)
+      ) {
+        setSelectedDocumentId(loadedDocuments[0].id);
+      }
+      if (!loadedDocuments[0]) {
         setSelectedDocumentId("");
       }
       const preferredSessionId = pendingSessionIdRef.current;
       const sessionToOpen =
         preferredSessionId &&
-        sessionsResponse.sessions.some(
-          (session) => session.id === preferredSessionId,
-        )
+        loadedSessions.some((session) => session.id === preferredSessionId)
           ? preferredSessionId
-          : sessionsResponse.sessions[0]?.id;
+          : loadedSessions[0]?.id;
       pendingSessionIdRef.current = null;
       if (sessionToOpen) {
         await loadMcpSession(sessionToOpen);
       } else {
         setMcpDetail(null);
+      }
+      if (loadErrors.length > 0) {
+        setError(
+          t(
+            `部分知识资产加载失败：${loadErrors[0]}`,
+            `Some knowledge assets failed to load: ${loadErrors[0]}`,
+          ),
+        );
       }
       setStatus(t("就绪", "Ready"));
     } catch (err) {
@@ -604,15 +668,58 @@ function AppShell() {
     const projectId = selectedProjectId;
     try {
       if (projectId) {
-        const [statsResponse, graphResponse, projectEntitiesResponse] =
-          await Promise.all([
-            api.getProjectStats(projectId),
-            api.getProjectGraph(projectId),
-            api.listProjectEntities(projectId),
-          ]);
-        setProjectStats(statsResponse.stats);
-        setProjectGraph(graphResponse.graph);
-        setProjectEntities(projectEntitiesResponse.entities);
+        const [
+          statsResult,
+          graphResult,
+          projectChunksResult,
+          projectEventsResult,
+          projectEntitiesResult,
+        ] = await Promise.allSettled([
+          api.getProjectStats(projectId),
+          api.getProjectGraph(projectId),
+          api.listProjectChunks(projectId),
+          api.listProjectEvents(projectId),
+          api.listProjectEntities(projectId),
+        ]);
+        const loadErrors: string[] = [];
+        if (statsResult.status === "fulfilled") {
+          setProjectStats(statsResult.value.stats);
+        } else {
+          setProjectStats(null);
+          loadErrors.push(getErrorMessage(statsResult.reason));
+        }
+        if (graphResult.status === "fulfilled") {
+          setProjectGraph(graphResult.value.graph);
+        } else {
+          setProjectGraph(null);
+          loadErrors.push(getErrorMessage(graphResult.reason));
+        }
+        if (projectChunksResult.status === "fulfilled") {
+          setProjectChunks(projectChunksResult.value.chunks);
+        } else {
+          setProjectChunks([]);
+          loadErrors.push(getErrorMessage(projectChunksResult.reason));
+        }
+        if (projectEventsResult.status === "fulfilled") {
+          setProjectEvents(projectEventsResult.value.events);
+        } else {
+          setProjectEvents([]);
+          loadErrors.push(getErrorMessage(projectEventsResult.reason));
+        }
+        if (projectEntitiesResult.status === "fulfilled") {
+          setProjectEntities(projectEntitiesResult.value.entities);
+        } else {
+          setProjectEntities([]);
+          loadErrors.push(getErrorMessage(projectEntitiesResult.reason));
+        }
+        if (loadErrors.length > 0) {
+          setError(
+            t(
+              `部分知识资产刷新失败：${loadErrors[0]}`,
+              `Some knowledge assets failed to refresh: ${loadErrors[0]}`,
+            ),
+          );
+        }
       }
       if (documentId) {
         await loadDocumentWorkspace(documentId);
@@ -998,6 +1105,7 @@ function AppShell() {
     title?: string;
     fileName?: string;
     format: ManualImportFormat;
+    appendToDocumentId?: string;
     content: string;
   }) {
     if (!selectedProjectId) {
@@ -1011,6 +1119,43 @@ function AppShell() {
     );
     try {
       const response = await api.createStructuredImportJob({
+        sourceId: selectedProjectId,
+        ...input,
+      });
+      refreshedUploadJobsRef.current.delete(response.job.id);
+      setUploadJobs((current) => [response.job, ...current].slice(0, 20));
+      setIsUploadQueueExpanded(true);
+      setStatus(
+        t(
+          `已提交后台导入任务：${response.job.title || response.job.fileName}，可在处理队列查看进度`,
+          `Background import job submitted: ${response.job.title || response.job.fileName}. Track it in the processing queue.`,
+        ),
+      );
+    } catch (err) {
+      const message = getErrorMessage(err);
+      setError(message);
+      throw err;
+    }
+  }
+
+  async function handleStructuredImportFile(input: {
+    title?: string;
+    fileName: string;
+    format: ManualImportFormat;
+    appendToDocumentId?: string;
+    file: File;
+  }) {
+    if (!selectedProjectId) {
+      throw new Error(
+        t("请先创建或选择项目。", "Create or select a project first."),
+      );
+    }
+    setError("");
+    setStatus(
+      t("正在上传文件并提交后台导入任务...", "Uploading the file and submitting a background import job..."),
+    );
+    try {
+      const response = await api.createStructuredImportFileJob({
         sourceId: selectedProjectId,
         ...input,
       });
@@ -1613,6 +1758,15 @@ function AppShell() {
     });
   }
 
+  function focusGraphDrawerNode(nodeId: string) {
+    if (workspaceView !== "graph") return;
+    window.requestAnimationFrame(() => {
+      window.dispatchEvent(
+        new CustomEvent("sag:graph-focus-node", { detail: { nodeId } }),
+      );
+    });
+  }
+
   async function openEventDetail(
     eventId: string,
     options?: { pushHistory?: boolean },
@@ -1626,6 +1780,7 @@ function AppShell() {
         setDrawerHistory([]);
       }
       setDrawer({ type: "event", detail });
+      focusGraphDrawerNode(eventId);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -1666,6 +1821,7 @@ function AppShell() {
         sameNameDetails:
           sameNameDetails.length > 0 ? sameNameDetails : undefined,
       });
+      focusGraphDrawerNode(entityId);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -2073,6 +2229,8 @@ function AppShell() {
                 chunks={chunks}
                 events={events}
                 entities={entities}
+                projectChunks={projectChunks}
+                projectEvents={projectEvents}
                 projectEntities={projectEntities}
                 projectStats={projectStats}
                 resultView={resultView}
@@ -2087,6 +2245,7 @@ function AppShell() {
                 fileInputRef={fileInputRef}
                 onUploadFiles={(files) => void handleUploadFiles(files)}
                 onImportStructured={handleStructuredImport}
+                onImportStructuredFile={handleStructuredImportFile}
                 onExportProject={(format, profile, split, maxBytes) =>
                   void exportProject(format, profile, split, maxBytes)
                 }
@@ -3889,6 +4048,8 @@ function ProjectDocumentsWorkspace(props: {
   chunks: ChunkRecord[];
   events: EventRecord[];
   entities: EntityRecord[];
+  projectChunks: ChunkRecord[];
+  projectEvents: EventRecord[];
   projectEntities: EntityRecord[];
   projectStats: ProjectStatsRecord | null;
   resultView: ResultView;
@@ -3906,7 +4067,15 @@ function ProjectDocumentsWorkspace(props: {
     title?: string;
     fileName?: string;
     format: ManualImportFormat;
+    appendToDocumentId?: string;
     content: string;
+  }) => Promise<void>;
+  onImportStructuredFile: (input: {
+    title?: string;
+    fileName: string;
+    format: ManualImportFormat;
+    appendToDocumentId?: string;
+    file: File;
   }) => Promise<void>;
   onExportProject: (
     format: "csv" | "json",
@@ -3950,12 +4119,11 @@ function ProjectDocumentsWorkspace(props: {
   const [resultTitleQuery, setResultTitleQuery] = useState("");
   const [resultPage, setResultPage] = useState(1);
   const [manualImportOpen, setManualImportOpen] = useState(false);
+  const [manualImportMode, setManualImportMode] = useState<"new" | "append">("new");
   const [manualImportContent, setManualImportContent] = useState("");
   const [manualImportTitle, setManualImportTitle] = useState("");
   const [manualImportFileName, setManualImportFileName] = useState("");
-  const [manualImportFiles, setManualImportFiles] = useState<
-    Array<{ fileName: string; content: string }>
-  >([]);
+  const [manualImportFileCount, setManualImportFileCount] = useState(0);
   const [manualImportFormat, setManualImportFormat] =
     useState<ManualImportFormat>("auto");
   const [manualImportError, setManualImportError] = useState("");
@@ -3983,6 +4151,8 @@ function ProjectDocumentsWorkspace(props: {
     ),
   );
   const manualImportFileRef = useRef<HTMLInputElement | null>(null);
+  const manualImportAppendTarget =
+    manualImportMode === "append" ? props.selectedDocument : null;
 
   useEffect(() => {
     try {
@@ -4008,24 +4178,30 @@ function ProjectDocumentsWorkspace(props: {
     props.resultView === "chunks" ||
     props.resultView === "events" ||
     props.resultView === "entities";
+  const scopeSelectableResultView =
+    props.resultView === "chunks" || props.resultView === "events";
   const normalizedResultTitleQuery = normalizeKeyword(resultTitleQuery);
+  const scopedChunks =
+    entityScope === "project" ? props.projectChunks : props.chunks;
+  const scopedEvents =
+    entityScope === "project" ? props.projectEvents : props.events;
   const filteredChunks = useMemo(
     () =>
       filterByKeyword(
-        props.chunks,
+        scopedChunks,
         normalizedResultTitleQuery,
         (chunk) => chunk.heading || t("未命名切片", "Untitled chunk"),
       ),
-    [normalizedResultTitleQuery, props.chunks],
+    [normalizedResultTitleQuery, scopedChunks],
   );
   const filteredEvents = useMemo(
     () =>
       filterByKeyword(
-        props.events,
+        scopedEvents,
         normalizedResultTitleQuery,
         (event) => event.title,
       ),
-    [normalizedResultTitleQuery, props.events],
+    [normalizedResultTitleQuery, scopedEvents],
   );
   const scopedEntities =
     entityScope === "project" ? props.projectEntities : props.entities;
@@ -4068,9 +4244,9 @@ function ProjectDocumentsWorkspace(props: {
           : 0;
   const activeTotalCount =
     props.resultView === "chunks"
-      ? props.chunks.length
+      ? scopedChunks.length
       : props.resultView === "events"
-        ? props.events.length
+        ? scopedEvents.length
         : props.resultView === "entities"
           ? dedupedEntities.length
           : 0;
@@ -4127,6 +4303,7 @@ function ProjectDocumentsWorkspace(props: {
     if (isManualImporting) return;
     setManualImportOpen(false);
     setManualImportError("");
+    resetManualImportForm();
   }
 
   function exportSelectedProject() {
@@ -4231,41 +4408,77 @@ function ProjectDocumentsWorkspace(props: {
     }
   }
 
+  function resetManualImportForm() {
+    setManualImportMode("new");
+    setManualImportContent("");
+    setManualImportTitle("");
+    setManualImportFileName("");
+    setManualImportFileCount(0);
+    setManualImportFormat("auto");
+  }
+
+  function openManualImport(mode: "new" | "append" = "new") {
+    setManualImportError("");
+    setManualImportFileName("");
+    setManualImportFileCount(0);
+    setManualImportMode(mode);
+    setManualImportOpen(true);
+  }
+
   async function submitManualImport() {
-    if (
-      (!manualImportContent.trim() && manualImportFiles.length === 0) ||
-      isManualImporting
-    )
+    if (!manualImportContent.trim() || isManualImporting) return;
+    if (manualImportMode === "append" && !props.selectedDocumentId) {
+      setManualImportError(t("请先选择要追加的文档。", "Select a document to append to first."));
       return;
+    }
     setIsManualImporting(true);
     setManualImportError("");
     try {
-      if (manualImportFiles.length > 0) {
-        for (const file of manualImportFiles) {
-          await props.onImportStructured({
-            title:
-              manualImportFiles.length === 1
+      await props.onImportStructured({
+        title: manualImportMode === "append" ? undefined : manualImportTitle.trim() || undefined,
+        fileName: manualImportFileName.trim() || undefined,
+        format: manualImportFormat,
+        appendToDocumentId:
+          manualImportMode === "append" ? props.selectedDocumentId : undefined,
+        content: manualImportContent,
+      });
+      setManualImportOpen(false);
+      resetManualImportForm();
+    } catch (error) {
+      setManualImportError(getErrorMessage(error));
+    } finally {
+      setIsManualImporting(false);
+    }
+  }
+
+  async function submitManualImportFiles(files: File[]) {
+    if (files.length === 0 || isManualImporting) return;
+    if (manualImportMode === "append" && !props.selectedDocumentId) {
+      setManualImportError(t("请先选择要追加的文档。", "Select a document to append to first."));
+      return;
+    }
+    setIsManualImporting(true);
+    setManualImportError("");
+    setManualImportFileName(files.map((file) => file.name).join(", "));
+    setManualImportFileCount(files.length);
+    try {
+      for (const file of files) {
+        await props.onImportStructuredFile({
+          title:
+            manualImportMode === "append"
+              ? undefined
+              : files.length === 1
                 ? manualImportTitle.trim() || undefined
                 : undefined,
-            fileName: file.fileName,
-            format: manualImportFormat,
-            content: file.content,
-          });
-        }
-      } else {
-        await props.onImportStructured({
-          title: manualImportTitle.trim() || undefined,
-          fileName: manualImportFileName.trim() || undefined,
+          fileName: file.name,
           format: manualImportFormat,
-          content: manualImportContent,
+          appendToDocumentId:
+            manualImportMode === "append" ? props.selectedDocumentId : undefined,
+          file,
         });
       }
       setManualImportOpen(false);
-      setManualImportContent("");
-      setManualImportTitle("");
-      setManualImportFileName("");
-      setManualImportFiles([]);
-      setManualImportFormat("auto");
+      resetManualImportForm();
     } catch (error) {
       setManualImportError(getErrorMessage(error));
     } finally {
@@ -4362,7 +4575,7 @@ function ProjectDocumentsWorkspace(props: {
               )}
               {t("添加文档", "Add document")}
             </Button>
-            <Button size="sm" onClick={() => setManualImportOpen(true)}>
+            <Button size="sm" onClick={() => openManualImport("new")}>
               <Plus className="h-4 w-4" />
               {t(
                 "导入 JSON / CSV / MD 结构化数据",
@@ -4498,6 +4711,9 @@ function ProjectDocumentsWorkspace(props: {
                         >
                           {t("重命名", "Rename")}
                         </MiniButton>
+                        <MiniButton onClick={() => openManualImport("append")}>
+                          {t("追加内容", "Append content")}
+                        </MiniButton>
                         <MiniButton
                           onClick={() =>
                             props.onArchiveOrRestoreDocument(document)
@@ -4547,6 +4763,12 @@ function ProjectDocumentsWorkspace(props: {
             </div>
 
             <div className="mt-4">
+              {scopeSelectableResultView ? (
+                <KnowledgeAssetScopeSelector
+                  scope={entityScope}
+                  onScopeChange={changeEntityScope}
+                />
+              ) : null}
               {searchableResultView ? (
                 <ResultTitleSearch
                   label={resultViewLabel(props.resultView, language)}
@@ -4656,10 +4878,12 @@ function ProjectDocumentsWorkspace(props: {
           >
             <div className="border-b border-border px-5 py-4">
               <div id="manual-import-title" className="text-sm font-semibold">
-                {t(
-                  "粘贴或上传网页版 AI 的数据",
-                  "Paste or upload AI-generated data",
-                )}
+                {manualImportMode === "append"
+                  ? t("追加内容到已有文档", "Append content to existing document")
+                  : t(
+                      "粘贴或上传网页版 AI 的数据",
+                      "Paste or upload AI-generated data",
+                    )}
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {t(
@@ -4669,16 +4893,66 @@ function ProjectDocumentsWorkspace(props: {
               </p>
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-2 text-xs">
+                <span className="text-muted-foreground">
+                  {t("导入方式", "Import mode")}
+                </span>
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded-full border px-3 py-1 font-medium",
+                    manualImportMode === "new"
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setManualImportMode("new")}
+                  disabled={isManualImporting}
+                >
+                  {t("新建文档", "New document")}
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded-full border px-3 py-1 font-medium",
+                    manualImportMode === "append"
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setManualImportMode("append")}
+                  disabled={isManualImporting || !props.selectedDocumentId}
+                  title={
+                    props.selectedDocumentId
+                      ? t("把本次导入的切片、事件和实体追加到当前选中文档。", "Append this import's chunks, events, and entities to the selected document.")
+                      : t("请先选择一个文档。", "Select a document first.")
+                  }
+                >
+                  {t("追加到当前文档", "Append to current document")}
+                </button>
+                {manualImportMode === "append" && manualImportAppendTarget ? (
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                    {t("目标文档：", "Target: ")}
+                    <RichTextFragment text={manualImportAppendTarget.title} />
+                  </span>
+                ) : null}
+              </div>
+
               <div className="grid gap-3 md:grid-cols-[1fr_180px]">
                 <div>
                   <div className="mb-1 text-xs font-medium text-muted-foreground">
-                    {t("文档标题（可选）", "Document title (optional)")}
+                    {manualImportMode === "append"
+                      ? t("追加目标", "Append target")
+                      : t("文档标题（可选）", "Document title (optional)")}
                   </div>
                   <Input
-                    value={manualImportTitle}
+                    value={
+                      manualImportMode === "append"
+                        ? manualImportAppendTarget?.title ?? ""
+                        : manualImportTitle
+                    }
                     onChange={(event) =>
                       setManualImportTitle(event.target.value)
                     }
+                    disabled={manualImportMode === "append"}
                     placeholder={t(
                       "表格中有“文档标题”列时可留空",
                       "May be blank when the table has a document title column",
@@ -4708,8 +4982,12 @@ function ProjectDocumentsWorkspace(props: {
 
               <div className="rounded-md border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
                 {t(
-                  "推荐使用“简化 JSON v2”或 18 列 CSV：文档标题、来源名称、来源类型、来源日期、来源作者、来源链接、切片编号、切片标题、原文切片、事件标题、事件摘要、事件内容、事件分类、关键词、实体类型、实体名称、实体说明、关系说明。完整备份格式只适合系统迁移保留参考字段。",
-                  "Recommended: simple JSON v2 or the 18-column CSV: document_title, source_name, source_type, source_date, source_author, source_url, chunk_id, chunk_heading, chunk_content, event_title, event_summary, event_content, event_category, keywords, entity_type, entity_name, entity_description, relation_description. Full backup format is only for system migration/reference fields.",
+                  manualImportMode === "append"
+                    ? "追加模式会把本次导入解析出的切片、事件和实体写入当前选中文档，不会新建文档；适合把后续补充资料并入同一份资料中。"
+                    : "推荐使用“简化 JSON v2”或 18 列 CSV：文档标题、来源名称、来源类型、来源日期、来源作者、来源链接、切片编号、切片标题、原文切片、事件标题、事件摘要、事件内容、事件分类、关键词、实体类型、实体名称、实体说明、关系说明。完整备份格式只适合系统迁移保留参考字段。",
+                  manualImportMode === "append"
+                    ? "Append mode writes imported chunks, events, and entities into the selected document instead of creating a new document; useful for merging later additions into the same source."
+                    : "Recommended: simple JSON v2 or the 18-column CSV: document_title, source_name, source_type, source_date, source_author, source_url, chunk_id, chunk_heading, chunk_content, event_title, event_summary, event_content, event_category, keywords, entity_type, entity_name, entity_description, relation_description. Full backup format is only for system migration/reference fields.",
                 )}
               </div>
 
@@ -4724,22 +5002,7 @@ function ProjectDocumentsWorkspace(props: {
                     const files = Array.from(event.target.files ?? []);
                     event.currentTarget.value = "";
                     if (files.length === 0) return;
-                    void Promise.all(
-                      files.map(async (file) => ({
-                        fileName: file.name,
-                        content: await file.text(),
-                      })),
-                    ).then((items) => {
-                      setManualImportFiles(items);
-                      setManualImportFileName(
-                        items.map((item) => item.fileName).join(", "),
-                      );
-                      setManualImportContent(
-                        items.length === 1 ? items[0].content : "",
-                      );
-                      setManualImportFormat("auto");
-                      setManualImportError("");
-                    });
+                    void submitManualImportFiles(files);
                   }}
                 />
                 <Button
@@ -4747,9 +5010,24 @@ function ProjectDocumentsWorkspace(props: {
                   variant="outline"
                   size="sm"
                   onClick={() => manualImportFileRef.current?.click()}
+                  disabled={isManualImporting}
+                  title={t(
+                    manualImportMode === "append"
+                      ? "选择文件后会直接上传并追加到当前文档，不再写入下方粘贴框。"
+                      : "选择文件后会直接上传并提交后台导入任务，不再写入下方粘贴框。",
+                    manualImportMode === "append"
+                      ? "After selecting files, they are uploaded directly and appended to the current document without filling the paste box below."
+                      : "After selecting files, they are uploaded directly as background import jobs without filling the paste box below.",
+                  )}
                 >
-                  <Upload className="h-4 w-4" />
-                  {t("选择 CSV / MD / JSON 文件", "Choose CSV / MD / JSON")}
+                  {isManualImporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {manualImportMode === "append"
+                    ? t("选择并追加导入文件", "Choose and append files")
+                    : t("选择并直接导入文件", "Choose and import files")}
                 </Button>
                 <span className="text-xs text-muted-foreground">
                   {t("下载模板：", "Templates:")}
@@ -4780,10 +5058,10 @@ function ProjectDocumentsWorkspace(props: {
                 )}
                 {manualImportFileName ? (
                   <span className="max-w-full truncate text-xs text-muted-foreground">
-                    {manualImportFiles.length > 1
+                    {manualImportFileCount > 1
                       ? t(
-                          `已选择 ${manualImportFiles.length} 个文件`,
-                          `${manualImportFiles.length} files selected`,
+                          `正在提交 ${manualImportFileCount} 个文件`,
+                          `Submitting ${manualImportFileCount} files`,
                         )
                       : manualImportFileName}
                   </span>
@@ -4801,7 +5079,7 @@ function ProjectDocumentsWorkspace(props: {
                   value={manualImportContent}
                   onChange={(event) => {
                     setManualImportContent(event.target.value);
-                    setManualImportFiles([]);
+                    setManualImportFileCount(0);
                     setManualImportFileName("");
                     setManualImportError("");
                   }}
@@ -4829,16 +5107,14 @@ function ProjectDocumentsWorkspace(props: {
               <Button
                 size="sm"
                 onClick={() => void submitManualImport()}
-                disabled={
-                  (!manualImportContent.trim() &&
-                    manualImportFiles.length === 0) ||
-                  isManualImporting
-                }
+                disabled={!manualImportContent.trim() || isManualImporting}
               >
                 {isManualImporting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
-                {t("提交导入任务", "Submit import job")}
+                {manualImportMode === "append"
+                  ? t("提交追加任务", "Submit append job")
+                  : t("提交导入任务", "Submit import job")}
               </Button>
             </div>
           </div>
@@ -7022,6 +7298,38 @@ function OverviewPanel(props: {
   );
 }
 
+function KnowledgeAssetScopeSelector(props: {
+  scope: KnowledgeAssetEntityScope;
+  onScopeChange: (scope: KnowledgeAssetEntityScope) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/80 px-3 py-2">
+      <span className="text-xs font-medium text-muted-foreground">
+        {t("范围", "Scope")}
+      </span>
+      {(["document", "project"] as KnowledgeAssetEntityScope[]).map(
+        (scope) => (
+          <button
+            key={scope}
+            type="button"
+            className={cn(
+              "rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground",
+              props.scope === scope &&
+                "border-primary/40 bg-primary/[0.08] text-foreground",
+            )}
+            onClick={() => props.onScopeChange(scope)}
+          >
+            {scope === "project"
+              ? t("整个项目", "Project")
+              : t("当前文档", "Document")}
+          </button>
+        ),
+      )}
+    </div>
+  );
+}
+
 function ResultTitleSearch(props: {
   label: string;
   query: string;
@@ -8950,6 +9258,7 @@ function DetailDrawer(props: {
     <div className="pointer-events-none fixed inset-0 z-20" role="presentation">
       <aside
         ref={drawerRef}
+        data-sag-detail-drawer="true"
         className="pointer-events-auto absolute inset-y-0 right-0 flex w-full max-w-[440px] flex-col border-l border-border bg-background shadow-xl"
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
@@ -11370,7 +11679,7 @@ function buildGraphFocus(value: unknown, query: string): GraphFocus | null {
   ).slice(0, 12);
 
   const rerankedEventIds = trace ? stringArray(trace.rerankedEventIds) : [];
-  const eventIds = (trace
+  const eventIds = trace
     ? Array.isArray(trace.rerankedEventIds)
       ? rerankedEventIds
       : firstNonEmptyStringArray(
@@ -11378,8 +11687,7 @@ function buildGraphFocus(value: unknown, query: string): GraphFocus | null {
           trace.queryEventIds,
           trace.entityEventIds,
         )
-    : []
-  ).slice(0, 30);
+    : [];
   const recalledEntities = trace && Array.isArray(trace.recalledEntities)
     ? trace.recalledEntities.filter(isPlainRecord)
     : [];

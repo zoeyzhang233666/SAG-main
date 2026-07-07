@@ -105,6 +105,14 @@ export const api = {
     return request<{ graph: ProjectGraphRecord }>(`/api/projects/${projectId}/graph`);
   },
 
+  async listProjectChunks(projectId: string) {
+    return request<{ chunks: ChunkRecord[] }>(`/api/projects/${projectId}/chunks`);
+  },
+
+  async listProjectEvents(projectId: string) {
+    return request<{ events: EventRecord[] }>(`/api/projects/${projectId}/events`);
+  },
+
   async listProjectEntities(projectId: string) {
     return request<{ entities: EntityRecord[] }>(`/api/projects/${projectId}/entities`);
   },
@@ -351,6 +359,33 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input)
     });
+  },
+
+  async createStructuredImportFileJob(input: {
+    sourceId: string;
+    title?: string;
+    fileName: string;
+    format?: ManualImportFormat;
+    file: File;
+  }) {
+    const params = new URLSearchParams({
+      sourceId: input.sourceId,
+      fileName: input.fileName,
+      format: input.format ?? "auto"
+    });
+    if (input.title?.trim()) {
+      params.set("title", input.title.trim());
+    }
+    return request<{ job: UploadJobRecord }>(
+      `/api/documents/import-structured/file/jobs?${params.toString()}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: input.file
+      }
+    );
   },
 
   async getStructuredImportJob(jobId: string) {

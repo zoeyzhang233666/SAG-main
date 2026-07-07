@@ -9,6 +9,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  getViewportForBounds,
   type Edge,
   type EdgeProps,
   type Node,
@@ -55,8 +56,10 @@ const EVENT_RING_GAP = 185;
 const EVENT_SLOT_SPACING = 240;
 const EVENT_ANGLE_OFFSET = -Math.PI / 2 + Math.PI / 12;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
-const FOCUS_ENTITY_LIMIT = 30;
-const FOCUS_EVENT_LIMIT = 24;
+const FOCUS_ENTITY_LIMIT = 96;
+const SEARCH_LAYER_EVENT_LIMIT = 66;
+const COLUMN_EVENT_LIMIT = 28;
+const DEFAULT_FOCUS_EVENT_LIMIT = SEARCH_LAYER_EVENT_LIMIT;
 const SHOWCASE_ENTITY_LIMIT = 34;
 const SHOWCASE_EVENT_LIMIT = 12;
 const SHOWCASE_TOP_CANDIDATE_LIMIT = 18;
@@ -84,6 +87,14 @@ type GraphShowcase = {
   linkedNodeIds: string[];
 };
 
+type ActiveEventBatch = {
+  kind: "entity" | "focus";
+  label: string;
+  sourceEntityIds: string[];
+  eventIds: string[];
+  offset: number;
+};
+
 const GRAPH_SHOWCASE_BUTTONS: Array<{
   mode: GraphShowcaseMode;
   zh: string;
@@ -92,6 +103,12 @@ const GRAPH_SHOWCASE_BUTTONS: Array<{
   { mode: "frequency", zh: "高频化工品", en: "Core chemicals" },
   { mode: "relations", zh: "产业链关系", en: "Co-event pairs" },
   { mode: "events", zh: "高关联事件", en: "Key events" },
+];
+
+const DEFAULT_GRAPH_SHOWCASE_MODES: GraphShowcaseMode[] = [
+  "frequency",
+  "relations",
+  "events",
 ];
 
 export type GraphLayoutStyle = "search_layers" | "entity_inner" | "columns";
@@ -172,8 +189,12 @@ function ProjectGraphCanvas(props: {
   const [entityTypeQuery, setEntityTypeQuery] = useState("");
   const [entityTypeFilterCollapsed, setEntityTypeFilterCollapsed] =
     useState(false);
-  const [activeGraphMode, setActiveGraphMode] =
-    useState<ActiveGraphMode>("overview");
+  const [activeGraphMode, setActiveGraphMode] = useState<ActiveGraphMode>(() =>
+    randomGraphShowcaseMode(),
+  );
+  const [activeEventBatch, setActiveEventBatch] =
+    useState<ActiveEventBatch | null>(null);
+  const [ignoredFocusKey, setIgnoredFocusKey] = useState<string | null>(null);
   const [showcaseSeed, setShowcaseSeed] = useState(() =>
     Math.floor(Math.random() * 1_000_000),
   );
@@ -185,11 +206,20 @@ function ProjectGraphCanvas(props: {
   const expandedEventIdsRef = useRef(expandedEventIds);
   const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
-  const { fitView } = useReactFlow<GraphNode, GraphEdge>();
+  const { fitView, getNode, setCenter, setViewport } = useReactFlow<GraphNode, GraphEdge>();
   const graphEdgeTypes = useMemo(() => ({ bus: BusEdge }), []);
   const graphNodeTypes = useMemo(() => ({ rich: RichGraphNode }), []);
   const clickTimerRef = useRef<number | null>(null);
+  const flowContainerRef = useRef<HTMLDivElement | null>(null);
   const shouldFitViewRef = useRef(true);
+  const pendingCenterNodeIdRef = useRef<string | null>(null);
+  const pendingFitNodeIdsRef = useRef<{
+    nodeIds: string[];
+    centerNodeId?: string;
+  } | null>(null);
+  const appliedFocusKeyRef = useRef<string | null>(null);
+  const effectiveFocus =
+    props.focus && props.focus.key !== ignoredFocusKey ? props.focus : null;
 
   const entityById = useMemo(
     () => new Map(props.graph.entities.map((entity) => [entity.id, entity])),
@@ -205,20 +235,30 @@ function ProjectGraphCanvas(props: {
   );
   const eventIdsByChunkId = useMemo(() => {
     const map = new Map<string, string[]>();
-    const edges = props.graph.chunkEventEdges ?? [];
-    for (const edge of edges) {
-      const eventIds = map.get(edge.chunkId) ?? [];
-      eventIds.push(edge.eventId);
-      map.set(edge.chunkId, eventIds);
+    const linkChunkToEvent = (chunkId: string, eventId: string) => {
+      if (!chunkId || !eventId || !eventById.has(eventId)) return;
+      const eventIds = map.get(chunkId) ?? [];
+      eventIds.push(eventId);
+      map.set(chunkId, eventIds);
+    };
+    for (const event of props.graph.events) {
+      if (event.chunkId) {
+        linkChunkToEvent(event.chunkId, event.id);
+      }
+    }
+    for (const edge of props.graph.chunkEventEdges ?? []) {
+      linkChunkToEvent(edge.chunkId, edge.eventId);
     }
     for (const [chunkId, eventIds] of map.entries()) {
-      eventIds.sort((a, b) =>
-        compareEvents(eventById.get(a), eventById.get(b)),
+      map.set(
+        chunkId,
+        uniqueGraphIds(eventIds).sort((a, b) =>
+          compareEvents(eventById.get(a), eventById.get(b)),
+        ),
       );
-      map.set(chunkId, eventIds);
     }
     return map;
-  }, [eventById, props.graph.chunkEventEdges]);
+  }, [eventById, props.graph.chunkEventEdges, props.graph.events]);
   const chunkIdByEventId = useMemo(() => {
     const map = new Map<string, string>();
     for (const event of props.graph.events) {
@@ -231,34 +271,56 @@ function ProjectGraphCanvas(props: {
   }, [props.graph.chunkEventEdges, props.graph.events]);
   const eventIdsByEntityId = useMemo(() => {
     const map = new Map<string, string[]>();
+    const linkEntityToEvent = (entityId: string, eventId: string) => {
+      if (!entityId || !eventId || !eventById.has(eventId)) return;
+      const eventIds = map.get(entityId) ?? [];
+      eventIds.push(eventId);
+      map.set(entityId, eventIds);
+    };
     for (const edge of props.graph.edges) {
-      const eventIds = map.get(edge.entityId) ?? [];
-      eventIds.push(edge.eventId);
-      map.set(edge.entityId, eventIds);
+      linkEntityToEvent(edge.entityId, edge.eventId);
+    }
+    for (const event of props.graph.events) {
+      for (const entityId of event.entityIds ?? []) {
+        linkEntityToEvent(entityId, event.id);
+      }
     }
     for (const [entityId, eventIds] of map.entries()) {
-      eventIds.sort((a, b) =>
-        compareEvents(eventById.get(a), eventById.get(b)),
+      map.set(
+        entityId,
+        uniqueGraphIds(eventIds).sort((a, b) =>
+          compareEvents(eventById.get(a), eventById.get(b)),
+        ),
       );
-      map.set(entityId, eventIds);
     }
     return map;
-  }, [eventById, props.graph.edges]);
+  }, [eventById, props.graph.edges, props.graph.events]);
   const entityIdsByEventId = useMemo(() => {
     const map = new Map<string, string[]>();
+    const linkEventToEntity = (eventId: string, entityId: string) => {
+      if (!eventId || !entityId || !entityById.has(entityId)) return;
+      const entityIds = map.get(eventId) ?? [];
+      entityIds.push(entityId);
+      map.set(eventId, entityIds);
+    };
     for (const edge of props.graph.edges) {
-      const entityIds = map.get(edge.eventId) ?? [];
-      entityIds.push(edge.entityId);
-      map.set(edge.eventId, entityIds);
+      linkEventToEntity(edge.eventId, edge.entityId);
+    }
+    for (const event of props.graph.events) {
+      for (const entityId of event.entityIds ?? []) {
+        linkEventToEntity(event.id, entityId);
+      }
     }
     for (const [eventId, entityIds] of map.entries()) {
-      entityIds.sort((a, b) =>
-        compareEntities(entityById.get(a), entityById.get(b)),
+      map.set(
+        eventId,
+        uniqueGraphIds(entityIds).sort((a, b) =>
+          compareEntities(entityById.get(a), entityById.get(b)),
+        ),
       );
-      map.set(eventId, entityIds);
     }
     return map;
-  }, [entityById, props.graph.edges]);
+  }, [entityById, props.graph.edges, props.graph.events]);
   const activeShowcase = useMemo(
     () =>
       activeGraphMode === "manual"
@@ -282,9 +344,10 @@ function ProjectGraphCanvas(props: {
     () => buildCircularPositionMap(props.graph),
     [props.graph],
   );
+  const eventDisplayLimit = getGraphEventDisplayLimit(layoutStyle);
   const suggestions = useMemo(
-    () => rankGraphSuggestions(props.graph, graphQuery).slice(0, 8),
-    [graphQuery, props.graph],
+    () => rankGraphSuggestions(props.graph, graphQuery, 10, eventDisplayLimit),
+    [eventDisplayLimit, graphQuery, props.graph],
   );
   const graphIdentity = useMemo(
     () =>
@@ -332,6 +395,13 @@ function ProjectGraphCanvas(props: {
 
   const visibleGraphScopeAfterEntityFilter = useMemo(() => {
     const nextScope = cloneVisibleGraphScope(visibleGraphScope);
+    addSelectedTypeEntitiesFromVisibleEvents({
+      visibleEntityIds: nextScope.visibleEntityIds,
+      visibleEventIds: nextScope.visibleEventIds,
+      selectedEntityTypes,
+      entityById,
+      entityIdsByEventId,
+    });
     applyEntityVisibilityRules({
       visibleEntityIds: nextScope.visibleEntityIds,
       visibleEventIds: nextScope.visibleEventIds,
@@ -349,18 +419,32 @@ function ProjectGraphCanvas(props: {
     visibleGraphScope,
   ]);
 
+  const entityTypeScopeEntityIds = useMemo(
+    () =>
+      collectPotentialEntityIdsForScope({
+        visibleEntityIds: visibleGraphScope.visibleEntityIds,
+        visibleEventIds: visibleGraphScope.visibleEventIds,
+        entityIdsByEventId,
+      }),
+    [
+      entityIdsByEventId,
+      visibleGraphScope.visibleEntityIds,
+      visibleGraphScope.visibleEventIds,
+    ],
+  );
+
   const entityTypeOptions = useMemo(
     () =>
       buildEntityTypeOptionsFromScope({
-        scopeEntityIds: visibleGraphScope.visibleEntityIds,
+        scopeEntityIds: entityTypeScopeEntityIds,
         visibleEntityIds: visibleGraphScopeAfterEntityFilter.visibleEntityIds,
         entityById,
         language: props.language,
       }),
     [
       entityById,
+      entityTypeScopeEntityIds,
       props.language,
-      visibleGraphScope.visibleEntityIds,
       visibleGraphScopeAfterEntityFilter.visibleEntityIds,
     ],
   );
@@ -427,8 +511,28 @@ function ProjectGraphCanvas(props: {
     ],
   );
 
+  const graphDisplayMetrics = useMemo(() => {
+    const visibleEntityCount = graphModel.nodes.filter(
+      (node) => (node.data as GraphNodeData).kind === "entity",
+    ).length;
+    const visibleEventCount = graphModel.nodes.filter(
+      (node) => (node.data as GraphNodeData).kind === "event",
+    ).length;
+    return {
+      entity: {
+        visible: visibleEntityCount,
+        total: props.graph.entities.length,
+      },
+      event: {
+        visible: visibleEventCount,
+        total: props.graph.events.length,
+      },
+    };
+  }, [graphModel.nodes, props.graph.entities.length, props.graph.events.length]);
+
   function applyShowcase(showcase: GraphShowcase | null) {
     if (!showcase) return;
+    setActiveEventBatch(null);
     shouldFitViewRef.current = true;
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
@@ -444,9 +548,7 @@ function ProjectGraphCanvas(props: {
           : [...showcase.eventIds, ...showcase.entityIds].slice(0, 6),
       ),
     );
-    setSelectedEntityTypes(
-      buildSelectedEntityTypes(showcase.entityIds, entityById),
-    );
+    setSelectedEntityTypes(new Set());
     setEntityTypeQuery("");
     setSuggestionsOpen(false);
     setLayoutRevision((current) => current + 1);
@@ -460,14 +562,46 @@ function ProjectGraphCanvas(props: {
       window.requestAnimationFrame(() => {
         fitView({ padding: 0.2, maxZoom: 1, duration: 320 });
       });
+      return;
     }
-  }, [fitView, graphModel.edges, graphModel.nodes, setEdges, setNodes]);
+    const pendingFit = pendingFitNodeIdsRef.current;
+    if (pendingFit) {
+      window.requestAnimationFrame(() =>
+        fitGraphNodes(pendingFit.nodeIds, pendingFit.centerNodeId),
+      );
+      return;
+    }
+    const pendingNodeId = pendingCenterNodeIdRef.current;
+    if (pendingNodeId) {
+      window.requestAnimationFrame(() => centerGraphNode(pendingNodeId));
+    }
+  }, [
+    fitView,
+    graphModel.edges,
+    graphModel.nodes,
+    setEdges,
+    setNodes,
+    getNode,
+    setCenter,
+    setViewport,
+  ]);
 
   useEffect(() => {
-    if (props.focus) return;
+    if (effectiveFocus) return;
     if (!activeShowcase) return;
     applyShowcase(activeShowcase);
-  }, [activeShowcase, graphIdentity, props.focus?.key]);
+  }, [activeShowcase, graphIdentity, effectiveFocus?.key]);
+
+  useEffect(() => {
+    if (effectiveFocus || !appliedFocusKeyRef.current) return;
+    appliedFocusKeyRef.current = null;
+    shouldFitViewRef.current = true;
+    setGraphQuery("");
+    setActiveGraphMode(randomGraphShowcaseMode());
+    setShowcaseSeed(Math.floor(Math.random() * 1_000_000));
+    setShowcaseRevision((current) => current + 1);
+    setSuggestionsOpen(false);
+  }, [effectiveFocus?.key]);
 
   useEffect(() => {
     const availableTypes = new Set(
@@ -499,70 +633,96 @@ function ProjectGraphCanvas(props: {
   }, [props.defaultLayoutStyle]);
 
   useEffect(() => {
-    if (!props.focus) return;
-    const chunkIds = props.focus.chunkIds
-      .filter((id) => chunkById.has(id))
-      .slice(0, 12);
+    if (!effectiveFocus) return;
+    appliedFocusKeyRef.current = effectiveFocus.key;
+    setIgnoredFocusKey(null);
+    const focusChunkIds = effectiveFocus.chunkIds.filter((id) => chunkById.has(id));
     const eventIdsFromChunks = uniqueGraphIds(
-      chunkIds.flatMap((chunkId) => eventIdsByChunkId.get(chunkId) ?? []),
+      focusChunkIds.flatMap((chunkId) => eventIdsByChunkId.get(chunkId) ?? []),
     );
-    const directEventIds = props.focus.eventIds
-      .filter((id) => eventById.has(id))
-      .slice(0, FOCUS_EVENT_LIMIT);
-    const eventIds = uniqueGraphIds([
-      ...eventIdsFromChunks,
-      ...directEventIds,
-    ]).slice(0, FOCUS_EVENT_LIMIT);
-    const directEntityIds = props.focus.entityIds
+    const directEventIds = effectiveFocus.eventIds.filter((id) =>
+      eventById.has(id),
+    );
+    const directEntityIds = effectiveFocus.entityIds
       .filter((id) => entityById.has(id))
       .slice(0, FOCUS_ENTITY_LIMIT);
-    const entityIds = new Set(directEntityIds);
-    for (const eventId of eventIds) {
-      for (const entityId of entityIdsByEventId.get(eventId) ?? []) {
-        entityIds.add(entityId);
-        if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
-      }
-      if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
+    const eventIdsFromEntities = uniqueGraphIds(
+      directEntityIds.flatMap((entityId) => eventIdsByEntityId.get(entityId) ?? []),
+    );
+    const allEventIds = uniqueGraphIds([
+      ...eventIdsFromChunks,
+      ...directEventIds,
+      ...eventIdsFromEntities,
+    ]);
+
+    if (allEventIds.length > 0) {
+      applyEventBatch(
+        {
+          kind: "focus",
+          label: effectiveFocus.query,
+          sourceEntityIds: directEntityIds,
+          eventIds: allEventIds,
+          offset: 0,
+        },
+        eventDisplayLimit,
+      );
+      return;
     }
+
     setActiveGraphMode("manual");
+    setActiveEventBatch(null);
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
-    setFocusedChunkIds(new Set(chunkIds));
-    setFocusedEntityIds(entityIds);
-    setFocusedEventIds(new Set(eventIds));
+    setFocusedChunkIds(new Set());
+    setFocusedEntityIds(new Set(directEntityIds));
+    setFocusedEventIds(new Set());
     setSelectedNodeId(null);
-    setSelectedEntityTypes(buildSelectedEntityTypes([...entityIds], entityById));
-    setGraphQuery(props.focus.query);
+    setSelectedEntityTypes(
+      buildSelectedEntityTypes(directEntityIds, entityById),
+    );
+    setGraphQuery(effectiveFocus.query);
     setActiveQueryLabel(
-      `${graphText(props.language, "当前搜索", "Search")} · ${props.focus.query}`,
+      `${graphText(props.language, "当前搜索", "Search")} · ${effectiveFocus.query}`,
     );
-    setQueryLinkedNodeIds(
-      new Set(
-        chunkIds.length > 0
-          ? chunkIds
-          : eventIds.length > 0
-            ? eventIds
-            : directEntityIds,
-      ),
-    );
+    setQueryLinkedNodeIds(new Set(directEntityIds));
     setSuggestionsOpen(false);
     setLayoutRevision((current) => current + 1);
     shouldFitViewRef.current = true;
   }, [
     chunkById,
+    effectiveFocus?.key,
     entityById,
-    entityIdsByEventId,
     eventById,
     eventIdsByChunkId,
-    props.focus?.key,
+    eventIdsByEntityId,
+    eventDisplayLimit,
+    props.language,
   ]);
-
 
   useEffect(() => {
     expandedEventIdsRef.current = expandedEventIds;
   }, [expandedEventIds]);
 
   useEffect(() => () => clearClickTimer(), []);
+
+  useEffect(() => {
+    const handleGraphNodeFocus = (event: Event) => {
+      const detail = (event as CustomEvent<{ nodeId?: string }>).detail;
+      if (!detail?.nodeId) return;
+      requestGraphNodeFocus(detail.nodeId);
+    };
+    window.addEventListener("sag:graph-focus-node", handleGraphNodeFocus);
+    return () =>
+      window.removeEventListener("sag:graph-focus-node", handleGraphNodeFocus);
+  }, [
+    eventById,
+    entityById,
+    entityIdsByEventId,
+    eventIdsByEntityId,
+    expandedEventIds,
+    focusedEventIds,
+    queryLinkedNodeIds,
+  ]);
 
   const onNodeClick: NodeMouseHandler<GraphNode> = (event, node) => {
     event.stopPropagation();
@@ -580,16 +740,13 @@ function ProjectGraphCanvas(props: {
     }
     if (data.kind === "entity") {
       props.onOpenEntity(node.id);
-      clickTimerRef.current = window.setTimeout(() => {
-        expandEntityNode(node.id);
-        clickTimerRef.current = null;
-      }, 220);
       return;
     }
 
     props.onOpenEvent(node.id);
     clickTimerRef.current = window.setTimeout(() => {
       expandEventNode(node.id);
+      requestEventEntityFit(node.id);
       clickTimerRef.current = null;
     }, 220);
   };
@@ -614,25 +771,20 @@ function ProjectGraphCanvas(props: {
     collapseEventNode(node.id);
   };
 
-  function expandEntityNode(entityId: string) {
-    setExpandedEntityIds((current) => {
-      if (current.has(entityId)) {
-        return current;
-      }
-      const next = new Set(current);
-      next.add(entityId);
-      return next;
-    });
+  function requestEventEntityFit(eventId: string, centerNodeId = eventId) {
+    pendingFitNodeIdsRef.current = {
+      nodeIds: [eventId, ...(entityIdsByEventId.get(eventId) ?? [])],
+      centerNodeId,
+    };
+    shouldFitViewRef.current = false;
   }
 
   function expandEventNode(eventId: string) {
     setExpandedEventIds((current) => {
-      if (current.has(eventId)) {
+      if (current.size === 1 && current.has(eventId)) {
         return current;
       }
-      const next = new Set(current);
-      next.add(eventId);
-      return next;
+      return new Set([eventId]);
     });
   }
 
@@ -655,17 +807,149 @@ function ProjectGraphCanvas(props: {
     clickTimerRef.current = null;
   }
 
+  function centerGraphNode(nodeId: string) {
+    const node = getNode(nodeId);
+    if (!node) return;
+    pendingCenterNodeIdRef.current = null;
+    const { width, height } = graphNodeSize(node as GraphNode);
+    const visibleArea = getGraphVisibleArea(flowContainerRef.current);
+    const zoom = 1.05;
+    const horizontalOffset = visibleArea
+      ? (visibleArea.fullWidth / 2 -
+          (visibleArea.left + visibleArea.width / 2)) /
+        zoom
+      : 0;
+    const verticalOffset = visibleArea
+      ? (visibleArea.fullHeight / 2 -
+          (visibleArea.top + visibleArea.height / 2)) /
+        zoom
+      : 0;
+    setCenter(
+      node.position.x + width / 2 + horizontalOffset,
+      node.position.y + height / 2 + verticalOffset,
+      {
+        zoom,
+        duration: 320,
+      },
+    );
+  }
+
+  function fitGraphNodes(nodeIds: string[], centerNodeId?: string) {
+    pendingFitNodeIdsRef.current = null;
+    pendingCenterNodeIdRef.current = null;
+    const visibleNodes = uniqueGraphIds(nodeIds)
+      .map((nodeId) => getNode(nodeId) as GraphNode | undefined)
+      .filter((node): node is GraphNode => Boolean(node));
+    if (visibleNodes.length === 0) {
+      return;
+    }
+    if (visibleNodes.length === 1) {
+      centerGraphNode(centerNodeId ?? visibleNodes[0].id);
+      return;
+    }
+
+    const visibleArea = getGraphVisibleArea(flowContainerRef.current);
+    if (!visibleArea) {
+      fitView({
+        nodes: visibleNodes.map((node) => ({ id: node.id })),
+        padding: 0.26,
+        maxZoom: 1.05,
+        duration: 360,
+      });
+      return;
+    }
+
+    const viewport = getViewportForBounds(
+      getGraphNodesBounds(visibleNodes),
+      visibleArea.width,
+      visibleArea.height,
+      0.12,
+      1.05,
+      0.26,
+    );
+    setViewport(
+      {
+        ...viewport,
+        x: viewport.x + visibleArea.left,
+        y: viewport.y + visibleArea.top,
+      },
+      { duration: 360 },
+    );
+  }
+
+  function requestGraphNodeFocus(nodeId: string) {
+    if (!nodeId) return;
+    shouldFitViewRef.current = false;
+    pendingCenterNodeIdRef.current = nodeId;
+    setSelectedNodeId(nodeId);
+
+    if (eventById.has(nodeId)) {
+      const relatedEntityIds = entityIdsByEventId.get(nodeId) ?? [];
+      const chunkId = chunkIdByEventId.get(nodeId);
+      if (chunkId) {
+        setFocusedChunkIds((current) => new Set(current).add(chunkId));
+      }
+      setFocusedEventIds((current) => new Set(current).add(nodeId));
+      setFocusedEntityIds((current) => {
+        const next = new Set(current);
+        for (const entityId of relatedEntityIds) next.add(entityId);
+        return next;
+      });
+      setQueryLinkedNodeIds((current) => new Set(current).add(nodeId));
+      setExpandedEventIds(new Set([nodeId]));
+      requestEventEntityFit(nodeId);
+      setLayoutRevision((current) => current + 1);
+      return;
+    }
+
+    const entity = entityById.get(nodeId);
+    if (entity) {
+      const relatedEventIds = eventIdsByEntityId.get(nodeId) ?? [];
+      const hasCurrentEventContext = focusedEventIds.size > 0;
+      const preferredEventId =
+        relatedEventIds.find((eventId) => expandedEventIds.has(eventId)) ??
+        relatedEventIds.find((eventId) => focusedEventIds.has(eventId)) ??
+        relatedEventIds.find((eventId) => queryLinkedNodeIds.has(eventId)) ??
+        (hasCurrentEventContext ? undefined : relatedEventIds[0]);
+      setFocusedEntityIds((current) => new Set(current).add(nodeId));
+      if (preferredEventId) {
+        const chunkId = chunkIdByEventId.get(preferredEventId);
+        if (chunkId) {
+          setFocusedChunkIds((current) => new Set(current).add(chunkId));
+        }
+        setFocusedEventIds((current) => new Set(current).add(preferredEventId));
+        setExpandedEventIds(new Set([preferredEventId]));
+        setQueryLinkedNodeIds((current) => new Set(current).add(preferredEventId));
+        requestEventEntityFit(preferredEventId, nodeId);
+      } else {
+        setQueryLinkedNodeIds((current) => new Set(current).add(nodeId));
+        pendingCenterNodeIdRef.current = nodeId;
+        shouldFitViewRef.current = false;
+      }
+      setLayoutRevision((current) => current + 1);
+    }
+  }
+
+  function clearChatFocusForShowcase() {
+    appliedFocusKeyRef.current = null;
+    setActiveEventBatch(null);
+    setIgnoredFocusKey(props.focus?.key ?? null);
+    setSuggestionsOpen(false);
+    setSelectedNodeId(null);
+    setGraphQuery("");
+  }
+
   function resetGraph() {
     shouldFitViewRef.current = true;
-    setGraphQuery("");
-    setActiveGraphMode("overview");
+    clearChatFocusForShowcase();
+    setActiveGraphMode(randomGraphShowcaseMode());
     setShowcaseSeed(Math.floor(Math.random() * 1_000_000));
     setShowcaseRevision((current) => current + 1);
   }
 
   function showGraphPreset(mode: GraphShowcaseMode) {
     shouldFitViewRef.current = true;
-    setGraphQuery("");
+    clearChatFocusForShowcase();
     setActiveGraphMode(mode);
     setShowcaseSeed(Math.floor(Math.random() * 1_000_000));
     setShowcaseRevision((current) => current + 1);
@@ -673,8 +957,12 @@ function ProjectGraphCanvas(props: {
 
   function rotateGraphShowcase() {
     shouldFitViewRef.current = true;
-    setGraphQuery("");
-    setActiveGraphMode((current) => (current === "manual" ? "overview" : current));
+    clearChatFocusForShowcase();
+    setActiveGraphMode((current) =>
+      current === "manual" || current === "overview"
+        ? randomGraphShowcaseMode()
+        : current,
+    );
     setShowcaseSeed(Math.floor(Math.random() * 1_000_000));
     setShowcaseRevision((current) => current + 1);
   }
@@ -689,10 +977,94 @@ function ProjectGraphCanvas(props: {
     shouldFitViewRef.current = true;
     setSelectedNodeId(null);
     setLayoutStyle(value);
+    if (activeEventBatch) {
+      applyEventBatch(activeEventBatch, getGraphEventDisplayLimit(value));
+      return;
+    }
     setLayoutRevision((current) => current + 1);
   }
 
+  function collectEntityBatchEventIds(entityIds: string[]) {
+    return uniqueGraphIds(
+      entityIds.flatMap((entityId) => eventIdsByEntityId.get(entityId) ?? []),
+    );
+  }
+
+  function collectBatchEntityIds(seedEntityIds: string[], eventIds: string[]) {
+    const entityIds = new Set(seedEntityIds.filter((id) => entityById.has(id)));
+    for (const eventId of eventIds) {
+      for (const entityId of entityIdsByEventId.get(eventId) ?? []) {
+        entityIds.add(entityId);
+        if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
+      }
+      if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
+    }
+    return entityIds;
+  }
+
+  function applyEventBatch(
+    input: ActiveEventBatch,
+    displayLimit = eventDisplayLimit,
+  ) {
+    const totalEventCount = input.eventIds.length;
+    const offset = totalEventCount > 0 ? input.offset % totalEventCount : 0;
+    const visibleEventIds = input.eventIds.slice(
+      offset,
+      offset + displayLimit,
+    );
+    const entityIds = collectBatchEntityIds(input.sourceEntityIds, visibleEventIds);
+    setActiveGraphMode("manual");
+    setExpandedEntityIds(new Set());
+    setExpandedEventIds(new Set());
+    setFocusedChunkIds(new Set());
+    setFocusedEntityIds(new Set());
+    setFocusedEventIds(new Set(visibleEventIds));
+    setSelectedNodeId(null);
+    setSelectedEntityTypes(new Set());
+    setGraphQuery(input.label);
+    setActiveQueryLabel(
+      `${graphText(props.language, "当前搜索", "Search")} · ${input.label}`,
+    );
+    setQueryLinkedNodeIds(
+      new Set(visibleEventIds.length > 0 ? visibleEventIds : input.sourceEntityIds),
+    );
+    setActiveEventBatch({
+      ...input,
+      offset,
+    });
+    setSuggestionsOpen(false);
+    setLayoutRevision((current) => current + 1);
+    shouldFitViewRef.current = true;
+  }
+
+  function showNextEventBatch() {
+    if (!activeEventBatch) return;
+    const nextOffset =
+      activeEventBatch.offset + eventDisplayLimit >= activeEventBatch.eventIds.length
+        ? 0
+        : activeEventBatch.offset + eventDisplayLimit;
+    applyEventBatch({ ...activeEventBatch, offset: nextOffset });
+  }
+
   function revealSuggestion(suggestion: GraphSuggestion) {
+    appliedFocusKeyRef.current = null;
+    setIgnoredFocusKey(props.focus?.key ?? null);
+    setActiveEventBatch(null);
+
+    if (suggestion.kind === "entity") {
+      const suggestionEntityIds = suggestion.entityIds?.length
+        ? suggestion.entityIds
+        : [suggestion.id];
+      applyEventBatch({
+        kind: "entity",
+        label: suggestion.label,
+        sourceEntityIds: suggestionEntityIds,
+        eventIds: collectEntityBatchEventIds(suggestionEntityIds),
+        offset: 0,
+      });
+      return;
+    }
+
     const chunkIds = new Set<string>();
     const entityIds = new Set<string>();
     const eventIds = new Set<string>();
@@ -706,22 +1078,7 @@ function ProjectGraphCanvas(props: {
           entityIds.add(entityId);
           if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
         }
-        if (eventIds.size >= FOCUS_EVENT_LIMIT) break;
-      }
-    } else if (suggestion.kind === "entity") {
-      entityIds.add(suggestion.id);
-      for (const eventId of (eventIdsByEntityId.get(suggestion.id) ?? []).slice(
-        0,
-        FOCUS_EVENT_LIMIT,
-      )) {
-        eventIds.add(eventId);
-        const chunkId = chunkIdByEventId.get(eventId);
-        if (chunkId) chunkIds.add(chunkId);
-        for (const entityId of entityIdsByEventId.get(eventId) ?? []) {
-          entityIds.add(entityId);
-          if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
-        }
-        if (entityIds.size >= FOCUS_ENTITY_LIMIT) break;
+        if (eventIds.size >= eventDisplayLimit) break;
       }
     } else {
       eventIds.add(suggestion.id);
@@ -734,16 +1091,18 @@ function ProjectGraphCanvas(props: {
     setActiveGraphMode("manual");
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
-    setFocusedChunkIds(chunkIds);
-    setFocusedEntityIds(entityIds);
+    setFocusedChunkIds(new Set());
+    setFocusedEntityIds(new Set());
     setFocusedEventIds(eventIds);
     setSelectedNodeId(null);
-    setSelectedEntityTypes(buildSelectedEntityTypes([...entityIds], entityById));
+    setSelectedEntityTypes(new Set());
     setGraphQuery(suggestion.label);
     setActiveQueryLabel(
       `${graphText(props.language, "当前搜索", "Search")} · ${suggestion.label}`,
     );
-    setQueryLinkedNodeIds(new Set(chunkIds.size > 0 ? [...chunkIds] : [suggestion.id]));
+    setQueryLinkedNodeIds(
+      new Set(eventIds.size > 0 ? [...eventIds] : [suggestion.id]),
+    );
     setSuggestionsOpen(false);
     setLayoutRevision((current) => current + 1);
     shouldFitViewRef.current = true;
@@ -780,7 +1139,10 @@ function ProjectGraphCanvas(props: {
   }
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden rounded-xl bg-background">
+    <div
+      ref={flowContainerRef}
+      className="relative h-full min-h-0 overflow-hidden rounded-xl bg-background"
+    >
       <style>{`
         @keyframes sag-edge-dash-slow {
           from { stroke-dashoffset: 0; }
@@ -822,20 +1184,28 @@ function ProjectGraphCanvas(props: {
       `}</style>
       <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 rounded-xl border border-border bg-background/90 p-2 shadow-[0_10px_30px_rgba(24,36,58,0.08)] backdrop-blur">
         <MetricChip
-          label={graphText(props.language, "切片", "Chunks")}
-          value={(props.graph.chunks ?? []).length}
-        />
-        <MetricChip
           label={graphText(props.language, "实体", "Entities")}
-          value={props.graph.entities.length}
+          value={formatGraphMetricValue(
+            graphDisplayMetrics.entity.visible,
+            graphDisplayMetrics.entity.total,
+          )}
+          title={graphText(
+            props.language,
+            "当前已显示实体 / 项目实体总数",
+            "Visible entities / total entities in the project",
+          )}
         />
         <MetricChip
           label={graphText(props.language, "事件", "Events")}
-          value={props.graph.events.length}
-        />
-        <MetricChip
-          label={graphText(props.language, "关系", "Relations")}
-          value={props.graph.edges.length}
+          value={formatGraphMetricValue(
+            graphDisplayMetrics.event.visible,
+            graphDisplayMetrics.event.total,
+          )}
+          title={graphText(
+            props.language,
+            "当前已显示事件 / 项目事件总数",
+            "Visible events / total events in the project",
+          )}
         />
         <Button type="button" variant="outline" size="sm" onClick={resetGraph}>
           {graphText(props.language, "重置", "Reset")}
@@ -856,9 +1226,38 @@ function ProjectGraphCanvas(props: {
             {graphText(props.language, item.zh, item.en)}
           </Button>
         ))}
-        <Button type="button" variant="outline" size="sm" onClick={rotateGraphShowcase}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={rotateGraphShowcase}
+        >
           {graphText(props.language, "换一批", "Shuffle")}
         </Button>
+        {activeEventBatch ? (
+          <div className="flex h-8 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 text-xs text-amber-900">
+            <span>{formatActiveEventBatchLabel(activeEventBatch, props.language, eventDisplayLimit)}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={showNextEventBatch}
+              disabled={activeEventBatch.eventIds.length <= eventDisplayLimit}
+              title={
+                activeEventBatch.eventIds.length <= eventDisplayLimit
+                  ? graphText(
+                      props.language,
+                      "当前事件已全部展示",
+                      "All events are already shown",
+                    )
+                  : undefined
+              }
+            >
+              {graphText(props.language, "下一批", "Next batch")}
+            </Button>
+          </div>
+        ) : null}
         <select
           value={layoutStyle}
           title={graphText(props.language, "重排风格", "Layout style")}
@@ -927,11 +1326,7 @@ function ProjectGraphCanvas(props: {
                     <RichTextFragment text={suggestion.label} />
                   </span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {suggestion.kind === "chunk"
-                      ? graphText(props.language, "切片", "Chunk")
-                      : suggestion.kind === "entity"
-                        ? graphText(props.language, "实体", "Entity")
-                        : graphText(props.language, "事件", "Event")}
+                    {formatGraphSuggestionKindLabel(suggestion, props.language)}
                   </span>
                 </button>
               ))
@@ -939,8 +1334,8 @@ function ProjectGraphCanvas(props: {
               <div className="px-3 py-2 text-xs text-muted-foreground">
                 {graphText(
                   props.language,
-                  "没有找到相似实体或事件",
-                  "No similar entity or event found",
+                  "没有找到相似切片、实体或事件",
+                  "No similar chunk, entity or event found",
                 )}
               </div>
             )}
@@ -996,7 +1391,7 @@ function ProjectGraphCanvas(props: {
               : data.kind === "chunk"
                 ? "#1b6fcc"
                 : data.kind === "entity"
-                  ? data.entityTypeColor ?? "#df5b25"
+                  ? (data.entityTypeColor ?? "#df5b25")
                   : "#4f46e5";
           }}
           maskColor="rgba(238,242,247,0.72)"
@@ -1020,7 +1415,9 @@ function RichGraphNode({ data }: NodeProps<GraphNode>) {
       <div
         className={cn(
           "sag-rich-graph-label",
-          isQuestion ? "sag-rich-graph-label-question" : "sag-rich-graph-label-inline",
+          isQuestion
+            ? "sag-rich-graph-label-question"
+            : "sag-rich-graph-label-inline",
         )}
       >
         <RichTextFragment text={nodeData.label} />
@@ -1037,6 +1434,23 @@ function RichGraphNode({ data }: NodeProps<GraphNode>) {
 
 function graphText(language: SupportedLanguage, zh: string, en: string) {
   return language === "en" ? en : zh;
+}
+
+function formatActiveEventBatchLabel(
+  batch: ActiveEventBatch,
+  language: SupportedLanguage,
+  displayLimit: number,
+) {
+  const total = batch.eventIds.length;
+  const start = total === 0 ? 0 : batch.offset + 1;
+  const end = Math.min(total, batch.offset + displayLimit);
+  const zhPrefix = batch.kind === "focus" ? "当前搜索" : "实体";
+  const enPrefix = batch.kind === "focus" ? "Search" : "Entity";
+  return graphText(
+    language,
+    `${zhPrefix} · 展示事件 ${start}-${end}/${total} 个`,
+    `${enPrefix} · showing events ${start}-${end}/${total}`,
+  );
 }
 
 function BusEdge({
@@ -1119,9 +1533,17 @@ function roundPathNumber(value: number) {
 }
 
 function normalizeGraphLayoutStyle(value: unknown): GraphLayoutStyle {
-  return value === "entity_inner" || value === "columns" || value === "search_layers"
+  return value === "entity_inner" ||
+    value === "columns" ||
+    value === "search_layers"
     ? value
     : "search_layers";
+}
+
+function getGraphEventDisplayLimit(layoutStyle: GraphLayoutStyle) {
+  return layoutStyle === "columns"
+    ? COLUMN_EVENT_LIMIT
+    : SEARCH_LAYER_EVENT_LIMIT;
 }
 
 type EntityTypeOption = {
@@ -1218,9 +1640,7 @@ function buildVisibleGraphScope(input: {
     input.focusedEntityIds.size > 0 ||
     input.focusedEventIds.size > 0;
   const visibleChunkIds = new Set(hasFocusedGraph ? input.focusedChunkIds : []);
-  const visibleEntityIds = new Set(
-    hasFocusedGraph ? input.focusedEntityIds : input.initialEntityIds,
-  );
+  const visibleEntityIds = new Set<string>();
   const visibleEventIds = new Set(hasFocusedGraph ? input.focusedEventIds : []);
 
   for (const chunkId of visibleChunkIds) {
@@ -1233,9 +1653,6 @@ function buildVisibleGraphScope(input: {
     const chunkId = input.chunkIdByEventId.get(eventId);
     if (chunkId && hasFocusedGraph) {
       visibleChunkIds.add(chunkId);
-    }
-    for (const entityId of input.entityIdsByEventId.get(eventId) ?? []) {
-      visibleEntityIds.add(entityId);
     }
   }
 
@@ -1266,9 +1683,6 @@ function buildVisibleGraphScope(input: {
     if (chunkId && hasFocusedGraph) {
       visibleChunkIds.add(chunkId);
     }
-    for (const entityId of input.entityIdsByEventId.get(eventId) ?? []) {
-      visibleEntityIds.add(entityId);
-    }
   }
 
   return {
@@ -1288,6 +1702,20 @@ function cloneVisibleGraphScope(scope: VisibleGraphScope): VisibleGraphScope {
   };
 }
 
+function collectPotentialEntityIdsForScope(input: {
+  visibleEntityIds: Set<string>;
+  visibleEventIds: Set<string>;
+  entityIdsByEventId: Map<string, string[]>;
+}) {
+  const entityIds = new Set<string>(input.visibleEntityIds);
+  for (const eventId of input.visibleEventIds) {
+    for (const entityId of input.entityIdsByEventId.get(eventId) ?? []) {
+      entityIds.add(entityId);
+    }
+  }
+  return entityIds;
+}
+
 function collectExpandedEventEntityIds(input: {
   expandedEventIds: Set<string>;
   entityIdsByEventId: Map<string, string[]>;
@@ -1299,6 +1727,25 @@ function collectExpandedEventEntityIds(input: {
     }
   }
   return entityIds;
+}
+
+function addSelectedTypeEntitiesFromVisibleEvents(input: {
+  visibleEntityIds: Set<string>;
+  visibleEventIds: Set<string>;
+  selectedEntityTypes: Set<string>;
+  entityById: Map<string, ProjectGraphEntityRecord>;
+  entityIdsByEventId: Map<string, string[]>;
+}) {
+  if (input.selectedEntityTypes.size === 0) return;
+  for (const eventId of input.visibleEventIds) {
+    for (const entityId of input.entityIdsByEventId.get(eventId) ?? []) {
+      const entity = input.entityById.get(entityId);
+      if (!entity) continue;
+      if (input.selectedEntityTypes.has(normalizeEntityType(entity.type))) {
+        input.visibleEntityIds.add(entityId);
+      }
+    }
+  }
 }
 
 function applyEntityVisibilityRules(input: {
@@ -1335,9 +1782,22 @@ function resolveQuestionLinkedNodeIds(input: {
   layoutStyle: GraphLayoutStyle;
   queryLinkedNodeIds: Set<string>;
   visibleNodeIds: Set<string>;
-  visibleChunkIds: string[];
+  visibleEventIds: string[];
   visibleEntityIds: string[];
 }) {
+  const linkedNodeIds = [...input.queryLinkedNodeIds].filter((nodeId) =>
+    input.visibleNodeIds.has(nodeId),
+  );
+  const linkedEventIds = linkedNodeIds.filter((nodeId) =>
+    input.visibleEventIds.includes(nodeId),
+  );
+  if (linkedEventIds.length > 0) return linkedEventIds;
+
+  const eventIds = input.visibleEventIds.filter((eventId) =>
+    input.visibleNodeIds.has(eventId),
+  );
+  if (eventIds.length > 0) return eventIds;
+
   if (input.layoutStyle === "entity_inner") {
     const entityIds = input.visibleEntityIds.filter((entityId) =>
       input.visibleNodeIds.has(entityId),
@@ -1345,14 +1805,7 @@ function resolveQuestionLinkedNodeIds(input: {
     if (entityIds.length > 0) return entityIds;
   }
 
-  const chunkIds = input.visibleChunkIds.filter((chunkId) =>
-    input.visibleNodeIds.has(chunkId),
-  );
-  if (chunkIds.length > 0) return chunkIds;
-
-  return [...input.queryLinkedNodeIds].filter((nodeId) =>
-    input.visibleNodeIds.has(nodeId),
-  );
+  return linkedNodeIds;
 }
 
 function buildVisibleGraph(input: {
@@ -1379,8 +1832,20 @@ function buildVisibleGraph(input: {
   layoutStyle: GraphLayoutStyle;
   layoutRevision: number;
 }): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const { hasFocusedGraph, visibleChunkIds, visibleEntityIds, visibleEventIds } =
-    buildVisibleGraphScope(input);
+  const {
+    hasFocusedGraph,
+    visibleChunkIds,
+    visibleEntityIds,
+    visibleEventIds,
+  } = buildVisibleGraphScope(input);
+
+  addSelectedTypeEntitiesFromVisibleEvents({
+    visibleEntityIds,
+    visibleEventIds,
+    selectedEntityTypes: input.selectedEntityTypes,
+    entityById: input.entityById,
+    entityIdsByEventId: input.entityIdsByEventId,
+  });
 
   applyEntityVisibilityRules({
     visibleEntityIds,
@@ -1432,25 +1897,6 @@ function buildVisibleGraph(input: {
     );
   }
 
-  for (const chunkId of chunkIds) {
-    const chunk = input.chunkById.get(chunkId);
-    if (!chunk) continue;
-    const position =
-      focusedPositions?.get(chunk.id) ??
-      input.positionByNodeId.get(chunk.id) ??
-      fallbackPosition();
-    nodes.push(
-      createGraphNode({
-        id: chunk.id,
-        label: chunk.heading || trimGraphLabel(chunk.content),
-        kind: "chunk",
-        expanded: false,
-        x: position.x,
-        y: position.y,
-      }),
-    );
-  }
-
   for (const entityId of entityIds) {
     const entity = input.entityById.get(entityId);
     if (!entity) continue;
@@ -1493,38 +1939,12 @@ function buildVisibleGraph(input: {
 
   const visibleNodeIds = new Set(nodes.map((node) => node.id));
   const visibleNodeById = new Map(nodes.map((node) => [node.id, node]));
-  const chunkEdges: GraphEdge[] = input.chunkEventEdges
-    .filter(
-      (edge) =>
-        visibleNodeIds.has(edge.chunkId) && visibleNodeIds.has(edge.eventId),
-    )
-    .map((edge) => {
-      const visualLink = orientTopToBottomEdge({
-        sourceId: edge.chunkId,
-        targetId: edge.eventId,
-        nodeById: visibleNodeById,
-      });
-      return {
-        id: `${edge.chunkId}-${edge.eventId}`,
-        type: "bus",
-        source: visualLink.source,
-        target: visualLink.target,
-        animated: false,
-        data: { preferredAxis: "horizontal", busOffset: 66 },
-        interactionWidth: 14,
-        zIndex: 0,
-        style: {
-          stroke: "#1b6fcc",
-          strokeWidth: 1.45,
-          opacity: 0.38,
-          strokeDasharray: EDGE_DASH_PATTERN,
-          animation: EDGE_DASH_ANIMATION,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-        },
-      };
-    });
-  const edges: GraphEdge[] = input.edges
+  const eventEntityPairs = buildVisibleEventEntityPairs({
+    edges: input.edges,
+    eventIds,
+    entityIdsByEventId: input.entityIdsByEventId,
+  });
+  const edges: GraphEdge[] = eventEntityPairs
     .filter(
       (edge) =>
         visibleNodeIds.has(edge.entityId) && visibleNodeIds.has(edge.eventId),
@@ -1572,7 +1992,7 @@ function buildVisibleGraph(input: {
       layoutStyle: input.layoutStyle,
       queryLinkedNodeIds: input.queryLinkedNodeIds,
       visibleNodeIds,
-      visibleChunkIds: chunkIds,
+      visibleEventIds: eventIds,
       visibleEntityIds: entityIds,
     });
     for (const nodeId of questionLinkedNodeIds) {
@@ -1604,9 +2024,31 @@ function buildVisibleGraph(input: {
 
   return applySelectionStyles({
     nodes,
-    edges: [...chunkEdges, ...edges],
+    edges,
     selectedNodeId: input.selectedNodeId,
   });
+}
+
+
+function buildVisibleEventEntityPairs(input: {
+  edges: ProjectGraphRecord["edges"];
+  eventIds: string[];
+  entityIdsByEventId: Map<string, string[]>;
+}) {
+  const pairs = new Map<string, { entityId: string; eventId: string }>();
+  const addPair = (entityId: string, eventId: string) => {
+    if (!entityId || !eventId) return;
+    pairs.set(`${entityId}-${eventId}`, { entityId, eventId });
+  };
+  for (const edge of input.edges) {
+    addPair(edge.entityId, edge.eventId);
+  }
+  for (const eventId of input.eventIds) {
+    for (const entityId of input.entityIdsByEventId.get(eventId) ?? []) {
+      addPair(entityId, eventId);
+    }
+  }
+  return [...pairs.values()];
 }
 
 function orientTopToBottomEdge(input: {
@@ -1629,9 +2071,162 @@ function orientTopToBottomEdge(input: {
 }
 
 function getNodeCenterY(node: GraphNode) {
-  const kind = (node.data as GraphNodeData).kind;
-  const height = kind === "question" ? 72 : NODE_HEIGHT;
+  const { height } = graphNodeSize(node);
   return node.position.y + height / 2;
+}
+
+function graphNodeSize(node: GraphNode) {
+  const data = node.data as GraphNodeData;
+  const measured = node.measured as
+    | { width?: number; height?: number }
+    | undefined;
+  const widthFromStyle =
+    typeof node.style?.width === "number" ? node.style.width : undefined;
+  return {
+    width:
+      node.width ??
+      measured?.width ??
+      widthFromStyle ??
+      (data.kind === "question"
+        ? QUESTION_NODE_WIDTH
+        : data.kind === "chunk"
+          ? CHUNK_NODE_WIDTH
+          : data.kind === "entity"
+            ? ENTITY_NODE_WIDTH
+            : EVENT_NODE_WIDTH),
+    height: node.height ?? measured?.height ?? (data.kind === "question" ? 72 : NODE_HEIGHT),
+  };
+}
+
+
+function getGraphNodesBounds(nodes: GraphNode[]) {
+  const firstNode = nodes[0];
+  if (!firstNode) {
+    return { x: 0, y: 0, width: 1, height: 1 };
+  }
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const node of nodes) {
+    const { width, height } = graphNodeSize(node);
+    minX = Math.min(minX, node.position.x);
+    minY = Math.min(minY, node.position.y);
+    maxX = Math.max(maxX, node.position.x + width);
+    maxY = Math.max(maxY, node.position.y + height);
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+    return {
+      x: firstNode.position.x,
+      y: firstNode.position.y,
+      width: 1,
+      height: 1,
+    };
+  }
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+  };
+}
+
+function getGraphVisibleArea(container: HTMLDivElement | null) {
+  if (!container) return null;
+  const containerRect = container.getBoundingClientRect();
+  if (containerRect.width <= 0 || containerRect.height <= 0) return null;
+
+  const drawer = getActiveDetailDrawerElement();
+  const drawerRect = drawer?.getBoundingClientRect();
+  let reservedRightWidth = 0;
+  if (drawerRect && drawerRect.width > 0 && drawerRect.height > 0) {
+    const horizontalOverlap = getRectHorizontalOverlap(containerRect, drawerRect);
+    const verticalOverlap = getRectVerticalOverlap(containerRect, drawerRect);
+    const drawerCoversRightSide =
+      horizontalOverlap > 0 &&
+      verticalOverlap > 0 &&
+      drawerRect.left < containerRect.right &&
+      drawerRect.right >= containerRect.right - 2;
+    if (drawerCoversRightSide) {
+      reservedRightWidth = Math.min(
+        containerRect.width * 0.7,
+        horizontalOverlap + 32,
+      );
+    }
+  }
+
+  const entityTypePanel = getEntityTypeFilterPanelElement();
+  const entityTypePanelRect = entityTypePanel?.getBoundingClientRect();
+  let reservedLeftWidth = 0;
+  if (
+    entityTypePanelRect &&
+    entityTypePanelRect.width > 0 &&
+    entityTypePanelRect.height > 0
+  ) {
+    const horizontalOverlap = getRectHorizontalOverlap(
+      containerRect,
+      entityTypePanelRect,
+    );
+    const verticalOverlap = getRectVerticalOverlap(
+      containerRect,
+      entityTypePanelRect,
+    );
+    const panelCoversLeftSide =
+      horizontalOverlap > 0 &&
+      verticalOverlap > 0 &&
+      entityTypePanelRect.left <= containerRect.left + 24;
+    if (panelCoversLeftSide) {
+      reservedLeftWidth = Math.min(
+        containerRect.width * 0.45,
+        horizontalOverlap + 36,
+      );
+    }
+  }
+
+  const availableWidth = Math.max(
+    260,
+    containerRect.width - reservedLeftWidth - reservedRightWidth,
+  );
+
+  return {
+    fullWidth: containerRect.width,
+    fullHeight: containerRect.height,
+    left: reservedLeftWidth,
+    top: 0,
+    width: availableWidth,
+    height: Math.max(220, containerRect.height),
+  };
+}
+
+function getRectHorizontalOverlap(
+  leftRect: DOMRect,
+  rightRect: DOMRect,
+) {
+  return Math.max(
+    0,
+    Math.min(leftRect.right, rightRect.right) -
+      Math.max(leftRect.left, rightRect.left),
+  );
+}
+
+function getRectVerticalOverlap(leftRect: DOMRect, rightRect: DOMRect) {
+  return Math.max(
+    0,
+    Math.min(leftRect.bottom, rightRect.bottom) -
+      Math.max(leftRect.top, rightRect.top),
+  );
+}
+
+function getActiveDetailDrawerElement() {
+  return document.querySelector<HTMLElement>(
+    '[data-sag-detail-drawer="true"], aside.pointer-events-auto.absolute.inset-y-0.right-0',
+  );
+}
+
+function getEntityTypeFilterPanelElement() {
+  return document.querySelector<HTMLElement>(
+    '[data-sag-entity-type-panel="true"]',
+  );
 }
 
 function createGraphNode(input: {
@@ -1739,16 +2334,11 @@ function applySelectionStyles(input: {
     return input;
   }
 
-  const relatedNodeIds = new Set([input.selectedNodeId]);
-  for (const edge of input.edges) {
-    if (
-      edge.source === input.selectedNodeId ||
-      edge.target === input.selectedNodeId
-    ) {
-      relatedNodeIds.add(edge.source);
-      relatedNodeIds.add(edge.target);
-    }
-  }
+  const { relatedNodeIds, relatedEdgeIds } = collectSelectedEvidencePath({
+    nodes: input.nodes,
+    edges: input.edges,
+    selectedNodeId: input.selectedNodeId,
+  });
 
   return {
     nodes: input.nodes.map((node) => {
@@ -1779,9 +2369,7 @@ function applySelectionStyles(input: {
       };
     }),
     edges: input.edges.map((edge) => {
-      const related =
-        edge.source === input.selectedNodeId ||
-        edge.target === input.selectedNodeId;
+      const related = relatedEdgeIds.has(edge.id);
       return {
         ...edge,
         animated: false,
@@ -1797,6 +2385,157 @@ function applySelectionStyles(input: {
   };
 }
 
+function collectSelectedEvidencePath(input: {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  selectedNodeId: string;
+}) {
+  const nodeById = new Map(input.nodes.map((node) => [node.id, node]));
+  const selectedNode = nodeById.get(input.selectedNodeId);
+  const selectedKind = getGraphNodeKind(selectedNode);
+  const relatedNodeIds = new Set<string>([input.selectedNodeId]);
+  const relatedEdgeIds = new Set<string>();
+  const queryEdges: GraphEdge[] = [];
+  const chunkEventEdgesByChunkId = new Map<string, GraphEdge[]>();
+  const chunkEventEdgesByEventId = new Map<string, GraphEdge[]>();
+  const eventEntityEdgesByEventId = new Map<string, GraphEdge[]>();
+  const eventEntityEdgesByEntityId = new Map<string, GraphEdge[]>();
+
+  const addEdge = (edge: GraphEdge) => {
+    relatedEdgeIds.add(edge.id);
+    relatedNodeIds.add(edge.source);
+    relatedNodeIds.add(edge.target);
+  };
+  const addEdgeToMap = (
+    map: Map<string, GraphEdge[]>,
+    key: string,
+    edge: GraphEdge,
+  ) => {
+    const edges = map.get(key) ?? [];
+    edges.push(edge);
+    map.set(key, edges);
+  };
+
+  for (const edge of input.edges) {
+    const sourceKind = getGraphNodeKind(nodeById.get(edge.source));
+    const targetKind = getGraphNodeKind(nodeById.get(edge.target));
+    if (!sourceKind || !targetKind) continue;
+
+    if (sourceKind === "question" || targetKind === "question") {
+      queryEdges.push(edge);
+      continue;
+    }
+
+    if (
+      (sourceKind === "chunk" && targetKind === "event") ||
+      (sourceKind === "event" && targetKind === "chunk")
+    ) {
+      const chunkId = sourceKind === "chunk" ? edge.source : edge.target;
+      const eventId = sourceKind === "event" ? edge.source : edge.target;
+      addEdgeToMap(chunkEventEdgesByChunkId, chunkId, edge);
+      addEdgeToMap(chunkEventEdgesByEventId, eventId, edge);
+      continue;
+    }
+
+    if (
+      (sourceKind === "event" && targetKind === "entity") ||
+      (sourceKind === "entity" && targetKind === "event")
+    ) {
+      const eventId = sourceKind === "event" ? edge.source : edge.target;
+      const entityId = sourceKind === "entity" ? edge.source : edge.target;
+      addEdgeToMap(eventEntityEdgesByEventId, eventId, edge);
+      addEdgeToMap(eventEntityEdgesByEntityId, entityId, edge);
+    }
+  }
+
+  const addQueryEdgeToNode = (nodeId: string) => {
+    for (const edge of queryEdges) {
+      if (edge.source === nodeId || edge.target === nodeId) {
+        addEdge(edge);
+      }
+    }
+  };
+
+  const addEventToEntityEdges = (eventId: string, onlyEntityId?: string) => {
+    for (const edge of eventEntityEdgesByEventId.get(eventId) ?? []) {
+      if (
+        onlyEntityId &&
+        edge.source !== onlyEntityId &&
+        edge.target !== onlyEntityId
+      ) {
+        continue;
+      }
+      addEdge(edge);
+    }
+  };
+
+  const addFullPathThroughEvent = (eventId: string, onlyEntityId?: string) => {
+    relatedNodeIds.add(eventId);
+    const chunkEdges = chunkEventEdgesByEventId.get(eventId) ?? [];
+    if (chunkEdges.length > 0) {
+      for (const edge of chunkEdges) {
+        addEdge(edge);
+        const chunkId = getOtherGraphEdgeEndpoint(edge, eventId);
+        if (chunkId) addQueryEdgeToNode(chunkId);
+      }
+    } else {
+      addQueryEdgeToNode(eventId);
+    }
+    addEventToEntityEdges(eventId, onlyEntityId);
+  };
+
+  const addFullPathThroughChunk = (chunkId: string) => {
+    relatedNodeIds.add(chunkId);
+    addQueryEdgeToNode(chunkId);
+    for (const edge of chunkEventEdgesByChunkId.get(chunkId) ?? []) {
+      addEdge(edge);
+      const eventId = getOtherGraphEdgeEndpoint(edge, chunkId);
+      if (eventId) addEventToEntityEdges(eventId);
+    }
+  };
+
+  if (selectedKind === "chunk") {
+    addFullPathThroughChunk(input.selectedNodeId);
+  } else if (selectedKind === "event") {
+    addFullPathThroughEvent(input.selectedNodeId);
+  } else if (selectedKind === "entity") {
+    relatedNodeIds.add(input.selectedNodeId);
+    const eventEdges =
+      eventEntityEdgesByEntityId.get(input.selectedNodeId) ?? [];
+    for (const edge of eventEdges) {
+      addEdge(edge);
+      const eventId = getOtherGraphEdgeEndpoint(edge, input.selectedNodeId);
+      if (eventId) addFullPathThroughEvent(eventId, input.selectedNodeId);
+    }
+    if (eventEdges.length === 0) {
+      addQueryEdgeToNode(input.selectedNodeId);
+    }
+  }
+
+  if (relatedEdgeIds.size === 0) {
+    for (const edge of input.edges) {
+      if (
+        edge.source === input.selectedNodeId ||
+        edge.target === input.selectedNodeId
+      ) {
+        addEdge(edge);
+      }
+    }
+  }
+
+  return { relatedNodeIds, relatedEdgeIds };
+}
+
+function getGraphNodeKind(node?: GraphNode) {
+  return node ? ((node.data as GraphNodeData).kind ?? null) : null;
+}
+
+function getOtherGraphEdgeEndpoint(edge: GraphEdge, nodeId: string) {
+  if (edge.source === nodeId) return edge.target;
+  if (edge.target === nodeId) return edge.source;
+  return null;
+}
+
 function getNodeAccentColor(node: GraphNode) {
   const data = node.data as GraphNodeData;
   if (data.kind === "question") return "#22a06b";
@@ -1806,40 +2545,39 @@ function getNodeAccentColor(node: GraphNode) {
 }
 
 function buildFocusedPositionMap(
-  chunkIds: string[],
+  _chunkIds: string[],
   entityIds: string[],
   eventIds: string[],
   revision: number,
   layoutStyle: GraphLayoutStyle,
 ) {
   if (layoutStyle === "columns") {
-    return buildColumnFocusedPositionMap(chunkIds, entityIds, eventIds, revision);
+    return buildColumnFocusedPositionMap(entityIds, eventIds, revision);
   }
   if (layoutStyle === "entity_inner") {
+    // Entity-inner-ring mode: keep entity cards closer to the current context
+    // and place event cards on the outer ring.
     return buildSquareFocusedPositionMap({
       layers: [
         { ids: entityIds, nodeWidth: ENTITY_NODE_WIDTH },
-        { ids: chunkIds, nodeWidth: CHUNK_NODE_WIDTH },
         { ids: eventIds, nodeWidth: EVENT_NODE_WIDTH },
       ],
       revision,
     });
   }
-  return buildSearchLayerFocusedPositionMap(chunkIds, entityIds, eventIds, revision);
+  return buildSearchLayerFocusedPositionMap(entityIds, eventIds, revision);
 }
 
 function buildSearchLayerFocusedPositionMap(
-  chunkIds: string[],
   entityIds: string[],
   eventIds: string[],
   revision: number,
 ) {
-  // Search-centered mode: put cited chunks on the inner ring, events on the
-  // middle ring, and entities on the outer ring. This makes the visual graph
-  // follow the evidence path: question -> chunk -> event -> entity.
+  // Search-centered mode: put events on the inner ring and entities on the
+  // outer ring. The canvas intentionally hides chunk cards so the evidence
+  // path stays concise: current context -> event -> entity.
   return buildSquareFocusedPositionMap({
     layers: [
-      { ids: chunkIds, nodeWidth: CHUNK_NODE_WIDTH },
       { ids: eventIds, nodeWidth: EVENT_NODE_WIDTH },
       { ids: entityIds, nodeWidth: ENTITY_NODE_WIDTH },
     ],
@@ -1910,7 +2648,11 @@ function placeOnSquareRings(input: {
     });
     const offset = points.length > 0 ? input.revision % points.length : 0;
 
-    for (let pointIndex = 0; pointIndex < points.length && index < input.ids.length; pointIndex += 1) {
+    for (
+      let pointIndex = 0;
+      pointIndex < points.length && index < input.ids.length;
+      pointIndex += 1
+    ) {
       const point = points[(pointIndex + offset) % points.length];
       const id = input.ids[index];
       input.positions.set(id, {
@@ -1934,47 +2676,59 @@ function squareRingPoints(input: {
   slotSpacingY: number;
 }) {
   const points: Array<{ x: number; y: number }> = [];
-  const topSlots = Math.max(3, Math.floor((input.halfWidth * 2) / input.slotSpacingX) + 1);
-  const sideSlots = Math.max(1, Math.floor((input.halfHeight * 2) / input.slotSpacingY) - 1);
+  const topSlots = Math.max(
+    3,
+    Math.floor((input.halfWidth * 2) / input.slotSpacingX) + 1,
+  );
+  const sideSlots = Math.max(
+    1,
+    Math.floor((input.halfHeight * 2) / input.slotSpacingY) - 1,
+  );
 
   for (let slot = 0; slot < topSlots; slot += 1) {
     const ratio = topSlots === 1 ? 0.5 : slot / (topSlots - 1);
-    points.push({ x: -input.halfWidth + ratio * input.halfWidth * 2, y: -input.halfHeight });
+    points.push({
+      x: -input.halfWidth + ratio * input.halfWidth * 2,
+      y: -input.halfHeight,
+    });
   }
   for (let slot = 1; slot <= sideSlots; slot += 1) {
     const ratio = slot / (sideSlots + 1);
-    points.push({ x: input.halfWidth, y: -input.halfHeight + ratio * input.halfHeight * 2 });
+    points.push({
+      x: input.halfWidth,
+      y: -input.halfHeight + ratio * input.halfHeight * 2,
+    });
   }
   for (let slot = 0; slot < topSlots; slot += 1) {
     const ratio = topSlots === 1 ? 0.5 : slot / (topSlots - 1);
-    points.push({ x: input.halfWidth - ratio * input.halfWidth * 2, y: input.halfHeight });
+    points.push({
+      x: input.halfWidth - ratio * input.halfWidth * 2,
+      y: input.halfHeight,
+    });
   }
   for (let slot = sideSlots; slot >= 1; slot -= 1) {
     const ratio = slot / (sideSlots + 1);
-    points.push({ x: -input.halfWidth, y: -input.halfHeight + ratio * input.halfHeight * 2 });
+    points.push({
+      x: -input.halfWidth,
+      y: -input.halfHeight + ratio * input.halfHeight * 2,
+    });
   }
 
   return points;
 }
 
 function buildColumnFocusedPositionMap(
-  chunkIds: string[],
   entityIds: string[],
   eventIds: string[],
   _revision: number,
 ) {
   const positions = new Map<string, GraphPosition>();
-  const chunkColumns = Math.min(4, Math.max(1, chunkIds.length));
   const eventColumns = Math.min(4, Math.max(1, eventIds.length));
   const entityColumns = Math.min(5, Math.max(1, entityIds.length));
-  const chunkGapX = 245;
   const eventGapX = 240;
   const entityGapX = 210;
   const rowGap = 96;
-  const chunkStartY = 80;
-  const chunkRows = Math.max(1, Math.ceil(chunkIds.length / chunkColumns));
-  const eventStartY =
-    chunkStartY + (chunkIds.length > 0 ? chunkRows * (rowGap + 10) : 0) + 24;
+  const eventStartY = 92;
   const eventRows = Math.max(1, Math.ceil(eventIds.length / eventColumns));
   const entityStartY =
     eventStartY + (eventIds.length > 0 ? eventRows * (rowGap + 12) : 0) + 44;
@@ -1987,17 +2741,6 @@ function buildColumnFocusedPositionMap(
     root: true,
   });
 
-  chunkIds.forEach((id, index) => {
-    const row = Math.floor(index / chunkColumns);
-    const column = index % chunkColumns;
-    positions.set(id, {
-      x: (column - (chunkColumns - 1) / 2) * chunkGapX - CHUNK_NODE_WIDTH / 2,
-      y: chunkStartY + row * (rowGap + 10),
-      angle: Math.PI / 2,
-      radius: row + 1,
-    });
-  });
-
   eventIds.forEach((id, index) => {
     const row = Math.floor(index / eventColumns);
     const column = index % eventColumns;
@@ -2005,7 +2748,7 @@ function buildColumnFocusedPositionMap(
       x: (column - (eventColumns - 1) / 2) * eventGapX - EVENT_NODE_WIDTH / 2,
       y: eventStartY + row * (rowGap + 12),
       angle: Math.PI / 2,
-      radius: chunkRows + row + 2,
+      radius: row + 1,
     });
   });
 
@@ -2017,12 +2760,13 @@ function buildColumnFocusedPositionMap(
         (column - (entityColumns - 1) / 2) * entityGapX - ENTITY_NODE_WIDTH / 2,
       y: entityStartY + row * rowGap,
       angle: 0,
-      radius: chunkRows + eventRows + row + 3,
+      radius: eventRows + row + 2,
     });
   });
 
   return positions;
 }
+
 
 function buildCircularPositionMap(graph: ProjectGraphRecord) {
   const positions = new Map<string, GraphPosition>();
@@ -2233,7 +2977,9 @@ function compareChunks(
 ) {
   return (
     (a?.rank ?? 0) - (b?.rank ?? 0) ||
-    (a?.heading ?? a?.content ?? "").localeCompare(b?.heading ?? b?.content ?? "")
+    (a?.heading ?? a?.content ?? "").localeCompare(
+      b?.heading ?? b?.content ?? "",
+    )
   );
 }
 
@@ -2272,19 +3018,188 @@ type GraphSuggestion = {
   kind: "chunk" | "entity" | "event";
   score: number;
   weight: number;
+  entityIds?: string[];
+  relatedEventCount?: number;
+  visibleEventCount?: number;
 };
 
 function rankGraphSuggestions(
   graph: ProjectGraphRecord,
   query: string,
+  limit = 10,
+  eventDisplayLimit = DEFAULT_FOCUS_EVENT_LIMIT,
 ): GraphSuggestion[] {
   const normalizedQuery = normalizeGraphText(query);
   if (!normalizedQuery) return [];
+
+  const entityById = new Map(
+    graph.entities.map((entity) => [entity.id, entity]),
+  );
+  const eventById = new Map(graph.events.map((event) => [event.id, event]));
+  const edgeEntityIdsByEventId = new Map<string, string[]>();
+  const eventIdsByEntityId = new Map<string, Set<string>>();
+  const linkEntityToEvent = (entityId: string, eventId: string) => {
+    if (!entityId || !eventId || !eventById.has(eventId)) return;
+    const eventIds = eventIdsByEntityId.get(entityId) ?? new Set<string>();
+    eventIds.add(eventId);
+    eventIdsByEntityId.set(entityId, eventIds);
+  };
+  for (const edge of graph.edges) {
+    const entityIds = edgeEntityIdsByEventId.get(edge.eventId) ?? [];
+    entityIds.push(edge.entityId);
+    edgeEntityIdsByEventId.set(edge.eventId, entityIds);
+    linkEntityToEvent(edge.entityId, edge.eventId);
+  }
+  for (const event of graph.events) {
+    for (const entityId of event.entityIds ?? []) {
+      linkEntityToEvent(entityId, event.id);
+    }
+  }
+  const eventEntityTextById = new Map<string, string>();
+  const eventEntityScoreById = new Map<string, number>();
+  const chunkEventTextById = new Map<string, string>();
+  const chunkEntityScoreById = new Map<string, number>();
+
+  for (const event of graph.events) {
+    const eventEntityIds = uniqueGraphIds([
+      ...(event.entityIds ?? []),
+      ...(edgeEntityIdsByEventId.get(event.id) ?? []),
+    ]);
+    const relatedEntities = eventEntityIds
+      .map((entityId) => entityById.get(entityId))
+      .filter((entity): entity is ProjectGraphEntityRecord => Boolean(entity));
+    const relatedEntityText = relatedEntities
+      .map((entity) => `${entity.name} ${entity.normalizedName} ${entity.type}`)
+      .join(" ");
+    eventEntityTextById.set(event.id, relatedEntityText);
+    eventEntityScoreById.set(
+      event.id,
+      maxGraphMatchScore(
+        relatedEntities.map(
+          (entity) => `${entity.name} ${entity.normalizedName} ${entity.type}`,
+        ),
+        normalizedQuery,
+      ),
+    );
+  }
+
+  for (const event of graph.events) {
+    const eventSearchText = [
+      event.title,
+      eventEntityTextById.get(event.id) ?? "",
+    ].join(" ");
+    if (event.chunkId) {
+      chunkEventTextById.set(
+        event.chunkId,
+        `${chunkEventTextById.get(event.chunkId) ?? ""} ${eventSearchText}`,
+      );
+      chunkEntityScoreById.set(
+        event.chunkId,
+        Math.max(
+          chunkEntityScoreById.get(event.chunkId) ?? 0,
+          eventEntityScoreById.get(event.id) ?? 0,
+        ),
+      );
+    }
+  }
+  for (const edge of graph.chunkEventEdges ?? []) {
+    const event = eventById.get(edge.eventId);
+    if (!event) continue;
+    const eventSearchText = [
+      event.title,
+      eventEntityTextById.get(event.id) ?? "",
+    ].join(" ");
+    chunkEventTextById.set(
+      edge.chunkId,
+      `${chunkEventTextById.get(edge.chunkId) ?? ""} ${eventSearchText}`,
+    );
+    chunkEntityScoreById.set(
+      edge.chunkId,
+      Math.max(
+        chunkEntityScoreById.get(edge.chunkId) ?? 0,
+        eventEntityScoreById.get(event.id) ?? 0,
+      ),
+    );
+  }
+
   const suggestions: GraphSuggestion[] = [];
+  const entityGroupsBySearchKey = new Map<string, ProjectGraphEntityRecord[]>();
+  for (const entity of graph.entities) {
+    const key = graphEntitySuggestionGroupKey(entity);
+    const entities = entityGroupsBySearchKey.get(key) ?? [];
+    entities.push(entity);
+    entityGroupsBySearchKey.set(key, entities);
+  }
+  for (const groupEntities of entityGroupsBySearchKey.values()) {
+    const scoredEntities = groupEntities
+      .map((entity) => ({
+        entity,
+        score: maxGraphMatchScore(
+          [entity.name, entity.normalizedName, `${entity.name} ${entity.type}`],
+          normalizedQuery,
+        ),
+      }))
+      .filter((item) => item.score > 0);
+    if (scoredEntities.length === 0) continue;
+    const orderedEntities = [...groupEntities].sort(compareEntities);
+    const representative = orderedEntities[0] ?? scoredEntities[0].entity;
+    const relatedEventIds = uniqueGraphIds(
+      groupEntities.flatMap((entity) => [
+        ...(eventIdsByEntityId.get(entity.id) ?? []),
+      ]),
+    );
+    const relatedEventCount = relatedEventIds.length;
+    const score = Math.max(...scoredEntities.map((item) => item.score));
+    suggestions.push({
+      id: representative.id,
+      label: representative.name,
+      kind: "entity",
+      score: score + 8,
+      weight: relatedEventCount,
+      entityIds: orderedEntities.map((entity) => entity.id),
+      relatedEventCount,
+      visibleEventCount: Math.min(
+        relatedEventCount,
+        eventDisplayLimit,
+      ),
+    });
+  }
+  for (const event of graph.events) {
+    const titleScore = graphMatchScore(event.title, normalizedQuery);
+    const relatedEntityScore = eventEntityScoreById.get(event.id) ?? 0;
+    const combinedScore = graphMatchScore(
+      `${event.title} ${eventEntityTextById.get(event.id) ?? ""}`,
+      normalizedQuery,
+    );
+    const score = Math.max(
+      titleScore,
+      relatedEntityScore > 0 ? relatedEntityScore - 10 : 0,
+      combinedScore,
+    );
+    if (score > 0) {
+      suggestions.push({
+        id: event.id,
+        label: event.title,
+        kind: "event",
+        score,
+        weight: -event.rank,
+      });
+    }
+  }
   for (const chunk of graph.chunks ?? []) {
-    const score = graphMatchScore(
+    const chunkScore = graphMatchScore(
       `${chunk.heading ?? ""} ${chunk.content.slice(0, 220)}`,
       normalizedQuery,
+    );
+    const linkedScore = graphMatchScore(
+      chunkEventTextById.get(chunk.id) ?? "",
+      normalizedQuery,
+    );
+    const entityScore = chunkEntityScoreById.get(chunk.id) ?? 0;
+    const score = Math.max(
+      chunkScore,
+      linkedScore > 0 ? linkedScore - 6 : 0,
+      entityScore > 0 ? entityScore - 14 : 0,
     );
     if (score > 0) {
       suggestions.push({
@@ -2296,45 +3211,99 @@ function rankGraphSuggestions(
       });
     }
   }
-  for (const entity of graph.entities) {
-    const score = graphMatchScore(
-      `${entity.name} ${entity.type}`,
-      normalizedQuery,
+
+  return diversifyGraphSuggestions(
+    suggestions.sort(compareGraphSuggestions),
+    limit,
+  );
+}
+
+function diversifyGraphSuggestions(
+  sortedSuggestions: GraphSuggestion[],
+  limit: number,
+): GraphSuggestion[] {
+  const result: GraphSuggestion[] = [];
+  const seen = new Set<string>();
+  for (const suggestion of sortedSuggestions) {
+    if (result.length >= limit) break;
+    addGraphSuggestion(result, seen, suggestion);
+  }
+  return result;
+}
+
+function addGraphSuggestion(
+  result: GraphSuggestion[],
+  seen: Set<string>,
+  suggestion: GraphSuggestion,
+) {
+  const key = graphSuggestionDedupeKey(suggestion);
+  if (seen.has(key)) return;
+  seen.add(key);
+  result.push(suggestion);
+}
+
+function graphSuggestionDedupeKey(suggestion: GraphSuggestion) {
+  if (suggestion.kind === "entity" && suggestion.entityIds?.length) {
+    return `${suggestion.kind}-${suggestion.entityIds.join("|")}`;
+  }
+  return `${suggestion.kind}-${suggestion.id}`;
+}
+
+function graphEntitySuggestionGroupKey(entity: ProjectGraphEntityRecord) {
+  return (
+    normalizeGraphText(entity.normalizedName || entity.name) ||
+    normalizeGraphText(entity.name) ||
+    entity.id
+  );
+}
+
+function formatGraphSuggestionKindLabel(
+  suggestion: GraphSuggestion,
+  language: SupportedLanguage,
+) {
+  if (suggestion.kind === "chunk") return graphText(language, "切片", "Chunk");
+  if (suggestion.kind === "event") return graphText(language, "事件", "Event");
+  const relatedEventCount = suggestion.relatedEventCount ?? 0;
+  const visibleEventCount = suggestion.visibleEventCount ?? relatedEventCount;
+  if (relatedEventCount > visibleEventCount) {
+    return graphText(
+      language,
+      `实体 · 展示事件 ${visibleEventCount}/${relatedEventCount} 个`,
+      `Entity · showing ${visibleEventCount}/${relatedEventCount} events`,
     );
-    if (score > 0) {
-      suggestions.push({
-        id: entity.id,
-        label: entity.name,
-        kind: "entity",
-        score,
-        weight: entity.eventCount,
-      });
-    }
   }
-  for (const event of graph.events) {
-    const score = graphMatchScore(event.title, normalizedQuery);
-    if (score > 0) {
-      suggestions.push({
-        id: event.id,
-        label: event.title,
-        kind: "event",
-        score,
-        weight: -event.rank,
-      });
-    }
-  }
-  return suggestions.sort(
-    (left, right) =>
-      right.score - left.score ||
-      graphSuggestionKindWeight(right.kind) - graphSuggestionKindWeight(left.kind) ||
-      right.weight - left.weight ||
-      left.label.localeCompare(right.label),
+  return graphText(
+    language,
+    `实体 · 关联事件 ${relatedEventCount} 个`,
+    `Entity · ${relatedEventCount} related ${
+      relatedEventCount === 1 ? "event" : "events"
+    }`,
+  );
+}
+
+function compareGraphSuggestions(
+  left: GraphSuggestion,
+  right: GraphSuggestion,
+) {
+  return (
+    graphSuggestionKindWeight(right.kind) -
+      graphSuggestionKindWeight(left.kind) ||
+    right.score - left.score ||
+    right.weight - left.weight ||
+    left.label.localeCompare(right.label)
+  );
+}
+
+function maxGraphMatchScore(values: string[], normalizedQuery: string) {
+  return values.reduce(
+    (best, value) => Math.max(best, graphMatchScore(value, normalizedQuery)),
+    0,
   );
 }
 
 function graphSuggestionKindWeight(kind: GraphSuggestion["kind"]) {
-  if (kind === "chunk") return 3;
-  if (kind === "entity") return 2;
+  if (kind === "entity") return 3;
+  if (kind === "event") return 2;
   return 1;
 }
 
@@ -2419,6 +3388,7 @@ function EntityTypeFilterPanel(props: {
   if (props.collapsed) {
     return (
       <div
+        data-sag-entity-type-panel="true"
         className="absolute left-3 rounded-xl border border-border bg-background/95 p-1.5 shadow-[0_12px_36px_rgba(24,36,58,0.10)] backdrop-blur"
         style={{
           top: ENTITY_TYPE_FILTER_PANEL_TOP,
@@ -2457,6 +3427,7 @@ function EntityTypeFilterPanel(props: {
 
   return (
     <div
+      data-sag-entity-type-panel="true"
       className="absolute left-3 rounded-xl border border-border bg-background/95 p-2 shadow-[0_12px_36px_rgba(24,36,58,0.10)] backdrop-blur"
       style={{
         top: ENTITY_TYPE_FILTER_PANEL_TOP,
@@ -2651,6 +3622,14 @@ function buildSelectedEntityTypes(
   return types;
 }
 
+function randomGraphShowcaseMode(): GraphShowcaseMode {
+  return (
+    DEFAULT_GRAPH_SHOWCASE_MODES[
+      Math.floor(Math.random() * DEFAULT_GRAPH_SHOWCASE_MODES.length)
+    ] ?? "frequency"
+  );
+}
+
 function buildGraphShowcase(input: {
   graph: ProjectGraphRecord;
   mode: GraphShowcaseMode;
@@ -2686,19 +3665,31 @@ type GraphIndex = {
 };
 
 function indexProjectGraph(graph: ProjectGraphRecord): GraphIndex {
-  const entityById = new Map(graph.entities.map((entity) => [entity.id, entity]));
+  const entityById = new Map(
+    graph.entities.map((entity) => [entity.id, entity]),
+  );
   const eventById = new Map(graph.events.map((event) => [event.id, event]));
   const entityIdsByEventId = new Map<string, string[]>();
   const eventIdsByEntityId = new Map<string, string[]>();
 
-  for (const edge of graph.edges) {
-    const entityIds = entityIdsByEventId.get(edge.eventId) ?? [];
-    entityIds.push(edge.entityId);
-    entityIdsByEventId.set(edge.eventId, entityIds);
+  const linkEntityToEvent = (entityId: string, eventId: string) => {
+    if (!entityId || !eventId || !eventById.has(eventId) || !entityById.has(entityId)) return;
+    const entityIds = entityIdsByEventId.get(eventId) ?? [];
+    entityIds.push(entityId);
+    entityIdsByEventId.set(eventId, entityIds);
 
-    const eventIds = eventIdsByEntityId.get(edge.entityId) ?? [];
-    eventIds.push(edge.eventId);
-    eventIdsByEntityId.set(edge.entityId, eventIds);
+    const eventIds = eventIdsByEntityId.get(entityId) ?? [];
+    eventIds.push(eventId);
+    eventIdsByEntityId.set(entityId, eventIds);
+  };
+
+  for (const edge of graph.edges) {
+    linkEntityToEvent(edge.entityId, edge.eventId);
+  }
+  for (const event of graph.events) {
+    for (const entityId of event.entityIds ?? []) {
+      linkEntityToEvent(entityId, event.id);
+    }
   }
 
   for (const [eventId, entityIds] of entityIdsByEventId.entries()) {
@@ -2735,15 +3726,21 @@ function buildOverviewShowcase(input: {
 
   if (pair) {
     for (const entityId of pair.entityIds) anchorEntityIds.add(entityId);
-    for (const eventId of pair.eventIds.slice(0, 8)) candidateEventIds.add(eventId);
+    for (const eventId of pair.eventIds.slice(0, 8))
+      candidateEventIds.add(eventId);
   }
 
   for (const entity of seededShuffle(
-    input.chemicalEntities.slice(0, Math.min(24, input.chemicalEntities.length)),
+    input.chemicalEntities.slice(
+      0,
+      Math.min(24, input.chemicalEntities.length),
+    ),
     input.seed + 11,
   ).slice(0, 8)) {
     anchorEntityIds.add(entity.id);
-    for (const eventId of (input.graphIndex.eventIdsByEntityId.get(entity.id) ?? []).slice(0, 4)) {
+    for (const eventId of (
+      input.graphIndex.eventIdsByEntityId.get(entity.id) ?? []
+    ).slice(0, 4)) {
       candidateEventIds.add(eventId);
     }
   }
@@ -2791,7 +3788,10 @@ function buildFrequencyShowcase(input: {
   language: SupportedLanguage;
 }): GraphShowcase {
   const anchors = seededShuffle(
-    input.chemicalEntities.slice(0, Math.min(SHOWCASE_TOP_CANDIDATE_LIMIT, input.chemicalEntities.length)),
+    input.chemicalEntities.slice(
+      0,
+      Math.min(SHOWCASE_TOP_CANDIDATE_LIMIT, input.chemicalEntities.length),
+    ),
     input.seed + 23,
   )
     .slice(0, 9)
@@ -2799,7 +3799,9 @@ function buildFrequencyShowcase(input: {
   const anchorEntityIds = new Set(anchors.map((entity) => entity.id));
   const candidateEventIds = new Set<string>();
   for (const entity of anchors) {
-    for (const eventId of (input.graphIndex.eventIdsByEntityId.get(entity.id) ?? []).slice(0, 6)) {
+    for (const eventId of (
+      input.graphIndex.eventIdsByEntityId.get(entity.id) ?? []
+    ).slice(0, 6)) {
       candidateEventIds.add(eventId);
     }
   }
@@ -2819,12 +3821,21 @@ function buildFrequencyShowcase(input: {
     mode: "frequency",
     title: graphText(
       input.language,
-      `高频化工品 · ${anchors.slice(0, 3).map((entity) => entity.name).join("、")}`,
-      `Core chemicals · ${anchors.slice(0, 3).map((entity) => entity.name).join(", ")}`,
+      `高频化工品 · ${anchors
+        .slice(0, 3)
+        .map((entity) => entity.name)
+        .join("、")}`,
+      `Core chemicals · ${anchors
+        .slice(0, 3)
+        .map((entity) => entity.name)
+        .join(", ")}`,
     ),
     entityIds,
     eventIds,
-    linkedNodeIds: uniqueStrings([...anchors.slice(0, 4).map((entity) => entity.id), ...eventIds.slice(0, 3)]),
+    linkedNodeIds: uniqueStrings([
+      ...anchors.slice(0, 4).map((entity) => entity.id),
+      ...eventIds.slice(0, 3),
+    ]),
   };
 }
 
@@ -2874,12 +3885,17 @@ function buildEventShowcase(input: {
   seed: number;
   language: SupportedLanguage;
 }): GraphShowcase {
-  const chemicalEntityIdSet = new Set(input.chemicalEntities.map((entity) => entity.id));
+  const chemicalEntityIdSet = new Set(
+    input.chemicalEntities.map((entity) => entity.id),
+  );
   const eventCandidates = input.graph.events
     .map((event) => {
       const entityIds = input.graphIndex.entityIdsByEventId.get(event.id) ?? [];
-      const chemicalCount = entityIds.filter((entityId) => chemicalEntityIdSet.has(entityId)).length;
-      const score = chemicalCount * 6 + entityIds.length * 2 - event.rank * 0.02;
+      const chemicalCount = entityIds.filter((entityId) =>
+        chemicalEntityIdSet.has(entityId),
+      ).length;
+      const score =
+        chemicalCount * 6 + entityIds.length * 2 - event.rank * 0.02;
       return { event, score, chemicalCount, entityCount: entityIds.length };
     })
     .filter((candidate) => candidate.chemicalCount > 0)
@@ -2900,9 +3916,11 @@ function buildEventShowcase(input: {
   const eventIds = selectedEvents.map((candidate) => candidate.event.id);
   const anchorEntityIds = new Set<string>();
   for (const eventId of eventIds) {
-    for (const entityId of input.graphIndex.entityIdsByEventId.get(eventId) ?? []) {
+    for (const entityId of input.graphIndex.entityIdsByEventId.get(eventId) ??
+      []) {
       const entity = input.graphIndex.entityById.get(entityId);
-      if (entity && isChemicalGraphEntity(entity)) anchorEntityIds.add(entityId);
+      if (entity && isChemicalGraphEntity(entity))
+        anchorEntityIds.add(entityId);
     }
   }
   const entityIds = collectShowcaseEntities({
@@ -2912,7 +3930,10 @@ function buildEventShowcase(input: {
     limit: SHOWCASE_ENTITY_LIMIT,
     includeRelatedEntityLimit: 10,
   });
-  const firstEventTitle = truncateGraphLabel(selectedEvents[0]?.event.title ?? "核心事件", 18);
+  const firstEventTitle = truncateGraphLabel(
+    selectedEvents[0]?.event.title ?? "核心事件",
+    18,
+  );
   return {
     mode: "events",
     title: graphText(
@@ -2922,7 +3943,10 @@ function buildEventShowcase(input: {
     ),
     entityIds,
     eventIds,
-    linkedNodeIds: uniqueStrings([...eventIds.slice(0, 5), ...entityIds.slice(0, 5)]),
+    linkedNodeIds: uniqueStrings([
+      ...eventIds.slice(0, 5),
+      ...entityIds.slice(0, 5),
+    ]),
   };
 }
 
@@ -2942,7 +3966,10 @@ function pickCoEventPair(input: {
   const candidates = buildCoEventPairCandidates(input);
   if (candidates.length === 0) return null;
   return seededShuffle(
-    candidates.slice(0, Math.min(SHOWCASE_TOP_CANDIDATE_LIMIT, candidates.length)),
+    candidates.slice(
+      0,
+      Math.min(SHOWCASE_TOP_CANDIDATE_LIMIT, candidates.length),
+    ),
     input.seed + 53,
   )[0];
 }
@@ -2952,13 +3979,15 @@ function buildCoEventPairCandidates(input: {
   graphIndex: GraphIndex;
   chemicalEntities: ProjectGraphEntityRecord[];
 }): CoEventPairCandidate[] {
-  const chemicalEntityIdSet = new Set(input.chemicalEntities.map((entity) => entity.id));
+  const chemicalEntityIdSet = new Set(
+    input.chemicalEntities.map((entity) => entity.id),
+  );
   const pairEventIds = new Map<string, Set<string>>();
 
   for (const event of input.graph.events) {
     const chemicalIds = uniqueStrings(
-      (input.graphIndex.entityIdsByEventId.get(event.id) ?? []).filter((entityId) =>
-        chemicalEntityIdSet.has(entityId),
+      (input.graphIndex.entityIdsByEventId.get(event.id) ?? []).filter(
+        (entityId) => chemicalEntityIdSet.has(entityId),
       ),
     )
       .sort((left, right) =>
@@ -2969,10 +3998,17 @@ function buildCoEventPairCandidates(input: {
       )
       .slice(0, 10);
     for (let leftIndex = 0; leftIndex < chemicalIds.length; leftIndex += 1) {
-      for (let rightIndex = leftIndex + 1; rightIndex < chemicalIds.length; rightIndex += 1) {
+      for (
+        let rightIndex = leftIndex + 1;
+        rightIndex < chemicalIds.length;
+        rightIndex += 1
+      ) {
         const leftId = chemicalIds[leftIndex];
         const rightId = chemicalIds[rightIndex];
-        const key = leftId < rightId ? `${leftId}|||${rightId}` : `${rightId}|||${leftId}`;
+        const key =
+          leftId < rightId
+            ? `${leftId}|||${rightId}`
+            : `${rightId}|||${leftId}`;
         const current = pairEventIds.get(key) ?? new Set<string>();
         current.add(event.id);
         pairEventIds.set(key, current);
@@ -3028,20 +4064,28 @@ function scoreShowcaseEvent(
   anchorEntityIds: Set<string>,
 ) {
   const entityIds = graphIndex.entityIdsByEventId.get(eventId) ?? [];
-  const anchorHits = entityIds.filter((entityId) => anchorEntityIds.has(entityId)).length;
+  const anchorHits = entityIds.filter((entityId) =>
+    anchorEntityIds.has(entityId),
+  ).length;
   const chemicalHits = entityIds.filter((entityId) => {
     const entity = graphIndex.entityById.get(entityId);
     return entity ? isChemicalGraphEntity(entity) : false;
   }).length;
   const event = graphIndex.eventById.get(eventId);
-  return anchorHits * 40 + chemicalHits * 8 + entityIds.length * 2 - (event?.rank ?? 0) * 0.02;
+  return (
+    anchorHits * 40 +
+    chemicalHits * 8 +
+    entityIds.length * 2 -
+    (event?.rank ?? 0) * 0.02
+  );
 }
 
 function averageEventRank(eventIds: string[], graphIndex: GraphIndex) {
   if (eventIds.length === 0) return 0;
   return (
     eventIds.reduce(
-      (total, eventId) => total + (graphIndex.eventById.get(eventId)?.rank ?? 0),
+      (total, eventId) =>
+        total + (graphIndex.eventById.get(eventId)?.rank ?? 0),
       0,
     ) / eventIds.length
   );
@@ -3058,7 +4102,8 @@ function collectShowcaseEntities(input: {
   const relatedIds = new Set<string>();
 
   for (const eventId of input.eventIds) {
-    for (const entityId of input.graphIndex.entityIdsByEventId.get(eventId) ?? []) {
+    for (const entityId of input.graphIndex.entityIdsByEventId.get(eventId) ??
+      []) {
       const entity = input.graphIndex.entityById.get(entityId);
       if (!entity) continue;
       if (isChemicalGraphEntity(entity)) {
@@ -3086,9 +4131,18 @@ function collectShowcaseEntities(input: {
         input.graphIndex.entityById.get(rightId),
       ),
     )
-    .slice(0, Math.min(input.includeRelatedEntityLimit, input.limit - chemicalEntityIds.length));
+    .slice(
+      0,
+      Math.min(
+        input.includeRelatedEntityLimit,
+        input.limit - chemicalEntityIds.length,
+      ),
+    );
 
-  return uniqueStrings([...chemicalEntityIds, ...relatedEntityIds]).slice(0, input.limit);
+  return uniqueStrings([...chemicalEntityIds, ...relatedEntityIds]).slice(
+    0,
+    input.limit,
+  );
 }
 
 function buildFallbackShowcase(
@@ -3099,7 +4153,9 @@ function buildFallbackShowcase(
   const entityIds = graph.entities.slice(0, 18).map((entity) => entity.id);
   const entityIdSet = new Set(entityIds);
   const eventIds = graph.events
-    .filter((event) => event.entityIds.some((entityId) => entityIdSet.has(entityId)))
+    .filter((event) =>
+      event.entityIds.some((entityId) => entityIdSet.has(entityId)),
+    )
     .slice(0, 8)
     .map((event) => event.id);
   return {
@@ -3107,7 +4163,10 @@ function buildFallbackShowcase(
     title: graphText(language, "精选知识总览", "Curated overview"),
     entityIds,
     eventIds,
-    linkedNodeIds: uniqueStrings([...eventIds.slice(0, 4), ...entityIds.slice(0, 4)]),
+    linkedNodeIds: uniqueStrings([
+      ...eventIds.slice(0, 4),
+      ...entityIds.slice(0, 4),
+    ]),
   };
 }
 
@@ -3184,13 +4243,23 @@ function isChemicalGraphEntity(entity: ProjectGraphEntityRecord) {
     "市场",
   ];
 
-  if (negativeTypeKeywords.some((keyword) => type.includes(normalizeGraphText(keyword)))) {
+  if (
+    negativeTypeKeywords.some((keyword) =>
+      type.includes(normalizeGraphText(keyword)),
+    )
+  ) {
     return false;
   }
-  if (negativeNameKeywords.some((keyword) => name.includes(normalizeGraphText(keyword)))) {
+  if (
+    negativeNameKeywords.some((keyword) =>
+      name.includes(normalizeGraphText(keyword)),
+    )
+  ) {
     return false;
   }
-  return positiveTypeKeywords.some((keyword) => type.includes(normalizeGraphText(keyword)));
+  return positiveTypeKeywords.some((keyword) =>
+    type.includes(normalizeGraphText(keyword)),
+  );
 }
 
 function isLowValueGraphEntity(entity: ProjectGraphEntityRecord) {
@@ -3212,8 +4281,10 @@ function isLowValueGraphEntity(entity: ProjectGraphEntityRecord) {
     "标准",
     "术语",
   ];
-  return keywords.some((keyword) =>
-    type.includes(normalizeGraphText(keyword)) || name.includes(normalizeGraphText(keyword)),
+  return keywords.some(
+    (keyword) =>
+      type.includes(normalizeGraphText(keyword)) ||
+      name.includes(normalizeGraphText(keyword)),
   );
 }
 
@@ -3244,10 +4315,27 @@ function truncateGraphLabel(value: string, maxLength: number) {
   return `${value.slice(0, maxLength)}…`;
 }
 
-function MetricChip({ label, value }: { label: string; value: number }) {
+function formatGraphMetricValue(visible: number, total: number) {
+  return `${Math.max(0, visible)}/${Math.max(0, total)}`;
+}
+
+function MetricChip({
+  label,
+  value,
+  title,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+}) {
   return (
-    <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <div
+      className="rounded-lg border border-border bg-muted/40 px-2.5 py-1"
+      title={title}
+    >
+      <span className="text-xs text-muted-foreground">
+        <RichTextFragment text={label} />
+      </span>
       <span className="ml-1 text-sm font-semibold text-primary">{value}</span>
     </div>
   );

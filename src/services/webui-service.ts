@@ -16,10 +16,12 @@ import {
   getProjectGraph,
   getProjectStats,
   listChunksByDocument,
+  listChunksByProject,
   listDocumentsBySource,
   listEntitiesByDocument,
   listEntitiesByProject,
   listEventsByDocument,
+  listEventsByProject,
   listSources,
   restoreDocument,
   restoreSource,
@@ -522,6 +524,10 @@ export class WebuiService {
     return listChunksByDocument({ documentId, tenantId });
   }
 
+  async listProjectChunks(sourceId: string, tenantId = config.DEFAULT_TENANT_ID) {
+    return listChunksByProject({ sourceId, tenantId });
+  }
+
   async updateChunk(chunkId: string, input: {
     heading?: string | null;
     content?: string;
@@ -548,6 +554,10 @@ export class WebuiService {
 
   async listEvents(documentId: string, tenantId = config.DEFAULT_TENANT_ID) {
     return listEventsByDocument({ documentId, tenantId });
+  }
+
+  async listProjectEvents(sourceId: string, tenantId = config.DEFAULT_TENANT_ID) {
+    return listEventsByProject({ sourceId, tenantId });
   }
 
   async updateEvent(eventId: string, input: {

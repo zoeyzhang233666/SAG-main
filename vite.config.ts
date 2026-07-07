@@ -7,13 +7,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://127.0.0.1:4173",
-      "/health": "http://127.0.0.1:4173",
-      "/share-login": "http://127.0.0.1:4173",
-      "/sources": "http://127.0.0.1:4173",
-      "/ingest": "http://127.0.0.1:4173",
-      "/search": "http://127.0.0.1:4173",
-      "/events": "http://127.0.0.1:4173"
+      "/api": "http://127.0.0.1:4300",
+      "/health": "http://127.0.0.1:4300",
+      "/share-login": "http://127.0.0.1:4300",
+      "/sources": "http://127.0.0.1:4300",
+      "/ingest": "http://127.0.0.1:4300",
+      "/search": "http://127.0.0.1:4300",
+      "/events": "http://127.0.0.1:4300"
     }
   },
   build: {

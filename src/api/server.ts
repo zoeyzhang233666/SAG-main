@@ -79,6 +79,13 @@ const structuredImportSchema = z.object({
   content: z.string().min(1)
 });
 
+const structuredImportFileJobQuerySchema = z.object({
+  sourceId: z.string().uuid(),
+  title: z.string().min(1).optional(),
+  fileName: z.string().min(1),
+  format: z.enum(["auto", "json", "csv", "markdown"]).default("auto")
+});
+
 const exportFilesQuerySchema = z.object({
   format: z.enum(["csv", "json"]).default("csv"),
   profile: z.enum(["simple", "full"]).default("simple"),
@@ -393,6 +400,22 @@ export function buildHttpServer() {
     };
   });
 
+  app.get("/api/projects/:projectId/chunks", async (request) => {
+    const params = request.params as { projectId: string };
+    z.string().uuid().parse(params.projectId);
+    return {
+      chunks: await webuiService.listProjectChunks(params.projectId)
+    };
+  });
+
+  app.get("/api/projects/:projectId/events", async (request) => {
+    const params = request.params as { projectId: string };
+    z.string().uuid().parse(params.projectId);
+    return {
+      events: await webuiService.listProjectEvents(params.projectId)
+    };
+  });
+
   app.get("/api/projects/:projectId/entities", async (request) => {
     const params = request.params as { projectId: string };
     z.string().uuid().parse(params.projectId);
@@ -487,6 +510,23 @@ export function buildHttpServer() {
 
   app.post("/api/documents/import-structured/jobs", async (request, reply) => {
     const input = structuredImportSchema.parse(request.body);
+    const job = await webuiService.createStructuredImportJob(input);
+    return reply.code(202).send({ job });
+  });
+
+  app.post("/api/documents/import-structured/file/jobs", async (request, reply) => {
+    const query = structuredImportFileJobQuerySchema.parse(request.query);
+    const rawBody = request.body;
+    const content =
+      typeof rawBody === "string"
+        ? rawBody
+        : Buffer.isBuffer(rawBody)
+          ? rawBody.toString("utf8")
+          : "";
+    const input = structuredImportSchema.parse({
+      ...query,
+      content
+    });
     const job = await webuiService.createStructuredImportJob(input);
     return reply.code(202).send({ job });
   });
