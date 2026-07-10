@@ -49,7 +49,49 @@ type AnswerCitation = {
 type AssistantGenerationResult = {
   text: string;
   streamed: boolean;
+  generationIncomplete?: boolean;
+  incompleteReason?: string;
+  finishReason?: string;
 };
+
+type StreamTimeoutKind = "idle" | "total";
+
+type ParsedChatStreamPart = {
+  delta: string;
+  done: boolean;
+  finishReason?: string;
+};
+
+const FINAL_HISTORY_MAX_MESSAGES = 8;
+const FINAL_HISTORY_CHAR_BUDGET = 6_000;
+const FINAL_HISTORY_PER_MESSAGE_CHAR_LIMIT = 2_400;
+const STREAM_TOTAL_TIMEOUT_FLOOR_MS = 120_000;
+const STREAM_TOTAL_TIMEOUT_CEILING_MS = 900_000;
+const STREAM_TOTAL_TIMEOUT_MULTIPLIER = 3;
+const PARTIAL_LOG_PREVIEW_CHARS = 800;
+
+class LlmStreamTimeoutError extends Error {
+  constructor(
+    readonly timeoutKind: StreamTimeoutKind,
+    readonly timeoutMs: number
+  ) {
+    super(`LLM 流式${timeoutKind === "idle" ? "空闲" : "总时长"}超时（${timeoutMs} ms）`);
+    this.name = "LlmStreamTimeoutError";
+  }
+}
+
+class LlmStreamInterruptedError extends Error {
+  constructor(
+    message: string,
+    readonly partialText: string,
+    readonly reasonCode: string,
+    readonly finishReason?: string,
+    readonly timeoutKind?: StreamTimeoutKind
+  ) {
+    super(message);
+    this.name = "LlmStreamInterruptedError";
+  }
+}
 
 export type McpRunStreamEvent =
   | { type: "stage"; label: string; detail?: string }
@@ -206,7 +248,10 @@ export class McpAgentService {
             signal: input.signal,
             emit
           });
-        } catch {
+        } catch (error) {
+          if (input.signal?.aborted || error instanceof McpRunAbortedError) {
+            throw error;
+          }
           if (toolCalls.some((toolCall) => toolCall.status === "SUCCEEDED")) {
             emit?.({ type: "stage", label: "保留检索结果", detail: "上游模型未完成最终组织，正在返回已检索到的证据" });
             assistantResult = { text: buildEvidenceFallbackAnswer(toolCalls), streamed: false };
@@ -243,11 +288,12 @@ export class McpAgentService {
       }
     }
     assertNotAborted(input.signal);
+    const assistantMetadata = buildAssistantMessageMetadata(answerCitations, assistantResult);
     const assistant = await addMcpMessage({
       sessionId: input.sessionId,
       role: "assistant",
       content: assistantContent,
-      metadata: answerCitations.length > 0 ? { citations: answerCitations } : undefined
+      metadata: assistantMetadata
     });
     emit?.({ type: "message", message: assistant });
 
@@ -422,10 +468,13 @@ export class McpAgentService {
           emit: input.emit
         });
         const candidate = generated.text.trim();
-        if (!isToolOnlyPlaceholder(candidate)) {
+        if (generated.generationIncomplete || !isToolOnlyPlaceholder(candidate)) {
           return generated;
         }
-      } catch {
+      } catch (error) {
+        if (input.signal?.aborted || error instanceof McpRunAbortedError) {
+          throw error;
+        }
         // The retrieved evidence is still useful when a slow or incompatible
         // upstream model fails during the final synthesis request.
       }
@@ -793,10 +842,6 @@ async function synthesizeFinalAnswer(input: {
   emit?: StreamEmitter;
 }): Promise<AssistantGenerationResult> {
   assertNotAborted(input.signal);
-  const controller = new AbortController();
-  const abortFromParent = () => controller.abort(input.signal?.reason);
-  input.signal?.addEventListener("abort", abortFromParent, { once: true });
-  const timeout = setTimeout(() => controller.abort(), input.settings.llmTimeoutMs);
   const url = buildChatCompletionsUrl(input.settings.llmBaseUrl);
   const body = {
     model: input.settings.llmModel,
@@ -809,7 +854,7 @@ async function synthesizeFinalAnswer(input: {
       url,
       body,
       operation: "mcp.synthesizeFinalAnswer.stream",
-      signal: controller.signal,
+      signal: input.signal,
       emit: input.emit
     });
     if (streamed.text.trim()) {
@@ -820,24 +865,47 @@ async function synthesizeFinalAnswer(input: {
     if (input.signal?.aborted) {
       throw new McpRunAbortedError();
     }
-    if (controller.signal.aborted) {
-      throw error;
+    if (error instanceof LlmStreamInterruptedError && error.partialText.trim()) {
+      const incompleteNotice = buildGenerationIncompleteNotice(
+        error.partialText,
+        input.userContent
+      );
+      input.emit?.({ type: "assistant_delta", delta: incompleteNotice });
+      input.emit?.({
+        type: "stage",
+        label: "保留已生成回答",
+        detail: "上游流式生成未完整结束，已保留并保存当前已收到的回答，避免被检索兜底覆盖"
+      });
+      return {
+        text: `${error.partialText}${incompleteNotice}`,
+        streamed: true,
+        generationIncomplete: true,
+        incompleteReason: error.reasonCode,
+        finishReason: error.finishReason
+      };
     }
     input.emit?.({ type: "stage", label: "切换普通生成", detail: "流式输出不可用，正在改用普通请求生成最终回答" });
-    const text = await requestChatCompletionText({
-      settings: input.settings,
-      url,
-      body,
-      operation: "mcp.synthesizeFinalAnswer",
-      signal: controller.signal
-    });
-    return {
-      text,
-      streamed: false
-    };
-  } finally {
-    clearTimeout(timeout);
-    input.signal?.removeEventListener("abort", abortFromParent);
+    const deadline = createAbsoluteDeadline(input.signal, input.settings.llmTimeoutMs);
+    try {
+      const text = await requestChatCompletionText({
+        settings: input.settings,
+        url,
+        body,
+        operation: "mcp.synthesizeFinalAnswer",
+        signal: deadline.signal
+      });
+      return {
+        text,
+        streamed: false
+      };
+    } catch (fallbackError) {
+      if (input.signal?.aborted) {
+        throw new McpRunAbortedError();
+      }
+      throw fallbackError;
+    } finally {
+      deadline.dispose();
+    }
   }
 }
 
@@ -898,13 +966,67 @@ function buildFinalAnswerMessages(input: {
           id: input.session.id,
           projectId: input.session.sourceIds[0] ?? null
         },
-        recent_messages: input.history.slice(-8),
+        recent_messages: compactRecentHistoryForPrompt(input.history),
         citation_sources: citationSources,
-        tool_observations: compactObservationsForPrompt(input.observations),
+        tool_observations: compactObservationsForPrompt(input.observations, citationSources),
         auto_mermaid: input.autoMermaid
       })
     }
   ];
+}
+
+function compactRecentHistoryForPrompt(
+  history: Array<{ role: string; content: string }>,
+  charBudget = FINAL_HISTORY_CHAR_BUDGET
+): Array<{ role: string; content: string }> {
+  let remaining = Math.max(0, charBudget);
+  const compacted: Array<{ role: string; content: string }> = [];
+  const recent = history.slice(-FINAL_HISTORY_MAX_MESSAGES);
+  for (let index = recent.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const message = recent[index];
+    const maxContentChars = Math.min(FINAL_HISTORY_PER_MESSAGE_CHAR_LIMIT, remaining);
+    const content = truncateHistoryMessage(message.content, maxContentChars);
+    if (!content) continue;
+    compacted.unshift({
+      role: message.role,
+      content
+    });
+    remaining -= content.length;
+  }
+  return compacted;
+}
+
+function truncateHistoryMessage(content: string, maxChars: number): string {
+  const normalized = content.trim();
+  if (maxChars <= 0) return "";
+  if (normalized.length <= maxChars) return normalized;
+  const marker = "\n…[历史消息已截断]…\n";
+  if (maxChars <= marker.length + 2) {
+    return normalized.slice(0, maxChars);
+  }
+  const available = maxChars - marker.length;
+  const headLength = Math.ceil(available * 0.7);
+  const tailLength = available - headLength;
+  return `${normalized.slice(0, headLength)}${marker}${normalized.slice(-tailLength)}`;
+}
+
+function buildAssistantMessageMetadata(
+  citations: AnswerCitation[],
+  result: AssistantGenerationResult
+): Record<string, unknown> | undefined {
+  const metadata: Record<string, unknown> = {};
+  if (citations.length > 0) {
+    metadata.citations = citations;
+  }
+  if (result.generationIncomplete) {
+    metadata.generationIncomplete = true;
+    metadata.generationIncompleteReason = result.incompleteReason ?? "stream_interrupted";
+    metadata.generationPartialChars = result.text.length;
+    if (result.finishReason) {
+      metadata.generationFinishReason = result.finishReason;
+    }
+  }
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 async function requestChatJsonObject(input: {
@@ -1003,6 +1125,12 @@ async function requestChatCompletionText(input: {
       return content;
     } catch (error) {
       lastError = error;
+      if (input.signal?.aborted) {
+        if (!(error instanceof Error && error.message.startsWith("LLM 请求失败"))) {
+          log.fail(error);
+        }
+        throw error;
+      }
       if (attempt < maxAttempts && isRetryableFetchError(error)) {
         log.fail(error);
         await waitBeforeRetry(attempt);
@@ -1024,8 +1152,14 @@ async function streamChatCompletionText(input: {
   operation: string;
   signal?: AbortSignal;
   emit?: StreamEmitter;
+  totalTimeoutMs?: number;
 }): Promise<AssistantGenerationResult> {
   const streamBody = { ...input.body, stream: true };
+  const deadline = createStreamDeadline(
+    input.signal,
+    input.settings.llmTimeoutMs,
+    input.totalTimeoutMs ?? resolveStreamTotalTimeoutMs(input.settings.llmTimeoutMs)
+  );
   const log = createModelCallLogger({
     kind: "llm",
     operation: input.operation,
@@ -1038,29 +1172,42 @@ async function streamChatCompletionText(input: {
       body: streamBody
     }
   });
+  let text = "";
+  let doneReceived = false;
+  let finishReason: string | undefined;
+  let failureResponse: unknown;
+  let streamReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
     const response = await fetch(input.url, {
       method: "POST",
-      signal: input.signal,
+      signal: deadline.signal,
       headers: {
         Authorization: `Bearer ${input.settings.llmApiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(streamBody)
     });
+    deadline.resetIdle();
     if (!response.ok) {
       const { responseText, responseBody } = await readResponseBody(response);
       const error = new Error(`LLM 流式请求失败：${response.status} ${responseText.slice(0, 500)}`);
-      log.fail(error, {
+      failureResponse = {
         status: response.status,
         body: responseBody
-      });
+      };
       throw error;
     }
     const contentType = response.headers.get("content-type") ?? "";
     if (!response.body || !/text\/event-stream|application\/x-ndjson/i.test(contentType)) {
       const { responseBody } = await readResponseBody(response);
       const content = extractChatResponseText(responseBody);
+      if (!content.trim()) {
+        failureResponse = {
+          status: response.status,
+          body: responseBody
+        };
+        throw new Error("LLM 返回成功，但正文为空或不在兼容字段中");
+      }
       log.succeed({
         status: response.status,
         body: responseBody,
@@ -1074,47 +1221,279 @@ async function streamChatCompletionText(input: {
     }
 
     const reader = response.body.getReader();
+    streamReader = reader;
     const decoder = new TextDecoder();
+    const isNdjson = /application\/x-ndjson/i.test(contentType);
     let buffer = "";
-    let text = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split(/\r?\n\r?\n/);
-      buffer = parts.pop() ?? "";
-      for (const part of parts) {
-        const delta = parseChatStreamPart(part);
-        if (!delta) continue;
-        text += delta;
-        input.emit?.({ type: "assistant_delta", delta });
+    const processBufferedParts = (flush: boolean) => {
+      const split = takeChatStreamParts(buffer, isNdjson, flush);
+      buffer = split.remainder;
+      for (const part of split.parts) {
+        const parsed = parseChatStreamPart(part, isNdjson);
+        if (parsed.delta) {
+          text += parsed.delta;
+          input.emit?.({ type: "assistant_delta", delta: parsed.delta });
+        }
+        if (parsed.done) {
+          doneReceived = true;
+        }
+        if (parsed.finishReason) {
+          finishReason = parsed.finishReason;
+        }
       }
-    }
-    if (buffer.trim()) {
-      const delta = parseChatStreamPart(buffer);
-      if (delta) {
-        text += delta;
-        input.emit?.({ type: "assistant_delta", delta });
+    };
+
+    while (true) {
+      const { value, done } = await readStreamChunk(reader, deadline.signal);
+      if (done) {
+        buffer += decoder.decode();
+        processBufferedParts(true);
+        break;
+      }
+      deadline.resetIdle();
+      buffer += decoder.decode(value, { stream: true });
+      processBufferedParts(false);
+      if (doneReceived || finishReason) {
+        await reader.cancel().catch(() => undefined);
+        break;
       }
     }
     if (!text.trim()) {
-      const error = new Error("LLM 流式返回成功，但没有输出正文");
-      log.fail(error);
-      throw error;
+      throw new Error("LLM 流式返回成功，但没有输出正文");
+    }
+    if (finishReason && !isSuccessfulFinishReason(finishReason)) {
+      throw new LlmStreamInterruptedError(
+        `LLM 流式回答以 finish_reason=${finishReason} 提前结束`,
+        text,
+        `finish_reason_${normalizeReasonCode(finishReason)}`,
+        finishReason
+      );
+    }
+    if (!doneReceived && !finishReason) {
+      throw new LlmStreamInterruptedError(
+        "LLM 流式连接在完成标记之前结束",
+        text,
+        "unexpected_eof"
+      );
     }
     log.succeed({
       status: response.status,
       content: text,
-      streamed: true
+      streamed: true,
+      doneReceived,
+      finishReason
     });
     return {
       text,
-      streamed: true
+      streamed: true,
+      finishReason
     };
   } catch (error) {
-    log.fail(error);
-    throw error;
+    const interrupted = normalizeStreamInterruptionError(error, {
+      partialText: text,
+      doneReceived,
+      finishReason,
+      timeoutKind: deadline.timeoutKind
+    });
+    log.fail(interrupted, failureResponse ?? buildPartialStreamLogResponse({
+      text: interrupted.partialText,
+      doneReceived,
+      finishReason: interrupted.finishReason,
+      timeoutKind: interrupted.timeoutKind,
+      abortedByUser: input.signal?.aborted ?? false
+    }));
+    throw interrupted;
+  } finally {
+    await streamReader?.cancel().catch(() => undefined);
+    deadline.dispose();
   }
+}
+
+function resolveStreamTotalTimeoutMs(idleTimeoutMs: number): number {
+  return Math.min(
+    STREAM_TOTAL_TIMEOUT_CEILING_MS,
+    Math.max(STREAM_TOTAL_TIMEOUT_FLOOR_MS, idleTimeoutMs * STREAM_TOTAL_TIMEOUT_MULTIPLIER)
+  );
+}
+
+function createStreamDeadline(parentSignal: AbortSignal | undefined, idleTimeoutMs: number, totalTimeoutMs: number) {
+  const controller = new AbortController();
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let timeoutKind: StreamTimeoutKind | undefined;
+  const abortFromParent = () => {
+    controller.abort(parentSignal?.reason ?? new McpRunAbortedError());
+  };
+  const abortForTimeout = (kind: StreamTimeoutKind, timeoutMs: number) => {
+    if (controller.signal.aborted) return;
+    timeoutKind = kind;
+    controller.abort(new LlmStreamTimeoutError(kind, timeoutMs));
+  };
+  const resetIdle = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    if (controller.signal.aborted) return;
+    idleTimer = setTimeout(() => abortForTimeout("idle", idleTimeoutMs), idleTimeoutMs);
+  };
+  if (parentSignal?.aborted) {
+    abortFromParent();
+  } else {
+    parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  }
+  const totalTimer = setTimeout(
+    () => abortForTimeout("total", totalTimeoutMs),
+    totalTimeoutMs
+  );
+  resetIdle();
+  return {
+    signal: controller.signal,
+    resetIdle,
+    get timeoutKind() {
+      return timeoutKind;
+    },
+    dispose() {
+      if (idleTimer) clearTimeout(idleTimer);
+      clearTimeout(totalTimer);
+      parentSignal?.removeEventListener("abort", abortFromParent);
+    }
+  };
+}
+
+function createAbsoluteDeadline(parentSignal: AbortSignal | undefined, timeoutMs: number) {
+  const controller = new AbortController();
+  const abortFromParent = () => {
+    controller.abort(parentSignal?.reason ?? new McpRunAbortedError());
+  };
+  if (parentSignal?.aborted) {
+    abortFromParent();
+  } else {
+    parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  }
+  const timer = setTimeout(() => {
+    controller.abort(new Error(`LLM 请求超时（${timeoutMs} ms）`));
+  }, timeoutMs);
+  return {
+    signal: controller.signal,
+    dispose() {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener("abort", abortFromParent);
+    }
+  };
+}
+
+function readStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (signal.aborted) {
+    return Promise.reject(toAbortReason(signal));
+  }
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      cleanup();
+      reject(toAbortReason(signal));
+    };
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    signal.addEventListener("abort", onAbort, { once: true });
+    reader.read().then(
+      (result) => {
+        cleanup();
+        resolve(result);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      }
+    );
+  });
+}
+
+function toAbortReason(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) {
+    return signal.reason;
+  }
+  const error = new Error(signal.reason == null ? "操作已中止" : String(signal.reason));
+  error.name = "AbortError";
+  return error;
+}
+
+function takeChatStreamParts(buffer: string, ndjson: boolean, flush: boolean): { parts: string[]; remainder: string } {
+  const parts = buffer.split(ndjson ? /\r?\n/ : /\r?\n\r?\n/);
+  const remainder = flush ? "" : (parts.pop() ?? "");
+  return {
+    parts: parts.filter((part) => part.trim().length > 0),
+    remainder
+  };
+}
+
+function normalizeStreamInterruptionError(error: unknown, input: {
+  partialText: string;
+  doneReceived: boolean;
+  finishReason?: string;
+  timeoutKind?: StreamTimeoutKind;
+}): LlmStreamInterruptedError {
+  if (error instanceof LlmStreamInterruptedError) {
+    return error;
+  }
+  const timeoutKind = error instanceof LlmStreamTimeoutError
+    ? error.timeoutKind
+    : input.timeoutKind;
+  const reasonCode = timeoutKind
+    ? `${timeoutKind}_timeout`
+    : input.doneReceived
+      ? "stream_error_after_done"
+      : "stream_error";
+  const message = error instanceof Error ? error.message : String(error);
+  return new LlmStreamInterruptedError(
+    message,
+    input.partialText,
+    reasonCode,
+    input.finishReason,
+    timeoutKind
+  );
+}
+
+function buildPartialStreamLogResponse(input: {
+  text: string;
+  doneReceived: boolean;
+  finishReason?: string;
+  timeoutKind?: StreamTimeoutKind;
+  abortedByUser: boolean;
+}) {
+  return {
+    partial: input.text.length > 0,
+    partialChars: input.text.length,
+    partialPreview: previewPartialStreamText(input.text),
+    doneReceived: input.doneReceived,
+    finishReason: input.finishReason,
+    timeoutKind: input.timeoutKind,
+    abortedByUser: input.abortedByUser
+  };
+}
+
+function previewPartialStreamText(text: string): string {
+  if (text.length <= PARTIAL_LOG_PREVIEW_CHARS) {
+    return text;
+  }
+  const marker = "\n…[partial truncated]…\n";
+  const remaining = PARTIAL_LOG_PREVIEW_CHARS - marker.length;
+  const headLength = Math.ceil(remaining * 0.7);
+  return `${text.slice(0, headLength)}${marker}${text.slice(-(remaining - headLength))}`;
+}
+
+function buildGenerationIncompleteNotice(partialText: string, userContent: string): string {
+  const closesOpenFence = (partialText.match(/```/g)?.length ?? 0) % 2 === 1;
+  const fenceClosure = closesOpenFence ? "\n```" : "";
+  const notice = /[\u3400-\u9fff]/u.test(userContent)
+    ? "> ⚠️ 上游模型生成中断，已保留当前部分回答；末尾内容可能不完整。"
+    : "> ⚠️ Upstream generation was interrupted. This partial answer was preserved and may be incomplete at the end.";
+  return `${fenceClosure}\n\n${notice}`;
+}
+
+function isSuccessfulFinishReason(finishReason: string): boolean {
+  return ["stop", "end_turn", "completed"].includes(finishReason.trim().toLowerCase());
+}
+
+function normalizeReasonCode(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "unknown";
 }
 
 function parseJsonOrText(text: string): unknown {
@@ -1227,31 +1606,38 @@ function collectMessageContent(value: unknown, parts: string[]): void {
   }
 }
 
-function parseChatStreamPart(part: string): string {
+function parseChatStreamPart(part: string, allowRawJson = false): ParsedChatStreamPart {
   const dataLines = part
     .split(/\r?\n/)
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.replace(/^data:\s?/, "").trim())
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("data:") || (allowRawJson && line.startsWith("{")))
+    .map((line) => line.startsWith("data:") ? line.replace(/^data:\s?/, "").trim() : line)
     .filter(Boolean);
   let delta = "";
+  let done = false;
+  let finishReason: string | undefined;
   for (const data of dataLines) {
     if (data === "[DONE]") {
+      done = true;
       continue;
     }
     try {
-      delta += extractChatDeltaText(JSON.parse(data));
+      const parsed = extractChatStreamPayload(JSON.parse(data));
+      delta += parsed.delta;
+      finishReason = parsed.finishReason ?? finishReason;
     } catch {
       // Some relays send comments or keepalive frames that are not JSON.
     }
   }
-  return delta;
+  return { delta, done, finishReason };
 }
 
-function extractChatDeltaText(value: unknown): string {
+function extractChatStreamPayload(value: unknown): { delta: string; finishReason?: string } {
   if (!isRecord(value) || !Array.isArray(value.choices)) {
-    return "";
+    return { delta: "" };
   }
   const parts: string[] = [];
+  let finishReason: string | undefined;
   for (const choice of value.choices) {
     if (!isRecord(choice)) continue;
     if (typeof choice.text === "string") {
@@ -1263,13 +1649,23 @@ function extractChatDeltaText(value: unknown): string {
     if (isRecord(choice.message)) {
       collectMessageContent(choice.message.content, parts);
     }
+    if (typeof choice.finish_reason === "string" && choice.finish_reason.trim()) {
+      finishReason = choice.finish_reason.trim();
+    }
   }
-  return parts.join("");
+  return {
+    delta: parts.join(""),
+    finishReason
+  };
 }
 
 function compactObservationsForPrompt(
-  observations: Array<{ toolName: string; result: unknown; error?: string | null }>
+  observations: Array<{ toolName: string; result: unknown; error?: string | null }>,
+  citationSources: AnswerCitation[] = []
 ) {
+  const citationIndexByChunkId = new Map(
+    citationSources.map((citation) => [citation.chunkId, citation.index])
+  );
   return observations.map((observation) => {
     if (observation.error) {
       return {
@@ -1298,16 +1694,35 @@ function compactObservationsForPrompt(
         : undefined,
       sections: Array.isArray(result.sections)
         ? result.sections.slice(0, 5).map((section) => isRecord(section)
-          ? {
-              heading: section.heading,
-              content: typeof section.content === "string" ? previewForPrompt(section.content) : "",
-              score: section.score,
-              rank: section.rank
-            }
+          ? compactObservationSection(
+              section,
+              citationIndexByChunkId,
+              observation.toolName === "sag_search" && citationSources.length > 0
+            )
           : section)
         : undefined
     };
   });
+}
+
+function compactObservationSection(
+  section: Record<string, unknown>,
+  citationIndexByChunkId: Map<string, number>,
+  omitEvidenceContent: boolean
+) {
+  const chunkId = typeof section.chunkId === "string" ? section.chunkId : undefined;
+  const citationIndex = chunkId ? citationIndexByChunkId.get(chunkId) : undefined;
+  return {
+    citationIndex,
+    chunkId,
+    sourceId: typeof section.sourceId === "string" ? section.sourceId : undefined,
+    heading: section.heading,
+    content: !omitEvidenceContent && citationIndex == null && typeof section.content === "string"
+      ? previewForPrompt(section.content)
+      : undefined,
+    score: section.score,
+    rank: section.rank
+  };
 }
 
 function isRetryableHttpStatus(status: number): boolean {
@@ -1374,7 +1789,9 @@ function buildEvidenceFallbackAnswer(toolCalls: McpToolCallRecord[]): string {
     .reverse()
     .find((toolCall) => toolCall.toolName === "sag_search" && toolCall.status === "SUCCEEDED");
   if (latestSearch) {
-    const sections = extractCitationSections(parseToolJsonResult(latestSearch.result)).slice(0, 5);
+    const sections = selectDiverseCitationSections(
+      extractCitationSections(parseToolJsonResult(latestSearch.result))
+    );
     if (sections.length > 0) {
       return [
         "我已经检索到相关项目证据。当前先按证据片段整理如下，关键业务结论建议结合原文继续核验：",
@@ -1394,8 +1811,7 @@ function buildEvidenceFallbackAnswer(toolCalls: McpToolCallRecord[]): string {
 }
 
 function collectAnswerCitations(toolCalls: McpToolCallRecord[]): AnswerCitation[] {
-  const citations: AnswerCitation[] = [];
-  const seenChunkIds = new Set<string>();
+  const candidates: Array<Omit<AnswerCitation, "index">> = [];
   for (const toolCall of toolCalls) {
     if (toolCall.toolName !== "sag_search" || toolCall.status !== "SUCCEEDED") {
       continue;
@@ -1403,29 +1819,26 @@ function collectAnswerCitations(toolCalls: McpToolCallRecord[]): AnswerCitation[
     const result = parseToolJsonResult(toolCall.result);
     const query = typeof toolCall.arguments.query === "string" ? toolCall.arguments.query : undefined;
     for (const section of extractCitationSections(result)) {
-      if (seenChunkIds.has(section.chunkId)) {
-        continue;
-      }
-      seenChunkIds.add(section.chunkId);
-      citations.push({
-        index: citations.length + 1,
+      candidates.push({
         ...section,
         query,
         toolCallId: toolCall.id
       });
-      if (citations.length >= 5) {
-        return citations;
-      }
     }
   }
-  return citations;
+  return selectDiverseCitationSections(candidates).map((citation, index) => ({
+    index: index + 1,
+    ...citation
+  }));
 }
 
 function buildLocalSearchAnswer(toolCall: McpToolCallRecord): string {
   if (toolCall.status !== "SUCCEEDED") {
     return `本地检索失败：${toolCall.error ?? "未知错误"}`;
   }
-  const sections = extractCitationSections(parseToolJsonResult(toolCall.result)).slice(0, 5);
+  const sections = selectDiverseCitationSections(
+    extractCitationSections(parseToolJsonResult(toolCall.result))
+  );
   if (sections.length === 0) {
     return "这个问题需要更具体的产品、时间、工艺、企业或事件线索才能继续缩小范围。请补充关键词后我可以再帮你精确定位。";
   }
@@ -1445,28 +1858,56 @@ function buildLocalSearchAnswer(toolCall: McpToolCallRecord): string {
 function collectCitationSourcesFromObservations(
   observations: Array<{ toolName: string; result: unknown; error?: string | null }>
 ) {
-  const citations: AnswerCitation[] = [];
-  const seenChunkIds = new Set<string>();
+  const candidates: Array<Omit<AnswerCitation, "index">> = [];
   for (const observation of observations) {
     if (observation.toolName !== "sag_search" || observation.error) {
       continue;
     }
     for (const section of extractCitationSections(parseToolJsonResult(observation.result))) {
-      if (seenChunkIds.has(section.chunkId)) {
-        continue;
-      }
-      seenChunkIds.add(section.chunkId);
-      citations.push({
-        index: citations.length + 1,
+      candidates.push({
         ...section,
         content: previewForPrompt(section.content)
       });
-      if (citations.length >= 5) {
-        return citations;
-      }
     }
   }
-  return citations;
+  return selectDiverseCitationSections(candidates).map((citation, index) => ({
+    index: index + 1,
+    ...citation
+  }));
+}
+
+function selectDiverseCitationSections<T extends { chunkId: string; documentId?: string }>(
+  sections: T[],
+  limit = 5,
+  preferredPerDocument = 2
+): T[] {
+  const uniqueSections: T[] = [];
+  const seenChunkIds = new Set<string>();
+  for (const section of sections) {
+    if (seenChunkIds.has(section.chunkId)) continue;
+    seenChunkIds.add(section.chunkId);
+    uniqueSections.push(section);
+  }
+
+  const selected: T[] = [];
+  const deferred: T[] = [];
+  const selectedByDocument = new Map<string, number>();
+  for (const section of uniqueSections) {
+    const documentKey = section.documentId?.trim() || `__unknown__:${section.chunkId}`;
+    const currentCount = selectedByDocument.get(documentKey) ?? 0;
+    if (currentCount >= preferredPerDocument) {
+      deferred.push(section);
+      continue;
+    }
+    selected.push(section);
+    selectedByDocument.set(documentKey, currentCount + 1);
+    if (selected.length >= limit) return selected;
+  }
+  for (const section of deferred) {
+    selected.push(section);
+    if (selected.length >= limit) break;
+  }
+  return selected;
 }
 
 function extractCitationSections(result: unknown): Array<Omit<AnswerCitation, "index" | "query" | "toolCallId">> {
@@ -1659,5 +2100,16 @@ function extractToolText(value: unknown): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+export const __mcpAgentTestUtils = {
+  buildAssistantMessageMetadata,
+  buildFinalAnswerMessages,
+  compactRecentHistoryForPrompt,
+  parseChatStreamPart,
+  resolveStreamTotalTimeoutMs,
+  selectDiverseCitationSections,
+  streamChatCompletionText,
+  synthesizeFinalAnswer
+};
 
 export const mcpAgentService = new McpAgentService();

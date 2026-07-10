@@ -4,6 +4,15 @@ import { createModelCallLogger } from "../observability/model-call-log.js";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
+const MAX_CHAT_JSON_ATTEMPTS = 4;
+
+class JsonResponseCompatibilityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "JsonResponseCompatibilityError";
+  }
+}
+
 export interface LlmClient {
   extractNamedEntities(query: string): Promise<string[]>;
   extractEventsFromChunk(input: {
@@ -185,22 +194,30 @@ export class OpenAICompatibleLlmClient implements LlmClient {
     };
 
     let lastError: unknown;
-    const maxAttempts = settings.llmMaxRetries + 1;
+    const maxAttempts = Math.max(
+      1,
+      Math.min(MAX_CHAT_JSON_ATTEMPTS, settings.llmMaxRetries + 1)
+    );
     for (const useJsonMode of [true, false]) {
+      let tryNextMode = false;
       const body = useJsonMode
         ? { ...baseBody, response_format: { type: "json_object" } }
         : baseBody;
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), settings.llmTimeoutMs);
+        const timeout = setTimeout(
+          () => controller.abort(new Error(`llm request timeout (${settings.llmTimeoutMs} ms)`)),
+          settings.llmTimeoutMs
+        );
         const log = createModelCallLogger({
           kind: "llm",
           operation: useJsonMode ? input.operation ?? "chatJson" : `${input.operation ?? "chatJson"}.noResponseFormat`,
           request: {
             url,
             method: "POST",
-            attempt,
-            maxAttempts,
+              attempt,
+              maxAttempts,
+              timeoutMs: settings.llmTimeoutMs,
             headers: {
               "Content-Type": "application/json"
             },
@@ -227,7 +244,8 @@ export class OpenAICompatibleLlmClient implements LlmClient {
             });
             logged = true;
             lastError = error;
-            if (useJsonMode && !isRetryableHttpStatus(response.status)) {
+            if (useJsonMode && isJsonModeCompatibilityStatus(response.status)) {
+              tryNextMode = true;
               break;
             }
             if (attempt < maxAttempts && isRetryableHttpStatus(response.status)) {
@@ -238,9 +256,14 @@ export class OpenAICompatibleLlmClient implements LlmClient {
           }
           const content = extractChatResponseText(responseBody);
           if (!content.trim()) {
-            throw new Error("llm response did not include usable message content");
+            throw new JsonResponseCompatibilityError("llm response did not include usable message content");
           }
-          const parsed = parseJsonObject(content);
+          let parsed: Record<string, any>;
+          try {
+            parsed = parseJsonObject(content);
+          } catch (error) {
+            throw new JsonResponseCompatibilityError(error instanceof Error ? error.message : String(error));
+          }
           log.succeed({
             status: response.status,
             body: responseBody,
@@ -252,17 +275,21 @@ export class OpenAICompatibleLlmClient implements LlmClient {
           if (!logged) {
             log.fail(error);
           }
-          if (attempt < maxAttempts && isRetryableFetchError(error)) {
+          if (error instanceof JsonResponseCompatibilityError && useJsonMode) {
+            tryNextMode = true;
+            break;
+          }
+          if (attempt < maxAttempts && (controller.signal.aborted || isRetryableFetchError(error))) {
             await waitBeforeRetry(attempt);
             continue;
-          }
-          if (useJsonMode) {
-            break;
           }
           throw error;
         } finally {
           clearTimeout(timeout);
         }
+      }
+      if (!tryNextMode) {
+        break;
       }
     }
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
@@ -407,15 +434,39 @@ function isRetryableHttpStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
+function isJsonModeCompatibilityStatus(status: number): boolean {
+  return status === 400 || status === 415 || status === 422;
+}
+
 function isRetryableFetchError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  return error.name === "AbortError" || error.message.includes("fetch failed");
+  const code = readNestedErrorCode(error);
+  return error.name === "AbortError" ||
+    error.message.includes("fetch failed") ||
+    ["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENETUNREACH", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"].includes(code);
+}
+
+function readNestedErrorCode(error: unknown, depth = 0): string {
+  if (depth > 4 || !(error instanceof Error)) {
+    return "";
+  }
+  const record = error as Error & { code?: unknown; cause?: unknown; errors?: unknown };
+  if (typeof record.code === "string") {
+    return record.code;
+  }
+  if (Array.isArray(record.errors)) {
+    for (const item of record.errors) {
+      const code = readNestedErrorCode(item, depth + 1);
+      if (code) return code;
+    }
+  }
+  return readNestedErrorCode(record.cause, depth + 1);
 }
 
 async function waitBeforeRetry(attempt: number): Promise<void> {
-  const delayMs = Math.min(1_000, 100 * 2 ** Math.max(0, attempt - 1));
+  const delayMs = Math.min(3_000, 400 * 2 ** Math.max(0, attempt - 1));
   await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 

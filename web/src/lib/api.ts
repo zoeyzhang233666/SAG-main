@@ -20,7 +20,7 @@ import type {
   SearchResult,
   SourceRecord,
   UploadJobRecord
-} from "../types";
+} from "../types.js";
 
 function safeParseJson(text: string): any {
   if (!text) return null;
@@ -101,8 +101,20 @@ export const api = {
     return request<{ stats: ProjectStatsRecord }>(`/api/projects/${projectId}/stats`);
   },
 
-  async getProjectGraph(projectId: string) {
-    return request<{ graph: ProjectGraphRecord }>(`/api/projects/${projectId}/graph`);
+  async getProjectGraph(
+    projectId: string,
+    input: { chunkIds?: string[]; eventIds?: string[]; entityIds?: string[]; query?: string; limit?: number } = {},
+  ) {
+    const params = new URLSearchParams();
+    if (input.chunkIds?.length) params.set("chunkIds", input.chunkIds.join(","));
+    if (input.eventIds?.length) params.set("eventIds", input.eventIds.join(","));
+    if (input.entityIds?.length) params.set("entityIds", input.entityIds.join(","));
+    if (input.query?.trim()) params.set("query", input.query.trim());
+    if (input.limit) params.set("limit", String(input.limit));
+    const query = params.toString();
+    return request<{ graph: ProjectGraphRecord }>(
+      `/api/projects/${projectId}/graph${query ? `?${query}` : ""}`,
+    );
   },
 
   async listProjectChunks(projectId: string) {
@@ -228,7 +240,17 @@ export const api = {
     });
   },
 
-  async updateDocument(documentId: string, input: { title?: string }) {
+  async updateDocument(
+    documentId: string,
+    input: {
+      title?: string;
+      sourceName?: string | null;
+      sourceType?: string | null;
+      sourceDate?: string | null;
+      sourceAuthor?: string | null;
+      sourceUrl?: string | null;
+    }
+  ) {
     return request<{ document: DocumentRecord }>(`/api/documents/${documentId}`, {
       method: "PATCH",
       body: JSON.stringify(input)
@@ -566,27 +588,88 @@ function downloadBlob(fileName: string, blob: Blob) {
   URL.revokeObjectURL(url);
 }
 
-async function readSseStream<T>(response: Response, onEvent: (event: T) => void) {
-  if (!response.body) return;
+export async function readSseStream<T>(
+  response: Response,
+  onEvent: (event: T) => void,
+) {
+  if (!response.body) {
+    throw new Error("流式响应没有可读取的内容。");
+  }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop() ?? "";
-    for (const part of parts) {
-      const dataLine = part.split("\n").find((line) => line.startsWith("data: "));
-      if (!dataLine) continue;
-      onEvent(JSON.parse(dataLine.slice(6)) as T);
+  let sawDone = false;
+  let streamClosed = false;
+
+  const consumeFrame = (frame: string) => {
+    const lines = frame.split(/\r?\n/);
+    const namedEvent = lines
+      .find((line) => line.startsWith("event:"))
+      ?.slice(6)
+      .trim();
+    const data = lines
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (!data) return false;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      throw new Error("流式响应包含无法解析的事件数据。");
     }
+    const eventTypeFromData =
+      parsed && typeof parsed === "object" && "type" in parsed
+        ? (parsed as { type?: unknown }).type
+        : undefined;
+    const eventType =
+      typeof eventTypeFromData === "string" ? eventTypeFromData : namedEvent;
+    if (eventType === "error") {
+      const message =
+        parsed && typeof parsed === "object" && "message" in parsed
+          ? (parsed as { message?: unknown }).message
+          : undefined;
+      throw new Error(
+        typeof message === "string" && message.trim()
+          ? message
+          : "服务端报告流式处理失败。",
+      );
+    }
+    onEvent(parsed as T);
+    return eventType === "done";
+  };
+
+  try {
+    while (!sawDone) {
+      const { done, value } = await reader.read();
+      if (done) {
+        streamClosed = true;
+        buffer += decoder.decode();
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split(/\r?\n\r?\n/);
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        if (consumeFrame(part)) {
+          sawDone = true;
+          break;
+        }
+      }
+    }
+
+    if (!sawDone && buffer.trim()) {
+      sawDone = consumeFrame(buffer);
+    }
+  } finally {
+    if (!streamClosed) {
+      await reader.cancel().catch(() => undefined);
+    }
+    reader.releaseLock();
   }
-  if (buffer.trim()) {
-    const dataLine = buffer.split("\n").find((line) => line.startsWith("data: "));
-    if (dataLine) {
-      onEvent(JSON.parse(dataLine.slice(6)) as T);
-    }
+
+  if (!sawDone) {
+    throw new Error("流式连接在完成事件到达前提前中断，请重试。");
   }
 }

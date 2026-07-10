@@ -98,13 +98,36 @@ const projectSchema = z.object({
   description: z.string().optional().nullable()
 });
 
+
+const graphQuerySchema = z.object({
+  chunkIds: z.string().optional(),
+  eventIds: z.string().optional(),
+  entityIds: z.string().optional(),
+  query: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().positive().max(300).optional()
+});
+
+function parseUuidList(value?: string) {
+  if (!value) return [] as string[];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => z.string().uuid().parse(item));
+}
+
 const projectUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional().nullable()
 });
 
 const documentUpdateSchema = z.object({
-  title: z.string().min(1).optional()
+  title: z.string().min(1).optional(),
+  sourceName: z.string().optional().nullable(),
+  sourceType: z.string().optional().nullable(),
+  sourceDate: z.string().optional().nullable(),
+  sourceAuthor: z.string().optional().nullable(),
+  sourceUrl: z.string().optional().nullable()
 });
 
 const chunkUpdateSchema = z.object({
@@ -394,9 +417,16 @@ export function buildHttpServer() {
 
   app.get("/api/projects/:projectId/graph", async (request) => {
     const params = request.params as { projectId: string };
+    const query = graphQuerySchema.parse(request.query);
     z.string().uuid().parse(params.projectId);
     return {
-      graph: await webuiService.getProjectGraph(params.projectId)
+      graph: await webuiService.getProjectGraph(params.projectId, {
+        chunkIds: parseUuidList(query.chunkIds),
+        eventIds: parseUuidList(query.eventIds),
+        entityIds: parseUuidList(query.entityIds),
+        query: query.query,
+        limit: query.limit
+      })
     };
   });
 

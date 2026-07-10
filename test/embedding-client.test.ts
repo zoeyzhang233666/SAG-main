@@ -45,8 +45,7 @@ describe("OpenAICompatibleEmbeddingClient", () => {
       const body = JSON.parse(String(init?.body));
       expect(body).toEqual({
         model: "text-embedding-3-large",
-        input: ["SAG"],
-        dimensions: 1024
+        input: ["SAG"]
       });
       return {
         ok: true,
@@ -78,5 +77,28 @@ describe("OpenAICompatibleEmbeddingClient", () => {
 
     const client = new OpenAICompatibleEmbeddingClient();
     await expect(client.generate("SAG")).rejects.toThrow("embedding dimension mismatch");
+  });
+
+  it("retries a transient network failure and records the underlying cause", async () => {
+    const before = listModelCallLogs().latestSequence;
+    const embedding = new Array(1024).fill(0);
+    const networkCause = Object.assign(new Error("socket closed"), { code: "ECONNRESET" });
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed", { cause: networkCause }))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ embedding }] })
+      } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new OpenAICompatibleEmbeddingClient();
+    await expect(client.generate("SAG")).resolves.toEqual(embedding);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const failed = listModelCallLogs(before).logs.find((log) => log.status === "FAILED");
+    expect(failed?.error).toContain("fetch failed");
+    expect(failed?.error).toContain("ECONNRESET");
+    expect(failed?.request).toMatchObject({ attempt: 1, maxAttempts: 3 });
   });
 });

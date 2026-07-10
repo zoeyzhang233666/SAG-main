@@ -1,9 +1,10 @@
 import { config } from "../config/env.js";
 import { aiSettingsService, type AiRuntimeSettings } from "../services/ai-settings-service.js";
-import { createModelCallLogger } from "../observability/model-call-log.js";
+import { createModelCallLogger, formatModelCallError } from "../observability/model-call-log.js";
 import type { EventRecord } from "../types.js";
 
 const RERANK_TIMEOUT_MS = 45_000;
+const MAX_RERANK_ATTEMPTS = 3;
 
 export interface RerankClient {
   rerankEvents(input: {
@@ -42,8 +43,21 @@ export class QwenRerankClient implements RerankClient {
 
     try {
       return await this.remoteRerank(target, settings, input);
-    } catch {
-      return localScoreRerank(input.query, input.candidates, input.topK);
+    } catch (error) {
+      const ids = localScoreRerank(input.query, input.candidates, input.topK);
+      const log = createModelCallLogger({
+        kind: "llm",
+        operation: "rerankEvents.localFallback",
+        request: {
+          model: "local-lexical-rerank",
+          query: input.query,
+          topK: input.topK,
+          candidateCount: input.candidates.length,
+          remoteError: formatModelCallError(error)
+        }
+      });
+      log.succeed({ useful_event_ids: ids });
+      return ids;
     }
   }
 
@@ -63,18 +77,26 @@ export class QwenRerankClient implements RerankClient {
     };
 
     let lastError: unknown;
-    const maxAttempts = 1;
+    const maxAttempts = Math.max(
+      1,
+      Math.min(MAX_RERANK_ATTEMPTS, settings.llmMaxRetries + 1)
+    );
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), Math.min(settings.llmTimeoutMs, RERANK_TIMEOUT_MS));
+      const timeoutMs = Math.min(settings.llmTimeoutMs, RERANK_TIMEOUT_MS);
+      const timeout = setTimeout(
+        () => controller.abort(new Error(`rerank request timeout (${timeoutMs} ms)`)),
+        timeoutMs
+      );
       const log = createModelCallLogger({
         kind: "llm",
         operation: "rerankEvents.qwen3Rerank",
         request: {
           url,
           method: "POST",
-          attempt,
-          maxAttempts,
+            attempt,
+            maxAttempts,
+            timeoutMs,
           headers: {
             "Content-Type": "application/json"
           },
@@ -123,7 +145,7 @@ export class QwenRerankClient implements RerankClient {
         if (!logged) {
           log.fail(error);
         }
-        if (attempt < maxAttempts && isRetryableFetchError(error)) {
+        if (attempt < maxAttempts && (controller.signal.aborted || isRetryableFetchError(error))) {
           await waitBeforeRetry(attempt);
           continue;
         }
@@ -281,11 +303,31 @@ function isRetryableFetchError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  return error.name === "AbortError" || error.message.includes("fetch failed");
+  const code = readNestedErrorCode(error);
+  return error.name === "AbortError" ||
+    error.message.includes("fetch failed") ||
+    ["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENETUNREACH", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"].includes(code);
+}
+
+function readNestedErrorCode(error: unknown, depth = 0): string {
+  if (depth > 4 || !(error instanceof Error)) {
+    return "";
+  }
+  const record = error as Error & { code?: unknown; cause?: unknown; errors?: unknown };
+  if (typeof record.code === "string") {
+    return record.code;
+  }
+  if (Array.isArray(record.errors)) {
+    for (const item of record.errors) {
+      const code = readNestedErrorCode(item, depth + 1);
+      if (code) return code;
+    }
+  }
+  return readNestedErrorCode(record.cause, depth + 1);
 }
 
 async function waitBeforeRetry(attempt: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * attempt, 3000)));
+  await new Promise((resolve) => setTimeout(resolve, Math.min(2_000, 400 * 2 ** Math.max(0, attempt - 1))));
 }
 
 function previewText(text: string, limit: number): string {

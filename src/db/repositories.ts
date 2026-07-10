@@ -26,6 +26,10 @@ import type {
 
 type Queryable = Pick<pg.Pool | pg.PoolClient, "query">;
 
+const DEFAULT_PROJECT_GRAPH_LIMIT = 160;
+const FOCUSED_PROJECT_GRAPH_LIMIT = 240;
+const MAX_PROJECT_GRAPH_LIMIT = 300;
+
 function db(client?: Queryable): Queryable {
   return client ?? pool;
 }
@@ -54,8 +58,8 @@ function eventFromRow(row: Record<string, unknown>): EventRecord {
     content: String(row.content ?? ""),
     rank: Number(row.rank ?? 0),
     score: row.score == null ? undefined : Number(row.score),
-    titleEmbedding: embeddingPreviewFromText(row.title_embedding_preview),
-    contentEmbedding: embeddingPreviewFromText(row.content_embedding_preview)
+    titleEmbedding: embeddingPreviewFromRow(row, "title_embedding_preview", "title_embedding_dimensions"),
+    contentEmbedding: embeddingPreviewFromRow(row, "content_embedding_preview", "content_embedding_dimensions")
   };
 }
 
@@ -67,7 +71,7 @@ function entityFromRow(row: Record<string, unknown>): EntityRecord {
     name: String(row.name),
     normalizedName: String(row.normalized_name),
     score: row.score == null ? undefined : Number(row.score),
-    embedding: embeddingPreviewFromText(row.embedding_preview)
+    embedding: embeddingPreviewFromRow(row)
   };
 }
 
@@ -102,13 +106,38 @@ function chunkFromRow(row: Record<string, unknown>): ChunkRecord {
     references: Array.isArray(row.references) ? row.references.map(String) : [],
     metadata: (row.metadata ?? {}) as Record<string, unknown>,
     createdAt: new Date(String(row.created_at)).toISOString(),
-    embedding: embeddingPreviewFromText(row.embedding_preview)
+    embedding: embeddingPreviewFromRow(row)
   };
 }
 
-function embeddingPreviewFromText(value: unknown): EmbeddingPreview | null | undefined {
-  if (value == null) {
+function embeddingPreviewFromRow(
+  row: Record<string, unknown>,
+  previewColumn = "embedding_preview",
+  dimensionsColumn = "embedding_dimensions"
+): EmbeddingPreview | null | undefined {
+  const preview = embeddingPreviewFromText(row[previewColumn]);
+  if (preview !== undefined) {
+    return preview;
+  }
+  const dimensions = row[dimensionsColumn];
+  if (dimensions === undefined) {
     return undefined;
+  }
+  if (dimensions === null) {
+    return null;
+  }
+  const parsed = Number(dimensions);
+  return Number.isFinite(parsed) && parsed > 0
+    ? { dimensions: Math.trunc(parsed), sample: [] }
+    : null;
+}
+
+function embeddingPreviewFromText(value: unknown): EmbeddingPreview | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
   }
   const numbers = String(value)
     .match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi)
@@ -121,6 +150,16 @@ function embeddingPreviewFromText(value: unknown): EmbeddingPreview | null | und
     dimensions: numbers.length,
     sample: numbers.slice(0, 8)
   };
+}
+
+function uniqueIds(ids?: string[], limit = MAX_PROJECT_GRAPH_LIMIT): string[] {
+  return [...new Set((ids ?? []).filter(Boolean))].slice(0, limit);
+}
+
+function clampProjectGraphLimit(limit: number | undefined, hasFocus: boolean): number {
+  const fallback = hasFocus ? FOCUSED_PROJECT_GRAPH_LIMIT : DEFAULT_PROJECT_GRAPH_LIMIT;
+  const value = Number.isFinite(limit) ? Number(limit) : fallback;
+  return Math.min(MAX_PROJECT_GRAPH_LIMIT, Math.max(1, Math.floor(value)));
 }
 
 function mcpSessionFromRow(row: Record<string, unknown>): McpSessionRecord {
@@ -552,6 +591,7 @@ export async function searchEntitiesByText(input: {
              greatest(
                coalesce(ts_rank_cd(ent.search_text, q.tsq), 0),
                similarity(ent.normalized_name, q.raw_query),
+               case when ent.normalized_name like '%' || q.raw_query || '%' then 1.05 else 0 end,
                case when q.raw_query like '%' || ent.normalized_name || '%' then 1.0 else 0 end,
                case when ent.normalized_name = q.raw_query then 1.2 else 0 end
              ) as score
@@ -561,6 +601,7 @@ export async function searchEntitiesByText(input: {
         and (
           ent.search_text @@ q.tsq
           or ent.normalized_name % q.raw_query
+          or ent.normalized_name like '%' || q.raw_query || '%'
           or q.raw_query like '%' || ent.normalized_name || '%'
         )
         and exists (
@@ -842,6 +883,8 @@ export async function getEventDetail(input: {
     `
       select
         e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+        e.title_embedding::text as title_embedding_preview,
+        e.content_embedding::text as content_embedding_preview,
         d.id as document_id_for_detail,
         d.title as document_title,
         d.source_name as document_source_name,
@@ -1185,31 +1228,200 @@ export async function getProjectStats(input: {
 export async function getProjectGraph(input: {
   sourceId: string;
   tenantId: string;
+  chunkIds?: string[];
+  eventIds?: string[];
+  entityIds?: string[];
+  query?: string;
+  limit?: number;
 }): Promise<ProjectGraphRecord> {
-  const chunksResult = await pool.query(
-    `
-      select
-        c.id,
-        c.source_id,
-        c.document_id,
-        c.heading,
-        c.content,
-        c.rank,
-        count(distinct e.id)::int as event_count
-      from source_chunks c
-      join documents d on d.id = c.document_id
-      join sources s on s.id = c.source_id
-      left join events e
-        on e.chunk_id = c.id
-       and e.deleted_at is null
-      where c.source_id = $1
-        and s.tenant_id = $2
-        and d.archived_at is null
-      group by c.id
-      order by c.rank, c.id
-    `,
-    [input.sourceId, input.tenantId]
+  const chunkIds = uniqueIds(input.chunkIds);
+  const requestedEventIds = uniqueIds(input.eventIds);
+  const graphQuery = input.query?.trim() ?? "";
+  const queryMatchedEntityIds = graphQuery
+    ? (await searchEntitiesByText({
+        sourceIds: [input.sourceId],
+        query: graphQuery,
+        limit: 80
+      })).map((entity) => entity.id)
+    : [];
+  const requestedEntityIds = uniqueIds([
+    ...uniqueIds(input.entityIds),
+    ...queryMatchedEntityIds
+  ]);
+  const hasFocus =
+    chunkIds.length > 0 ||
+    requestedEventIds.length > 0 ||
+    requestedEntityIds.length > 0 ||
+    graphQuery.length > 0;
+  const limit = clampProjectGraphLimit(input.limit, hasFocus);
+
+  const selectedEventIdsResult = hasFocus
+    ? await pool.query(
+        `
+          with active_events as (
+            select
+              e.id,
+              e.chunk_id,
+              e.rank,
+              e.title,
+              coalesce(c.heading, '') as chunk_heading,
+              coalesce(c.content, '') as chunk_content
+            from events e
+            join documents d on d.id = e.document_id
+            join sources s on s.id = e.source_id
+            left join source_chunks c on c.id = e.chunk_id
+            where e.source_id = $1
+              and s.tenant_id = $2
+              and s.archived_at is null
+              and d.archived_at is null
+              and e.deleted_at is null
+          )
+          select ae.id
+          from active_events ae
+          where ae.id = any($3::uuid[])
+             or ae.chunk_id = any($4::uuid[])
+             or exists (
+               select 1
+               from event_entities ee
+               where ee.event_id = ae.id
+                 and ee.entity_id = any($5::uuid[])
+             )
+             or (
+               $7::text <> ''
+               and (
+                 lower(ae.title) like '%' || lower($7::text) || '%'
+                 or lower(ae.chunk_heading) like '%' || lower($7::text) || '%'
+                 or lower(ae.chunk_content) like '%' || lower($7::text) || '%'
+               )
+             )
+          order by
+            case
+              when ae.id = any($3::uuid[]) then 0
+              when ae.chunk_id = any($4::uuid[]) then 1
+              when exists (
+                select 1
+                from event_entities ee
+                where ee.event_id = ae.id
+                  and ee.entity_id = any($5::uuid[])
+              ) then 2
+              when $7::text <> '' then 3
+              else 4
+            end,
+            ae.rank,
+            ae.id
+          limit $6
+        `,
+        [
+          input.sourceId,
+          input.tenantId,
+          requestedEventIds,
+          chunkIds,
+          requestedEntityIds,
+          limit,
+          graphQuery
+        ]
+      )
+    : await pool.query(
+        `
+          select e.id
+          from events e
+          join documents d on d.id = e.document_id
+          join sources s on s.id = e.source_id
+          where e.source_id = $1
+            and s.tenant_id = $2
+            and s.archived_at is null
+            and d.archived_at is null
+            and e.deleted_at is null
+          order by e.rank, e.id
+          limit $3
+        `,
+        [input.sourceId, input.tenantId, limit]
+      );
+  const selectedEventIds = selectedEventIdsResult.rows.map((row) =>
+    String(row.id)
   );
+
+  const eventsResult =
+    selectedEventIds.length === 0
+      ? { rows: [] as Record<string, unknown>[] }
+      : await pool.query(
+          `
+            select
+              e.id,
+              e.source_id,
+              e.document_id,
+              e.chunk_id,
+              e.title,
+              e.rank,
+              coalesce(
+                array_agg(ee.entity_id order by ent.name) filter (where ee.entity_id is not null),
+                '{}'
+              ) as entity_ids
+            from events e
+            join documents d on d.id = e.document_id
+            join sources s on s.id = e.source_id
+            left join event_entities ee on ee.event_id = e.id
+            left join entities ent on ent.id = ee.entity_id
+            where e.id = any($1::uuid[])
+              and e.source_id = $2
+              and s.tenant_id = $3
+              and s.archived_at is null
+              and d.archived_at is null
+              and e.deleted_at is null
+            group by e.id
+            order by array_position($1::uuid[], e.id)
+          `,
+          [selectedEventIds, input.sourceId, input.tenantId]
+        );
+
+  const events: ProjectGraphEventRecord[] = eventsResult.rows.map((row) => ({
+    id: String(row.id),
+    sourceId: String(row.source_id),
+    documentId: row.document_id == null ? null : String(row.document_id),
+    chunkId: row.chunk_id == null ? null : String(row.chunk_id),
+    title: String(row.title),
+    rank: Number(row.rank ?? 0),
+    entityIds: Array.isArray(row.entity_ids) ? row.entity_ids.map(String) : []
+  }));
+  const entityIds = uniqueIds([
+    ...requestedEntityIds,
+    ...events.flatMap((event) => event.entityIds)
+  ]);
+  const chunkIdsForGraph = uniqueIds([
+    ...chunkIds,
+    ...events
+      .map((event) => event.chunkId)
+      .filter((id): id is string => Boolean(id))
+  ]);
+  const chunksResult =
+    chunkIdsForGraph.length === 0
+      ? { rows: [] as Record<string, unknown>[] }
+      : await pool.query(
+          `
+            select
+              c.id,
+              c.source_id,
+              c.document_id,
+              c.heading,
+              left(c.content, 360) as content,
+              c.rank,
+              count(distinct e.id)::int as event_count
+            from source_chunks c
+            join documents d on d.id = c.document_id
+            join sources s on s.id = c.source_id
+            left join events e
+              on e.chunk_id = c.id
+             and e.deleted_at is null
+            where c.id = any($1::uuid[])
+              and c.source_id = $2
+              and s.tenant_id = $3
+              and s.archived_at is null
+              and d.archived_at is null
+            group by c.id
+            order by array_position($1::uuid[], c.id), c.rank, c.id
+          `,
+          [chunkIdsForGraph, input.sourceId, input.tenantId]
+        );
 
   const chunks: ProjectGraphChunkRecord[] = chunksResult.rows.map((row) => ({
     id: String(row.id),
@@ -1221,29 +1433,34 @@ export async function getProjectGraph(input: {
     eventCount: Number(row.event_count ?? 0)
   }));
 
-  const entitiesResult = await pool.query(
-    `
-      select
-        ent.id,
-        ent.source_id,
-        ent.type,
-        ent.name,
-        ent.normalized_name,
-        count(distinct e.id)::int as event_count
-      from entities ent
-      join event_entities ee on ee.entity_id = ent.id
-      join events e on e.id = ee.event_id
-      join documents d on d.id = e.document_id
-      join sources s on s.id = e.source_id
-      where ent.source_id = $1
-        and s.tenant_id = $2
-        and d.archived_at is null
-        and e.deleted_at is null
-      group by ent.id
-      order by event_count desc, ent.type, ent.name
-    `,
-    [input.sourceId, input.tenantId]
-  );
+  const entitiesResult =
+    entityIds.length === 0
+      ? { rows: [] as Record<string, unknown>[] }
+      : await pool.query(
+          `
+            select
+              ent.id,
+              ent.source_id,
+              ent.type,
+              ent.name,
+              ent.normalized_name,
+              count(distinct e.id)::int as event_count
+            from entities ent
+            join event_entities ee on ee.entity_id = ent.id
+            join events e on e.id = ee.event_id
+            join documents d on d.id = e.document_id
+            join sources s on s.id = e.source_id
+            where ent.id = any($1::uuid[])
+              and ent.source_id = $2
+              and s.tenant_id = $3
+              and s.archived_at is null
+              and d.archived_at is null
+              and e.deleted_at is null
+            group by ent.id
+            order by event_count desc, ent.type, ent.name
+          `,
+          [entityIds, input.sourceId, input.tenantId]
+        );
 
   const entities: ProjectGraphEntityRecord[] = entitiesResult.rows.map((row) => ({
     id: String(row.id),
@@ -1252,44 +1469,6 @@ export async function getProjectGraph(input: {
     name: String(row.name),
     normalizedName: String(row.normalized_name),
     eventCount: Number(row.event_count ?? 0)
-  }));
-
-  const eventsResult = await pool.query(
-    `
-      select
-        e.id,
-        e.source_id,
-        e.document_id,
-        e.chunk_id,
-        e.title,
-        e.rank,
-        coalesce(
-          array_agg(ee.entity_id order by ent.name) filter (where ee.entity_id is not null),
-          '{}'
-        ) as entity_ids
-      from events e
-      join documents d on d.id = e.document_id
-      join sources s on s.id = e.source_id
-      left join event_entities ee on ee.event_id = e.id
-      left join entities ent on ent.id = ee.entity_id
-      where e.source_id = $1
-        and s.tenant_id = $2
-        and d.archived_at is null
-        and e.deleted_at is null
-      group by e.id
-      order by e.rank, e.id
-    `,
-    [input.sourceId, input.tenantId]
-  );
-
-  const events: ProjectGraphEventRecord[] = eventsResult.rows.map((row) => ({
-    id: String(row.id),
-    sourceId: String(row.source_id),
-    documentId: row.document_id == null ? null : String(row.document_id),
-    chunkId: row.chunk_id == null ? null : String(row.chunk_id),
-    title: String(row.title),
-    rank: Number(row.rank ?? 0),
-    entityIds: Array.isArray(row.entity_ids) ? row.entity_ids.map(String) : []
   }));
   const edges = events.flatMap((event) => event.entityIds.map((entityId) => ({
     entityId,
@@ -1302,7 +1481,15 @@ export async function getProjectGraph(input: {
       eventId: event.id
     }));
 
-  return { chunks, entities, events, edges, chunkEventEdges };
+  return {
+    version: "limited-v1",
+    scope: hasFocus ? "focus" : "overview",
+    chunks,
+    entities,
+    events,
+    edges,
+    chunkEventEdges
+  };
 }
 
 export async function getDocumentDetail(input: {
@@ -1341,7 +1528,10 @@ export async function listChunksByDocument(input: {
 }): Promise<ChunkRecord[]> {
   const result = await pool.query(
     `
-      select c.*, c.embedding::text as embedding_preview
+      select
+        c.id, c.source_id, c.document_id, c.heading, c.content, c.raw_content,
+        c.rank, c.references, c.metadata, c.created_at,
+        case when c.embedding is null then null else vector_dims(c.embedding) end as embedding_dimensions
       from source_chunks c
       join sources s on s.id = c.source_id
       where c.document_id = $1 and s.tenant_id = $2
@@ -1360,7 +1550,10 @@ export async function listChunksByProject(input: {
   const archiveSql = input.includeArchived ? "" : "and s.archived_at is null and (d.id is null or d.archived_at is null)";
   const result = await pool.query(
     `
-      select c.*, c.embedding::text as embedding_preview
+      select
+        c.id, c.source_id, c.document_id, c.heading, c.content, c.raw_content,
+        c.rank, c.references, c.metadata, c.created_at,
+        case when c.embedding is null then null else vector_dims(c.embedding) end as embedding_dimensions
       from source_chunks c
       join sources s on s.id = c.source_id
       left join documents d on d.id = c.document_id
@@ -1469,8 +1662,9 @@ export async function listEventsByDocument(input: {
   const result = await pool.query(
     `
       select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
-             e.content, e.rank, e.title_embedding::text as title_embedding_preview,
-             e.content_embedding::text as content_embedding_preview,
+             e.content, e.rank,
+             case when e.title_embedding is null then null else vector_dims(e.title_embedding) end as title_embedding_dimensions,
+             case when e.content_embedding is null then null else vector_dims(e.content_embedding) end as content_embedding_dimensions,
              count(ee.entity_id)::int as entity_count,
              coalesce(
                jsonb_agg(
@@ -1513,8 +1707,9 @@ export async function listEventsByProject(input: {
   const result = await pool.query(
     `
       select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
-             e.content, e.rank, e.title_embedding::text as title_embedding_preview,
-             e.content_embedding::text as content_embedding_preview,
+             e.content, e.rank,
+             case when e.title_embedding is null then null else vector_dims(e.title_embedding) end as title_embedding_dimensions,
+             case when e.content_embedding is null then null else vector_dims(e.content_embedding) end as content_embedding_dimensions,
              count(ee.entity_id)::int as entity_count,
              coalesce(
                jsonb_agg(
@@ -1641,7 +1836,8 @@ export async function listEntitiesByDocument(input: {
   const result = await pool.query(
     `
       select ent.id, ent.source_id, ent.type, ent.name, ent.normalized_name,
-             ent.description, ent.embedding::text as embedding_preview,
+             ent.description,
+             case when ent.embedding is null then null else vector_dims(ent.embedding) end as embedding_dimensions,
              count(distinct ee.event_id)::int as event_count
       from entities ent
       join event_entities ee on ee.entity_id = ent.id
@@ -1670,7 +1866,8 @@ export async function listEntitiesByProject(input: {
   const result = await pool.query(
     `
       select ent.id, ent.source_id, ent.type, ent.name, ent.normalized_name,
-             ent.description, ent.embedding::text as embedding_preview,
+             ent.description,
+             case when ent.embedding is null then null else vector_dims(ent.embedding) end as embedding_dimensions,
              count(distinct ee.event_id)::int as event_count
       from entities ent
       join event_entities ee on ee.entity_id = ent.id
@@ -1914,6 +2111,7 @@ export async function getEntityDetail(input: {
         ent.name,
         ent.normalized_name,
         ent.description,
+        ent.embedding::text as embedding_preview,
         count(distinct ee.event_id)::int as event_count,
         s.tenant_id,
         s.name as source_name,

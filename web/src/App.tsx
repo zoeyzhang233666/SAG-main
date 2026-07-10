@@ -91,6 +91,19 @@ import {
 
 type WorkspaceView = "chat" | "documents" | "graph" | "mcp" | "settings";
 type ResultView = "overview" | "chunks" | "events" | "entities" | "search";
+type ProjectAssetDataKind = "chunks" | "events" | "entities";
+type ProjectAssetDataLoadStatus = "idle" | "loading" | "loaded";
+type ProjectAssetDataStatus = Record<ProjectAssetDataKind, ProjectAssetDataLoadStatus>;
+const PROJECT_ASSET_DATA_KINDS: ProjectAssetDataKind[] = [
+  "chunks",
+  "events",
+  "entities",
+];
+const EMPTY_PROJECT_ASSET_DATA_STATUS: ProjectAssetDataStatus = {
+  chunks: "idle",
+  events: "idle",
+  entities: "idle",
+};
 type ExportSplitMode = "none" | "documents" | "size";
 type ExportProfile = "simple" | "full";
 type KnowledgeAssetEntityScope = "document" | "project";
@@ -147,6 +160,13 @@ type GraphFocus = {
   entityIds: string[];
   primaryEntityId?: string;
 };
+type ProjectGraphRequestInput = {
+  chunkIds?: string[];
+  eventIds?: string[];
+  entityIds?: string[];
+  query?: string;
+  limit?: number;
+};
 
 const MODEL_LOGS_STORAGE_KEY = "sag:model-call-logs:v1";
 const MODEL_LOG_CURSOR_STORAGE_KEY = "sag:model-call-log-cursor:v1";
@@ -171,6 +191,7 @@ const SAFE_JSON_MAX_ARRAY_ITEMS = 50;
 const SAFE_JSON_MAX_OBJECT_KEYS = 80;
 const SAFE_JSON_NUMERIC_ARRAY_PREVIEW_ITEMS = 16;
 const DOCUMENT_RESULT_PAGE_SIZE = 10;
+const ASSISTANT_STREAM_RENDER_INTERVAL_MS = 40;
 const LEFT_RAIL_MIN_WIDTH = 224;
 const LEFT_RAIL_MAX_WIDTH = 420;
 const LEFT_RAIL_COLLAPSED_WIDTH = 72;
@@ -209,12 +230,20 @@ function AppShell() {
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [selectedDocument, setSelectedDocument] =
     useState<DocumentRecord | null>(null);
+  const projectWorkspaceLoadSeqRef = useRef(0);
+  const projectGraphLoadSeqRef = useRef(0);
+  const projectGraphLoadKeyRef = useRef("");
   const [chunks, setChunks] = useState<ChunkRecord[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [entities, setEntities] = useState<EntityRecord[]>([]);
   const [projectChunks, setProjectChunks] = useState<ChunkRecord[]>([]);
   const [projectEvents, setProjectEvents] = useState<EventRecord[]>([]);
   const [projectEntities, setProjectEntities] = useState<EntityRecord[]>([]);
+  const [projectAssetDataStatus, setProjectAssetDataStatus] =
+    useState<ProjectAssetDataStatus>(() => ({ ...EMPTY_PROJECT_ASSET_DATA_STATUS }));
+  const [projectGraphStatus, setProjectGraphStatus] = useState<
+    "idle" | "loading" | "loaded"
+  >("idle");
   const [sessionsByProjectId, setSessionsByProjectId] = useState<
     Record<string, McpSessionRecord[]>
   >({});
@@ -296,6 +325,9 @@ function AppShell() {
   const modelLogCursorRef = useRef(modelLogCursor);
   const pendingSessionIdRef = useRef<string | null>(null);
   const mcpAbortControllerRef = useRef<AbortController | null>(null);
+  const streamingAssistantSessionIdRef = useRef<string | null>(null);
+  const streamingAssistantTextRef = useRef("");
+  const streamingAssistantFlushTimerRef = useRef<number | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -419,12 +451,24 @@ function AppShell() {
     );
   }, [isRightPanelCollapsed]);
 
+  useEffect(
+    () => () => {
+      if (streamingAssistantFlushTimerRef.current != null) {
+        window.clearTimeout(streamingAssistantFlushTimerRef.current);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     void loadProjects();
   }, [showArchivedProjects]);
 
   useEffect(() => {
     if (!selectedProjectId) {
+      projectWorkspaceLoadSeqRef.current += 1;
+      projectGraphLoadSeqRef.current += 1;
+      projectGraphLoadKeyRef.current = "";
       setDocuments([]);
       setSelectedDocumentId("");
       setSelectedDocument(null);
@@ -433,6 +477,8 @@ function AppShell() {
       setProjectChunks([]);
       setProjectEvents([]);
       setProjectEntities([]);
+      setProjectAssetDataStatus({ ...EMPTY_PROJECT_ASSET_DATA_STATUS });
+      setProjectGraphStatus("idle");
       setMcpDetail(null);
       return;
     }
@@ -449,6 +495,11 @@ function AppShell() {
     }
     void loadDocumentWorkspace(selectedDocumentId);
   }, [selectedDocumentId]);
+
+  useEffect(() => {
+    if (workspaceView !== "graph" || !selectedProjectId) return;
+    void ensureProjectGraphLoaded();
+  }, [workspaceView, selectedProjectId, graphFocus, projectGraphStatus]);
 
   useEffect(() => {
     const activeJobs = uploadJobs.filter(
@@ -527,25 +578,25 @@ function AppShell() {
   }
 
   async function loadProjectWorkspace(projectId: string) {
+    const loadSeq = projectWorkspaceLoadSeqRef.current + 1;
+    projectWorkspaceLoadSeqRef.current = loadSeq;
+    projectGraphLoadSeqRef.current += 1;
+    projectGraphLoadKeyRef.current = "";
     try {
       setError("");
-      const [
-        documentsResult,
-        sessionsResult,
-        statsResult,
-        graphResult,
-        projectChunksResult,
-        projectEventsResult,
-        projectEntitiesResult,
-      ] = await Promise.allSettled([
-        api.listDocuments(projectId, showArchivedDocuments),
-        api.listMcpSessions(projectId),
-        api.getProjectStats(projectId),
-        api.getProjectGraph(projectId),
-        api.listProjectChunks(projectId),
-        api.listProjectEvents(projectId),
-        api.listProjectEntities(projectId),
-      ]);
+      setProjectGraph(null);
+      setProjectChunks([]);
+      setProjectEvents([]);
+      setProjectEntities([]);
+      setProjectAssetDataStatus({ ...EMPTY_PROJECT_ASSET_DATA_STATUS });
+      setProjectGraphStatus("idle");
+      const [documentsResult, sessionsResult, statsResult] =
+        await Promise.allSettled([
+          api.listDocuments(projectId, showArchivedDocuments),
+          api.listMcpSessions(projectId),
+          api.getProjectStats(projectId),
+        ]);
+      if (projectWorkspaceLoadSeqRef.current !== loadSeq) return;
 
       const loadErrors: string[] = [];
       const loadedDocuments =
@@ -578,34 +629,6 @@ function AppShell() {
         loadErrors.push(getErrorMessage(statsResult.reason));
       }
 
-      if (graphResult.status === "fulfilled") {
-        setProjectGraph(graphResult.value.graph);
-      } else {
-        setProjectGraph(null);
-        loadErrors.push(getErrorMessage(graphResult.reason));
-      }
-
-      if (projectChunksResult.status === "fulfilled") {
-        setProjectChunks(projectChunksResult.value.chunks);
-      } else {
-        setProjectChunks([]);
-        loadErrors.push(getErrorMessage(projectChunksResult.reason));
-      }
-
-      if (projectEventsResult.status === "fulfilled") {
-        setProjectEvents(projectEventsResult.value.events);
-      } else {
-        setProjectEvents([]);
-        loadErrors.push(getErrorMessage(projectEventsResult.reason));
-      }
-
-      if (projectEntitiesResult.status === "fulfilled") {
-        setProjectEntities(projectEntitiesResult.value.entities);
-      } else {
-        setProjectEntities([]);
-        loadErrors.push(getErrorMessage(projectEntitiesResult.reason));
-      }
-
       if (
         loadedDocuments[0] &&
         !loadedDocuments.some((item) => item.id === selectedDocumentId)
@@ -630,8 +653,8 @@ function AppShell() {
       if (loadErrors.length > 0) {
         setError(
           t(
-            `部分知识资产加载失败：${loadErrors[0]}`,
-            `Some knowledge assets failed to load: ${loadErrors[0]}`,
+            `部分项目基础数据加载失败：${loadErrors[0]}`,
+            `Some project basics failed to load: ${loadErrors[0]}`,
           ),
         );
       }
@@ -664,61 +687,145 @@ function AppShell() {
     }
   }
 
+  async function ensureProjectGraphLoaded(force = false) {
+    const projectId = selectedProjectId;
+    if (!projectId) return;
+    const input = buildProjectGraphRequestInput(graphFocus);
+    const loadKey = buildProjectGraphLoadKey(projectId, input);
+    if (
+      !force &&
+      projectGraphLoadKeyRef.current === loadKey &&
+      (projectGraphStatus === "loading" || projectGraphStatus === "loaded")
+    ) {
+      return;
+    }
+    const loadSeq = projectGraphLoadSeqRef.current + 1;
+    projectGraphLoadSeqRef.current = loadSeq;
+    projectGraphLoadKeyRef.current = loadKey;
+    try {
+      setProjectGraphStatus("loading");
+      const response = await api.getProjectGraph(projectId, input);
+      if (projectGraphLoadSeqRef.current !== loadSeq) return;
+      setProjectGraph(response.graph);
+      setProjectGraphStatus("loaded");
+    } catch (err) {
+      if (projectGraphLoadSeqRef.current !== loadSeq) return;
+      projectGraphLoadKeyRef.current = "";
+      setProjectGraphStatus("idle");
+      setProjectGraph(null);
+      setError(getErrorMessage(err));
+    }
+  }
+
+  function searchProjectGraph(query: string) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      setGraphFocus(null);
+      return;
+    }
+    const key = `graph-query:${trimmedQuery}`;
+    setGraphFocus((current) => {
+      if (current?.key === key) return current;
+      return {
+        key,
+        query: trimmedQuery,
+        chunkIds: [],
+        eventIds: [],
+        entityIds: [],
+      };
+    });
+  }
+
+  async function ensureProjectAssetDataLoaded(
+    kind: ProjectAssetDataKind | "all" | null = "all",
+    force = false,
+  ) {
+    const projectId = selectedProjectId;
+    if (!projectId || !kind) return;
+    const kinds = kind === "all" ? PROJECT_ASSET_DATA_KINDS : [kind];
+    const pendingKinds = force
+      ? kinds
+      : kinds.filter((assetKind) => {
+          const status = projectAssetDataStatus[assetKind];
+          return status !== "loading" && status !== "loaded";
+        });
+    if (pendingKinds.length === 0) return;
+
+    const projectLoadSeq = projectWorkspaceLoadSeqRef.current;
+    setProjectAssetDataStatus((current) => {
+      const next = { ...current };
+      for (const assetKind of pendingKinds) {
+        next[assetKind] = "loading";
+      }
+      return next;
+    });
+
+    const loadErrors: string[] = [];
+    await Promise.all(
+      pendingKinds.map(async (assetKind) => {
+        try {
+          if (assetKind === "chunks") {
+            const response = await api.listProjectChunks(projectId);
+            if (projectWorkspaceLoadSeqRef.current !== projectLoadSeq) return;
+            setProjectChunks(response.chunks);
+          } else if (assetKind === "events") {
+            const response = await api.listProjectEvents(projectId);
+            if (projectWorkspaceLoadSeqRef.current !== projectLoadSeq) return;
+            setProjectEvents(response.events);
+          } else {
+            const response = await api.listProjectEntities(projectId);
+            if (projectWorkspaceLoadSeqRef.current !== projectLoadSeq) return;
+            setProjectEntities(response.entities);
+          }
+          setProjectAssetDataStatus((current) => ({
+            ...current,
+            [assetKind]: "loaded",
+          }));
+        } catch (err) {
+          if (projectWorkspaceLoadSeqRef.current !== projectLoadSeq) return;
+          loadErrors.push(getErrorMessage(err));
+          if (assetKind === "chunks") {
+            setProjectChunks([]);
+          } else if (assetKind === "events") {
+            setProjectEvents([]);
+          } else {
+            setProjectEntities([]);
+          }
+          setProjectAssetDataStatus((current) => ({
+            ...current,
+            [assetKind]: "idle",
+          }));
+        }
+      }),
+    );
+
+    if (loadErrors.length > 0) {
+      setError(
+        t(
+          `部分项目知识资产加载失败：${loadErrors[0]}`,
+          `Some project knowledge assets failed to load: ${loadErrors[0]}`,
+        ),
+      );
+    }
+  }
+
   async function refreshKnowledgeWorkspace(documentId = selectedDocumentId) {
     const projectId = selectedProjectId;
     try {
       if (projectId) {
-        const [
-          statsResult,
-          graphResult,
-          projectChunksResult,
-          projectEventsResult,
-          projectEntitiesResult,
-        ] = await Promise.allSettled([
-          api.getProjectStats(projectId),
-          api.getProjectGraph(projectId),
-          api.listProjectChunks(projectId),
-          api.listProjectEvents(projectId),
-          api.listProjectEntities(projectId),
-        ]);
-        const loadErrors: string[] = [];
-        if (statsResult.status === "fulfilled") {
-          setProjectStats(statsResult.value.stats);
-        } else {
-          setProjectStats(null);
-          loadErrors.push(getErrorMessage(statsResult.reason));
-        }
-        if (graphResult.status === "fulfilled") {
-          setProjectGraph(graphResult.value.graph);
-        } else {
-          setProjectGraph(null);
-          loadErrors.push(getErrorMessage(graphResult.reason));
-        }
-        if (projectChunksResult.status === "fulfilled") {
-          setProjectChunks(projectChunksResult.value.chunks);
-        } else {
-          setProjectChunks([]);
-          loadErrors.push(getErrorMessage(projectChunksResult.reason));
-        }
-        if (projectEventsResult.status === "fulfilled") {
-          setProjectEvents(projectEventsResult.value.events);
-        } else {
-          setProjectEvents([]);
-          loadErrors.push(getErrorMessage(projectEventsResult.reason));
-        }
-        if (projectEntitiesResult.status === "fulfilled") {
-          setProjectEntities(projectEntitiesResult.value.entities);
-        } else {
-          setProjectEntities([]);
-          loadErrors.push(getErrorMessage(projectEntitiesResult.reason));
-        }
-        if (loadErrors.length > 0) {
-          setError(
-            t(
-              `部分知识资产刷新失败：${loadErrors[0]}`,
-              `Some knowledge assets failed to refresh: ${loadErrors[0]}`,
-            ),
-          );
+        const statsResult = await api.getProjectStats(projectId);
+        setProjectStats(statsResult.stats);
+
+        const loadedKinds = PROJECT_ASSET_DATA_KINDS.filter(
+          (assetKind) => projectAssetDataStatus[assetKind] === "loaded",
+        );
+        await Promise.all(
+          loadedKinds.map((assetKind) =>
+            ensureProjectAssetDataLoaded(assetKind, true),
+          ),
+        );
+        if (projectGraphStatus === "loaded" || workspaceView === "graph") {
+          await ensureProjectGraphLoaded(true);
         }
       }
       if (documentId) {
@@ -1294,6 +1401,44 @@ function AppShell() {
     });
   }
 
+  function flushStreamingAssistantText() {
+    if (streamingAssistantFlushTimerRef.current != null) {
+      window.clearTimeout(streamingAssistantFlushTimerRef.current);
+      streamingAssistantFlushTimerRef.current = null;
+    }
+    const nextText = streamingAssistantTextRef.current;
+    setStreamingAssistantText((current) =>
+      current === nextText ? current : nextText,
+    );
+  }
+
+  function scheduleStreamingAssistantFlush() {
+    if (streamingAssistantFlushTimerRef.current != null) return;
+    streamingAssistantFlushTimerRef.current = window.setTimeout(() => {
+      streamingAssistantFlushTimerRef.current = null;
+      const nextText = streamingAssistantTextRef.current;
+      setStreamingAssistantText((current) =>
+        current === nextText ? current : nextText,
+      );
+    }, ASSISTANT_STREAM_RENDER_INTERVAL_MS);
+  }
+
+  function appendStreamingAssistantDelta(delta: string) {
+    if (!delta) return;
+    streamingAssistantTextRef.current += delta;
+    scheduleStreamingAssistantFlush();
+  }
+
+  function clearStreamingAssistantDraft() {
+    if (streamingAssistantFlushTimerRef.current != null) {
+      window.clearTimeout(streamingAssistantFlushTimerRef.current);
+      streamingAssistantFlushTimerRef.current = null;
+    }
+    streamingAssistantSessionIdRef.current = null;
+    streamingAssistantTextRef.current = "";
+    setStreamingAssistantText("");
+  }
+
   function handleMcpStreamEvent(event: McpStreamEvent) {
     if (event.type === "stage") {
       return;
@@ -1304,13 +1449,15 @@ function AppShell() {
         setPendingUserMessage("");
       }
       if (event.message.role === "assistant") {
-        setStreamingAssistantText("");
+        clearStreamingAssistantDraft();
       }
       return;
     }
     if (event.type === "assistant_delta") {
-      setContextPanelMode("process");
-      setStreamingAssistantText((current) => current + event.delta);
+      if (!streamingAssistantTextRef.current) {
+        setContextPanelMode("process");
+      }
+      appendStreamingAssistantDelta(event.delta);
       return;
     }
     if (event.type === "tool_start") {
@@ -1528,6 +1675,12 @@ function AppShell() {
   }
 
   async function loadMcpSession(sessionId: string) {
+    if (
+      streamingAssistantSessionIdRef.current &&
+      streamingAssistantSessionIdRef.current !== sessionId
+    ) {
+      clearStreamingAssistantDraft();
+    }
     const detail = await api.getMcpSession(sessionId);
     setMcpDetail(detail);
     const latestSearch = [...detail.toolCalls]
@@ -1565,6 +1718,7 @@ function AppShell() {
     try {
       setError("");
       const detail = await api.clearMcpSession(mcpDetail.session.id);
+      clearStreamingAssistantDraft();
       setMcpDetail(detail);
       setProcessSteps([]);
       setSearchResult(null);
@@ -1593,6 +1747,7 @@ function AppShell() {
       setError("");
       const deletedSessionId = mcpDetail.session.id;
       await api.deleteMcpSession(deletedSessionId);
+      clearStreamingAssistantDraft();
       const sessionsResponse = await api.listMcpSessions(
         selectedProjectId || undefined,
       );
@@ -1627,7 +1782,7 @@ function AppShell() {
     mcpAbortControllerRef.current = abortController;
     setIsMcpRunning(true);
     setPendingUserMessage(content);
-    setStreamingAssistantText("");
+    clearStreamingAssistantDraft();
     setRunningMcpSearches([]);
     setMcpInput("");
     setContextPanelMode("process");
@@ -1646,6 +1801,7 @@ function AppShell() {
         }));
         await loadMcpSession(sessionId);
       }
+      streamingAssistantSessionIdRef.current = sessionId;
       await api.streamMcpMessage(sessionId, content, handleMcpStreamEvent, {
         signal: abortController.signal,
         autoMermaid,
@@ -1653,6 +1809,7 @@ function AppShell() {
       await syncModelLogs();
       await refreshSessionsForProjects([selectedProjectId]);
     } catch (err) {
+      flushStreamingAssistantText();
       await syncModelLogs();
       if (isAbortError(err)) {
         setStatus(t("已停止生成", "Generation stopped"));
@@ -1677,11 +1834,11 @@ function AppShell() {
         status: "failed",
       });
     } finally {
+      flushStreamingAssistantText();
       if (mcpAbortControllerRef.current === abortController) {
         mcpAbortControllerRef.current = null;
       }
       setPendingUserMessage("");
-      setStreamingAssistantText("");
       setIsMcpRunning(false);
     }
   }
@@ -2233,6 +2390,7 @@ function AppShell() {
                 projectEvents={projectEvents}
                 projectEntities={projectEntities}
                 projectStats={projectStats}
+                isProjectAssetDataLoading={isAnyProjectAssetDataLoading(projectAssetDataStatus)}
                 resultView={resultView}
                 showArchivedDocuments={showArchivedDocuments}
                 hasActiveUploads={hasActiveUploads}
@@ -2261,6 +2419,9 @@ function AppShell() {
                   void permanentlyDeleteDocument(document)
                 }
                 onSetResultView={setResultView}
+                onEnsureProjectAssetData={(view) =>
+                  void ensureProjectAssetDataLoaded(projectAssetKindForView(view))
+                }
                 onToggleArchivedDocuments={setShowArchivedDocuments}
                 onSearchQueryChange={setSearchQuery}
                 onSearchModeChange={setSearchMode}
@@ -2285,7 +2446,9 @@ function AppShell() {
                 project={selectedProject}
                 graph={projectGraph}
                 focus={graphFocus}
+                isLoading={projectGraphStatus === "loading"}
                 defaultLayoutStyle={aiSettings?.graphDefaultLayoutStyle}
+                onSearch={searchProjectGraph}
                 onOpenChunk={(chunkId) => void openChunkDetail(chunkId)}
                 onOpenEvent={(eventId) => void openEventDetail(eventId)}
                 onOpenEntity={(entityId) => void openEntityDetail(entityId)}
@@ -3305,10 +3468,10 @@ function pickWelcomePromptPlaceholderEntities(input: {
   return {
     focus:
       focusEntity?.name ||
-      input.t("高频化工品类实体", "frequent chemical product entities"),
+      input.t("高频产品大类实体", "frequent chemical product entities"),
     secondary:
       secondaryEntity?.name ||
-      input.t("另一个高频化工品类实体", "another frequent chemical entity"),
+      input.t("另一个高频产品大类实体", "another frequent chemical entity"),
   };
 }
 
@@ -3860,6 +4023,11 @@ function ConversationWorkspace(props: {
               <div className="chem-message chem-message-assistant max-w-[86%] rounded-2xl border border-border px-4 py-3 text-sm leading-6">
                 <div className="mb-1 flex items-center gap-2 text-xs opacity-70">
                   {t("助手", "Assistant")}
+                  {!props.isRunning ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                      {t("未完成草稿", "Incomplete draft")}
+                    </span>
+                  ) : null}
                 </div>
                 <MarkdownMessage
                   content={formatMessageContent(
@@ -3867,7 +4035,7 @@ function ConversationWorkspace(props: {
                     t,
                   )}
                   mermaidPendingText={props.mermaidPendingText}
-                  isStreaming
+                  isStreaming={props.isRunning}
                   onRequestMermaidRedraw={props.onRequestMermaidRedraw}
                 />
               </div>
@@ -4052,6 +4220,7 @@ function ProjectDocumentsWorkspace(props: {
   projectEvents: EventRecord[];
   projectEntities: EntityRecord[];
   projectStats: ProjectStatsRecord | null;
+  isProjectAssetDataLoading: boolean;
   resultView: ResultView;
   showArchivedDocuments: boolean;
   hasActiveUploads: boolean;
@@ -4089,6 +4258,7 @@ function ProjectDocumentsWorkspace(props: {
   onArchiveOrRestoreDocument: (document: DocumentRecord) => void;
   onDeleteDocument: (document: DocumentRecord) => void;
   onSetResultView: (view: ResultView) => void;
+  onEnsureProjectAssetData: (view: ResultView) => void;
   onToggleArchivedDocuments: (value: boolean) => void;
   onSearchQueryChange: (value: string) => void;
   onSearchModeChange: (value: SearchMode) => void;
@@ -4164,6 +4334,17 @@ function ProjectDocumentsWorkspace(props: {
       // 忽略 localStorage 不可用的情况
     }
   }, [docRailWidth]);
+
+  useEffect(() => {
+    if (
+      entityScope === "project" &&
+      (props.resultView === "chunks" ||
+        props.resultView === "events" ||
+        props.resultView === "entities")
+    ) {
+      props.onEnsureProjectAssetData(props.resultView);
+    }
+  }, [entityScope, props.project?.id, props.resultView]);
 
   function startDocRailResize(event: ReactPointerEvent) {
     startPanelResize(event, {
@@ -4345,6 +4526,9 @@ function ProjectDocumentsWorkspace(props: {
   function changeEntityScope(scope: KnowledgeAssetEntityScope) {
     setEntityScope(scope);
     setResultPage(1);
+    if (scope === "project") {
+      props.onEnsureProjectAssetData(props.resultView);
+    }
   }
 
   async function exportFilteredEntities() {
@@ -4800,6 +4984,17 @@ function ProjectDocumentsWorkspace(props: {
                   onSelectTypes={selectEntityTypeFilters}
                   onClear={clearEntityTypeFilters}
                 />
+              ) : null}
+              {entityScope === "project" && props.isProjectAssetDataLoading ? (
+                <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>
+                    {t(
+                      "正在加载整个项目的知识资产明细，统计总数不受影响。",
+                      "Loading project-wide knowledge asset details; summary counts are unaffected.",
+                    )}
+                  </span>
+                </div>
               ) : null}
               {props.resultView === "overview" ? (
                 <OverviewPanel
@@ -6361,7 +6556,9 @@ function ProjectGraphWorkspace(props: {
   project: SourceRecord | null;
   graph: ProjectGraphRecord | null;
   focus: GraphFocus | null;
+  isLoading: boolean;
   defaultLayoutStyle?: string;
+  onSearch: (query: string) => void;
   onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
@@ -6377,6 +6574,20 @@ function ProjectGraphWorkspace(props: {
           description={t(
             "项目里有文档、事件和实体后，图谱会在这里显示。",
             "The graph appears after the project has documents, events, and entities.",
+          )}
+        />
+      </section>
+    );
+  }
+
+  if (props.isLoading && !graph) {
+    return (
+      <section className="flex min-h-0 flex-1 items-center justify-center px-6">
+        <EmptyState
+          title={t("正在加载图谱", "Loading graph")}
+          description={t(
+            "正在读取项目知识超图概览，请稍候。",
+            "Loading the project hypergraph overview. Please wait.",
           )}
         />
       </section>
@@ -6424,6 +6635,7 @@ function ProjectGraphWorkspace(props: {
           focus={props.focus}
           defaultLayoutStyle={props.defaultLayoutStyle}
           language={language}
+          onSearch={props.onSearch}
           onOpenChunk={props.onOpenChunk}
           onOpenEvent={props.onOpenEvent}
           onOpenEntity={props.onOpenEntity}
@@ -7413,7 +7625,7 @@ function EntityAssetTypeFilter(props: {
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {t(
-              "支持按当前文档或整个项目查看实体；类型支持多选与模糊搜索；“化工品类”会匹配原料、中间体、产品、下游产品、联产品、副产品、催化剂、牌号/规格等。",
+              "支持按当前文档或整个项目查看实体；类型支持多选与模糊搜索；“产品大类”会匹配原料、中间体、产品、下游产品、联产品、副产品、催化剂、牌号/规格等。",
               "View entities for the current document or the whole project. Types support multi-select and fuzzy search. Chemical products matches raw materials, intermediates, products, downstream products, co-products, by-products, catalysts, grades/specifications, and similar types.",
             )}
           </p>
@@ -8583,7 +8795,7 @@ function SettingsPanel(props: {
           />
           <div className="text-xs leading-5 text-muted-foreground">
             {t(
-              "支持占位符：{projectName}、{focus}、{secondary}。当模板同时包含 {focus} 和 {secondary} 时，会优先选择在同一事件超边中共同出现、共同事件数较多的一对化工品类实体，并在高相关实体对里轮换；留空保存时会恢复默认问题。",
+              "支持占位符：{projectName}、{focus}、{secondary}。当模板同时包含 {focus} 和 {secondary} 时，会优先选择在同一事件超边中共同出现、共同事件数较多的一对产品大类实体，并在高相关实体对里轮换；留空保存时会恢复默认问题。",
               "Supported placeholders: {projectName}, {focus}, {secondary}. When a template contains both {focus} and {secondary}, the app prefers a high-confidence pair of chemical product/category entities that co-occur in the same event hyperedges and rotates among related pairs. Saving an empty value restores the defaults.",
             )}
           </div>
@@ -9875,6 +10087,17 @@ function EmbeddingPreviewBlock({
   preview?: EmbeddingPreview | null;
 }) {
   const { t } = useI18n();
+  const sample = preview?.sample ?? [];
+  const dimensions = preview?.dimensions;
+  const hasSample = sample.length > 0;
+  const badgeLabel =
+    preview === undefined
+      ? t("状态按需", "Status on demand")
+      : !preview
+        ? t("未生成", "Not generated")
+        : dimensions != null
+          ? t(`${dimensions} 维`, `${dimensions} dims`)
+          : t("向量已写入", "Vector stored");
   return (
     <div className="min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-muted/30 p-2 text-left">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -9882,19 +10105,29 @@ function EmbeddingPreviewBlock({
           {title}
         </span>
         <Badge className="shrink-0">
-          {preview
-            ? t(`${preview.dimensions} 维`, `${preview.dimensions} dims`)
-            : t("未生成", "Not generated")}
+          {badgeLabel}
         </Badge>
       </div>
-      {preview ? (
+      {preview === undefined ? (
+        <div className="text-xs text-muted-foreground">
+          {t(
+            "此列表没有加载向量状态或数值样本；这不代表数据库中没有向量。",
+            "This list did not load vector status or numeric samples; that does not mean the database has no vector.",
+          )}
+        </div>
+      ) : preview && hasSample ? (
         <code className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted-foreground">
           [
-          {preview.sample
-            .map((value) => formatEmbeddingNumber(value))
-            .join(", ")}
-          {preview.dimensions > preview.sample.length ? ", ..." : ""}]
+          {sample.map((value) => formatEmbeddingNumber(value)).join(", ")}
+          {dimensions != null && dimensions > sample.length ? ", ..." : ""}]
         </code>
+      ) : preview ? (
+        <div className="text-xs text-muted-foreground">
+          {t(
+            "向量已写入数据库；为提升列表速度，数值样本按需加载。",
+            "The vector is stored; numeric samples load on demand to keep lists fast.",
+          )}
+        </div>
       ) : (
         <div className="text-xs text-muted-foreground">
           {t(
@@ -10312,12 +10545,12 @@ function buildKnowledgeAssetEntityTypeOptions(
   return [
     {
       type: KNOWLEDGE_ASSET_CHEMICAL_ENTITY_GROUP,
-      label: language === "en" ? "Chemical products" : "化工品类",
+      label: language === "en" ? "Chemical products" : "产品大类",
       count: chemicalCount,
       description:
         language === "en"
           ? "Raw materials, intermediates, products, downstream products, co-products, by-products, catalysts, grades/specifications, and similar chemical-related types."
-          : "原料、中间体、产品、下游产品、联产品、副产品、催化剂、牌号/规格等化工相关类型。",
+          : "原料、中间体、产品、下游产品、联产品、副产品、催化剂、牌号/规格等产品相关类型。",
     },
     ...actualOptions,
   ];
@@ -11663,6 +11896,54 @@ function extractSearchTrace(value: unknown): Record<string, unknown> | null {
     "queryEventIds" in value
   ) {
     return value;
+  }
+  return null;
+}
+
+function buildProjectGraphRequestInput(
+  focus: GraphFocus | null,
+): ProjectGraphRequestInput {
+  const chunkIds = uniqueStrings(focus?.chunkIds ?? []).slice(0, 80);
+  const eventIds = uniqueStrings(focus?.eventIds ?? []).slice(0, 160);
+  const entityIds = uniqueStrings(focus?.entityIds ?? []).slice(0, 120);
+  const query = focus?.query.trim() ?? "";
+  const hasFocus =
+    chunkIds.length > 0 || eventIds.length > 0 || entityIds.length > 0;
+  if (!hasFocus) {
+    if (query) {
+      return { query, limit: 240 };
+    }
+    return { limit: 160 };
+  }
+  return {
+    chunkIds,
+    eventIds,
+    entityIds,
+    limit: 240,
+  };
+}
+
+function buildProjectGraphLoadKey(
+  projectId: string,
+  input: ProjectGraphRequestInput,
+) {
+  return [
+    projectId,
+    input.limit ?? "",
+    input.query ?? "",
+    uniqueStrings(input.chunkIds ?? []).sort().join(","),
+    uniqueStrings(input.eventIds ?? []).sort().join(","),
+    uniqueStrings(input.entityIds ?? []).sort().join(","),
+  ].join("|");
+}
+
+function isAnyProjectAssetDataLoading(status: ProjectAssetDataStatus) {
+  return PROJECT_ASSET_DATA_KINDS.some((kind) => status[kind] === "loading");
+}
+
+function projectAssetKindForView(view: ResultView): ProjectAssetDataKind | null {
+  if (view === "chunks" || view === "events" || view === "entities") {
+    return view;
   }
   return null;
 }

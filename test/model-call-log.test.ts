@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createModelCallLogger,
+  formatModelCallError,
   importModelCallLog,
   listModelCallLogs,
   subscribeModelCallLogs,
@@ -54,5 +55,21 @@ describe("model call log", () => {
     expect(imported?.operation).toBe(operation);
     expect(duplicate).toBeNull();
     expect(matchingLogs).toHaveLength(1);
+  });
+
+  it("includes nested network causes instead of only saying fetch failed", () => {
+    const nested = Object.assign(new Error("connect timeout"), {
+      code: "UND_ERR_CONNECT_TIMEOUT",
+      hostname: "api.example.test"
+    });
+    const error = new TypeError("fetch failed", {
+      cause: new AggregateError([nested], "")
+    });
+
+    const message = formatModelCallError(error);
+
+    expect(message).toContain("fetch failed");
+    expect(message).toContain("UND_ERR_CONNECT_TIMEOUT");
+    expect(message).toContain("api.example.test");
   });
 });

@@ -101,13 +101,11 @@ const GRAPH_SHOWCASE_BUTTONS: Array<{
   en: string;
 }> = [
   { mode: "frequency", zh: "高频化工品", en: "Core chemicals" },
-  { mode: "relations", zh: "产业链关系", en: "Co-event pairs" },
   { mode: "events", zh: "高关联事件", en: "Key events" },
 ];
 
 const DEFAULT_GRAPH_SHOWCASE_MODES: GraphShowcaseMode[] = [
   "frequency",
-  "relations",
   "events",
 ];
 
@@ -125,6 +123,7 @@ export function ProjectGraphFlow(props: {
   } | null;
   defaultLayoutStyle?: string;
   language: SupportedLanguage;
+  onSearch?: (query: string) => void;
   onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
@@ -148,6 +147,7 @@ function ProjectGraphCanvas(props: {
   } | null;
   defaultLayoutStyle?: string;
   language: SupportedLanguage;
+  onSearch?: (query: string) => void;
   onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
@@ -511,25 +511,6 @@ function ProjectGraphCanvas(props: {
     ],
   );
 
-  const graphDisplayMetrics = useMemo(() => {
-    const visibleEntityCount = graphModel.nodes.filter(
-      (node) => (node.data as GraphNodeData).kind === "entity",
-    ).length;
-    const visibleEventCount = graphModel.nodes.filter(
-      (node) => (node.data as GraphNodeData).kind === "event",
-    ).length;
-    return {
-      entity: {
-        visible: visibleEntityCount,
-        total: props.graph.entities.length,
-      },
-      event: {
-        visible: visibleEventCount,
-        total: props.graph.events.length,
-      },
-    };
-  }, [graphModel.nodes, props.graph.entities.length, props.graph.events.length]);
-
   function applyShowcase(showcase: GraphShowcase | null) {
     if (!showcase) return;
     setActiveEventBatch(null);
@@ -649,18 +630,49 @@ function ProjectGraphCanvas(props: {
     const eventIdsFromEntities = uniqueGraphIds(
       directEntityIds.flatMap((entityId) => eventIdsByEntityId.get(entityId) ?? []),
     );
-    const allEventIds = uniqueGraphIds([
-      ...eventIdsFromChunks,
-      ...directEventIds,
-      ...eventIdsFromEntities,
-    ]);
+    const isQueryOnlyFocus =
+      Boolean(effectiveFocus.query.trim()) &&
+      focusChunkIds.length === 0 &&
+      directEventIds.length === 0 &&
+      directEntityIds.length === 0 &&
+      props.graph.scope === "focus";
+    const queryScopeEventIds = isQueryOnlyFocus
+      ? [...eventById.keys()]
+      : [];
+    const normalizedFocusQuery = normalizeGraphText(effectiveFocus.query);
+    const queryScopeEntityIds = isQueryOnlyFocus
+      ? normalizedFocusQuery
+        ? [...entityById.values()]
+          .filter(
+            (entity) =>
+              maxGraphMatchScore(
+                [
+                  entity.name,
+                  entity.normalizedName,
+                  `${entity.name} ${entity.type}`,
+                ],
+                normalizedFocusQuery,
+              ) > 0,
+          )
+          .map((entity) => entity.id)
+          .slice(0, FOCUS_ENTITY_LIMIT)
+        : []
+      : directEntityIds;
+    const directEvidenceEventIds =
+      directEventIds.length > 0 ? directEventIds : eventIdsFromChunks;
+    const allEventIds =
+      directEvidenceEventIds.length > 0
+        ? directEvidenceEventIds
+        : eventIdsFromEntities.length > 0
+          ? eventIdsFromEntities
+          : queryScopeEventIds;
 
     if (allEventIds.length > 0) {
       applyEventBatch(
         {
           kind: "focus",
           label: effectiveFocus.query,
-          sourceEntityIds: directEntityIds,
+          sourceEntityIds: queryScopeEntityIds,
           eventIds: allEventIds,
           offset: 0,
         },
@@ -674,17 +686,17 @@ function ProjectGraphCanvas(props: {
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
     setFocusedChunkIds(new Set());
-    setFocusedEntityIds(new Set(directEntityIds));
+    setFocusedEntityIds(new Set(queryScopeEntityIds));
     setFocusedEventIds(new Set());
     setSelectedNodeId(null);
     setSelectedEntityTypes(
-      buildSelectedEntityTypes(directEntityIds, entityById),
+      buildSelectedEntityTypes(queryScopeEntityIds, entityById),
     );
     setGraphQuery(effectiveFocus.query);
     setActiveQueryLabel(
       `${graphText(props.language, "当前搜索", "Search")} · ${effectiveFocus.query}`,
     );
-    setQueryLinkedNodeIds(new Set(directEntityIds));
+    setQueryLinkedNodeIds(new Set(queryScopeEntityIds));
     setSuggestionsOpen(false);
     setLayoutRevision((current) => current + 1);
     shouldFitViewRef.current = true;
@@ -696,6 +708,7 @@ function ProjectGraphCanvas(props: {
     eventIdsByChunkId,
     eventIdsByEntityId,
     eventDisplayLimit,
+    props.graph.scope,
     props.language,
   ]);
 
@@ -703,7 +716,12 @@ function ProjectGraphCanvas(props: {
     expandedEventIdsRef.current = expandedEventIds;
   }, [expandedEventIds]);
 
-  useEffect(() => () => clearClickTimer(), []);
+  useEffect(
+    () => () => {
+      clearClickTimer();
+    },
+    [],
+  );
 
   useEffect(() => {
     const handleGraphNodeFocus = (event: Event) => {
@@ -1017,7 +1035,7 @@ function ProjectGraphCanvas(props: {
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
     setFocusedChunkIds(new Set());
-    setFocusedEntityIds(new Set());
+    setFocusedEntityIds(entityIds);
     setFocusedEventIds(new Set(visibleEventIds));
     setSelectedNodeId(null);
     setSelectedEntityTypes(new Set());
@@ -1183,30 +1201,6 @@ function ProjectGraphCanvas(props: {
         }
       `}</style>
       <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 rounded-xl border border-border bg-background/90 p-2 shadow-[0_10px_30px_rgba(24,36,58,0.08)] backdrop-blur">
-        <MetricChip
-          label={graphText(props.language, "实体", "Entities")}
-          value={formatGraphMetricValue(
-            graphDisplayMetrics.entity.visible,
-            graphDisplayMetrics.entity.total,
-          )}
-          title={graphText(
-            props.language,
-            "当前已显示实体 / 项目实体总数",
-            "Visible entities / total entities in the project",
-          )}
-        />
-        <MetricChip
-          label={graphText(props.language, "事件", "Events")}
-          value={formatGraphMetricValue(
-            graphDisplayMetrics.event.visible,
-            graphDisplayMetrics.event.total,
-          )}
-          title={graphText(
-            props.language,
-            "当前已显示事件 / 项目事件总数",
-            "Visible events / total events in the project",
-          )}
-        />
         <Button type="button" variant="outline" size="sm" onClick={resetGraph}>
           {graphText(props.language, "重置", "Reset")}
         </Button>
@@ -1257,6 +1251,24 @@ function ProjectGraphCanvas(props: {
               {graphText(props.language, "下一批", "Next batch")}
             </Button>
           </div>
+        ) : activeShowcase && activeGraphMode !== "manual" ? (
+          <div className="flex h-8 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 text-xs text-amber-900">
+            <span>{formatShowcaseEventLabel(activeShowcase, props.language, eventDisplayLimit)}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={rotateGraphShowcase}
+              title={graphText(
+                props.language,
+                "按当前模式重新挑选一批事件和实体",
+                "Pick another batch for the current mode",
+              )}
+            >
+              {graphText(props.language, "下一批", "Next batch")}
+            </Button>
+          </div>
         ) : null}
         <select
           value={layoutStyle}
@@ -1291,7 +1303,12 @@ function ProjectGraphCanvas(props: {
         <input
           value={graphQuery}
           onChange={(event) => {
-            setGraphQuery(event.target.value);
+            const nextQuery = event.target.value;
+            setGraphQuery(nextQuery);
+            setSuggestionsOpen(true);
+          }}
+          onCompositionEnd={(event) => {
+            setGraphQuery(event.currentTarget.value);
             setSuggestionsOpen(true);
           }}
           onFocus={() => setSuggestionsOpen(true)}
@@ -1299,6 +1316,11 @@ function ProjectGraphCanvas(props: {
             if (event.key === "Enter" && suggestions[0]) {
               event.preventDefault();
               revealSuggestion(suggestions[0]);
+              return;
+            }
+            if (event.key === "Enter") {
+              event.preventDefault();
+              props.onSearch?.(graphQuery.trim());
             }
             if (event.key === "Escape") {
               setSuggestionsOpen(false);
@@ -1446,6 +1468,37 @@ function formatActiveEventBatchLabel(
   const end = Math.min(total, batch.offset + displayLimit);
   const zhPrefix = batch.kind === "focus" ? "当前搜索" : "实体";
   const enPrefix = batch.kind === "focus" ? "Search" : "Entity";
+  return graphText(
+    language,
+    `${zhPrefix} · 展示事件 ${start}-${end}/${total} 个`,
+    `${enPrefix} · showing events ${start}-${end}/${total}`,
+  );
+}
+
+function formatShowcaseEventLabel(
+  showcase: GraphShowcase,
+  language: SupportedLanguage,
+  displayLimit: number,
+) {
+  const total = showcase.eventIds.length;
+  const start = total === 0 ? 0 : 1;
+  const end = Math.min(total, displayLimit);
+  const zhPrefix =
+    showcase.mode === "events"
+      ? "高关联事件"
+      : showcase.mode === "frequency"
+        ? "高频化工品"
+        : showcase.mode === "relations"
+          ? "产业链关系"
+          : "知识总览";
+  const enPrefix =
+    showcase.mode === "events"
+      ? "Key events"
+      : showcase.mode === "frequency"
+        ? "Core chemicals"
+        : showcase.mode === "relations"
+          ? "Industry relations"
+          : "Overview";
   return graphText(
     language,
     `${zhPrefix} · 展示事件 ${start}-${end}/${total} 个`,
@@ -1640,7 +1693,9 @@ function buildVisibleGraphScope(input: {
     input.focusedEntityIds.size > 0 ||
     input.focusedEventIds.size > 0;
   const visibleChunkIds = new Set(hasFocusedGraph ? input.focusedChunkIds : []);
-  const visibleEntityIds = new Set<string>();
+  const visibleEntityIds = new Set<string>(
+    hasFocusedGraph ? input.focusedEntityIds : [],
+  );
   const visibleEventIds = new Set(hasFocusedGraph ? input.focusedEventIds : []);
 
   for (const chunkId of visibleChunkIds) {
@@ -3032,11 +3087,7 @@ function rankGraphSuggestions(
   const normalizedQuery = normalizeGraphText(query);
   if (!normalizedQuery) return [];
 
-  const entityById = new Map(
-    graph.entities.map((entity) => [entity.id, entity]),
-  );
   const eventById = new Map(graph.events.map((event) => [event.id, event]));
-  const edgeEntityIdsByEventId = new Map<string, string[]>();
   const eventIdsByEntityId = new Map<string, Set<string>>();
   const linkEntityToEvent = (entityId: string, eventId: string) => {
     if (!entityId || !eventId || !eventById.has(eventId)) return;
@@ -3045,81 +3096,12 @@ function rankGraphSuggestions(
     eventIdsByEntityId.set(entityId, eventIds);
   };
   for (const edge of graph.edges) {
-    const entityIds = edgeEntityIdsByEventId.get(edge.eventId) ?? [];
-    entityIds.push(edge.entityId);
-    edgeEntityIdsByEventId.set(edge.eventId, entityIds);
     linkEntityToEvent(edge.entityId, edge.eventId);
   }
   for (const event of graph.events) {
     for (const entityId of event.entityIds ?? []) {
       linkEntityToEvent(entityId, event.id);
     }
-  }
-  const eventEntityTextById = new Map<string, string>();
-  const eventEntityScoreById = new Map<string, number>();
-  const chunkEventTextById = new Map<string, string>();
-  const chunkEntityScoreById = new Map<string, number>();
-
-  for (const event of graph.events) {
-    const eventEntityIds = uniqueGraphIds([
-      ...(event.entityIds ?? []),
-      ...(edgeEntityIdsByEventId.get(event.id) ?? []),
-    ]);
-    const relatedEntities = eventEntityIds
-      .map((entityId) => entityById.get(entityId))
-      .filter((entity): entity is ProjectGraphEntityRecord => Boolean(entity));
-    const relatedEntityText = relatedEntities
-      .map((entity) => `${entity.name} ${entity.normalizedName} ${entity.type}`)
-      .join(" ");
-    eventEntityTextById.set(event.id, relatedEntityText);
-    eventEntityScoreById.set(
-      event.id,
-      maxGraphMatchScore(
-        relatedEntities.map(
-          (entity) => `${entity.name} ${entity.normalizedName} ${entity.type}`,
-        ),
-        normalizedQuery,
-      ),
-    );
-  }
-
-  for (const event of graph.events) {
-    const eventSearchText = [
-      event.title,
-      eventEntityTextById.get(event.id) ?? "",
-    ].join(" ");
-    if (event.chunkId) {
-      chunkEventTextById.set(
-        event.chunkId,
-        `${chunkEventTextById.get(event.chunkId) ?? ""} ${eventSearchText}`,
-      );
-      chunkEntityScoreById.set(
-        event.chunkId,
-        Math.max(
-          chunkEntityScoreById.get(event.chunkId) ?? 0,
-          eventEntityScoreById.get(event.id) ?? 0,
-        ),
-      );
-    }
-  }
-  for (const edge of graph.chunkEventEdges ?? []) {
-    const event = eventById.get(edge.eventId);
-    if (!event) continue;
-    const eventSearchText = [
-      event.title,
-      eventEntityTextById.get(event.id) ?? "",
-    ].join(" ");
-    chunkEventTextById.set(
-      edge.chunkId,
-      `${chunkEventTextById.get(edge.chunkId) ?? ""} ${eventSearchText}`,
-    );
-    chunkEntityScoreById.set(
-      edge.chunkId,
-      Math.max(
-        chunkEntityScoreById.get(edge.chunkId) ?? 0,
-        eventEntityScoreById.get(event.id) ?? 0,
-      ),
-    );
   }
 
   const suggestions: GraphSuggestion[] = [];
@@ -3166,16 +3148,7 @@ function rankGraphSuggestions(
   }
   for (const event of graph.events) {
     const titleScore = graphMatchScore(event.title, normalizedQuery);
-    const relatedEntityScore = eventEntityScoreById.get(event.id) ?? 0;
-    const combinedScore = graphMatchScore(
-      `${event.title} ${eventEntityTextById.get(event.id) ?? ""}`,
-      normalizedQuery,
-    );
-    const score = Math.max(
-      titleScore,
-      relatedEntityScore > 0 ? relatedEntityScore - 10 : 0,
-      combinedScore,
-    );
+    const score = titleScore;
     if (score > 0) {
       suggestions.push({
         id: event.id,
@@ -3191,16 +3164,7 @@ function rankGraphSuggestions(
       `${chunk.heading ?? ""} ${chunk.content.slice(0, 220)}`,
       normalizedQuery,
     );
-    const linkedScore = graphMatchScore(
-      chunkEventTextById.get(chunk.id) ?? "",
-      normalizedQuery,
-    );
-    const entityScore = chunkEntityScoreById.get(chunk.id) ?? 0;
-    const score = Math.max(
-      chunkScore,
-      linkedScore > 0 ? linkedScore - 6 : 0,
-      entityScore > 0 ? entityScore - 14 : 0,
-    );
+    const score = chunkScore;
     if (score > 0) {
       suggestions.push({
         id: chunk.id,
@@ -3646,7 +3610,7 @@ function buildGraphShowcase(input: {
   }
 
   if (input.mode === "relations") {
-    return buildRelationShowcase({ ...input, graphIndex, chemicalEntities });
+    return buildFrequencyShowcase({ ...input, graphIndex, chemicalEntities });
   }
   if (input.mode === "events") {
     return buildEventShowcase({ ...input, graphIndex, chemicalEntities });
@@ -4313,30 +4277,4 @@ function uniqueStrings(values: Iterable<string>) {
 function truncateGraphLabel(value: string, maxLength: number) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength)}…`;
-}
-
-function formatGraphMetricValue(visible: number, total: number) {
-  return `${Math.max(0, visible)}/${Math.max(0, total)}`;
-}
-
-function MetricChip({
-  label,
-  value,
-  title,
-}: {
-  label: string;
-  value: string;
-  title?: string;
-}) {
-  return (
-    <div
-      className="rounded-lg border border-border bg-muted/40 px-2.5 py-1"
-      title={title}
-    >
-      <span className="text-xs text-muted-foreground">
-        <RichTextFragment text={label} />
-      </span>
-      <span className="ml-1 text-sm font-semibold text-primary">{value}</span>
-    </div>
-  );
 }

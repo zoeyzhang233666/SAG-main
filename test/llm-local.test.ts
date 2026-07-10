@@ -28,6 +28,7 @@ vi.mock("../src/services/ai-settings-service.js", () => ({
 }));
 
 import { OpenAICompatibleLlmClient } from "../src/ai/llm-client.js";
+import { listModelCallLogs } from "../src/observability/model-call-log.js";
 
 describe("local LLM fallback", () => {
   beforeEach(() => {
@@ -259,5 +260,59 @@ describe("local LLM fallback", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(events).toHaveLength(1);
     expect(events[0].title).toBe("SAG重试");
+  });
+
+  it("does not duplicate exhausted network retries in noResponseFormat mode", async () => {
+    runtimeSettings.current = {
+      ...runtimeSettings.current,
+      llmApiKey: "test-key",
+      hasRemoteLlm: true,
+      llmMaxRetries: 1
+    };
+    const cause = Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("fetch failed", { cause });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const before = listModelCallLogs().latestSequence;
+
+    const client = new OpenAICompatibleLlmClient();
+    const entities = await client.extractNamedEntities("聚酯产业链");
+
+    expect(Array.isArray(entities)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const logs = listModelCallLogs(before).logs;
+    expect(logs.filter((log) => log.operation === "chatJson")).toHaveLength(2);
+    expect(logs.some((log) => log.operation === "chatJson.noResponseFormat")).toBe(false);
+    expect(logs[0]?.error).toContain("ECONNRESET");
+  });
+
+  it("uses noResponseFormat only when the provider rejects JSON mode", async () => {
+    runtimeSettings.current = {
+      ...runtimeSettings.current,
+      llmApiKey: "test-key",
+      hasRemoteLlm: true,
+      llmMaxRetries: 1
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => "response_format is unsupported"
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ named_entities: ["聚酯"] }) } }]
+        })
+      } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new OpenAICompatibleLlmClient();
+    await expect(client.extractNamedEntities("聚酯产业链")).resolves.toEqual(["聚酯"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(secondBody.response_format).toBeUndefined();
   });
 });

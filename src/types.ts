@@ -120,6 +120,8 @@ export interface ProjectGraphEventRecord {
 }
 
 export interface ProjectGraphRecord {
+  version?: string;
+  scope?: "overview" | "focus";
   chunks: ProjectGraphChunkRecord[];
   entities: ProjectGraphEntityRecord[];
   events: ProjectGraphEventRecord[];

@@ -476,15 +476,35 @@ export class WebuiService {
     return getProjectStats({ sourceId: projectId, tenantId });
   }
 
-  async getProjectGraph(projectId: string, tenantId = config.DEFAULT_TENANT_ID) {
-    return getProjectGraph({ sourceId: projectId, tenantId });
+  async getProjectGraph(
+    projectId: string,
+    input: { chunkIds?: string[]; eventIds?: string[]; entityIds?: string[]; query?: string; limit?: number } = {},
+    tenantId = config.DEFAULT_TENANT_ID
+  ) {
+    return getProjectGraph({ sourceId: projectId, tenantId, ...input });
   }
 
-  async updateDocument(documentId: string, input: { title?: string }, tenantId = config.DEFAULT_TENANT_ID) {
+  async updateDocument(
+    documentId: string,
+    input: {
+      title?: string;
+      sourceName?: string | null;
+      sourceType?: string | null;
+      sourceDate?: string | null;
+      sourceAuthor?: string | null;
+      sourceUrl?: string | null;
+    },
+    tenantId = config.DEFAULT_TENANT_ID
+  ) {
     const document = await updateDocument({
       documentId,
       tenantId,
-      title: input.title
+      title: input.title,
+      ...(Object.prototype.hasOwnProperty.call(input, "sourceName") ? { sourceName: input.sourceName } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, "sourceType") ? { sourceType: input.sourceType } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, "sourceDate") ? { sourceDate: input.sourceDate } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, "sourceAuthor") ? { sourceAuthor: input.sourceAuthor } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, "sourceUrl") ? { sourceUrl: input.sourceUrl } : {})
     });
     if (!document) {
       throw new Error("文档不存在");

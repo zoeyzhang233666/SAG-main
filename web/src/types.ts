@@ -28,8 +28,8 @@ export interface DocumentRecord {
 }
 
 export interface EmbeddingPreview {
-  dimensions: number;
-  sample: number[];
+  dimensions?: number;
+  sample?: number[];
 }
 
 export interface ChunkRecord {
@@ -162,6 +162,8 @@ export interface ProjectGraphEventRecord {
 }
 
 export interface ProjectGraphRecord {
+  version?: string;
+  scope?: "overview" | "focus";
   chunks: ProjectGraphChunkRecord[];
   entities: ProjectGraphEntityRecord[];
   events: ProjectGraphEventRecord[];

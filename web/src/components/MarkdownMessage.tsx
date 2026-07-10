@@ -416,17 +416,6 @@ function MermaidDiagram({
           >
             {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            title={error ? "把 Mermaid 语法错误发送给 AI 重新生成" : "让 AI 重新生成更好的 Mermaid 图"}
-            disabled={isStreaming || !onRequestRedraw}
-            onClick={requestRedraw}
-          >
-            <Sparkles className="h-4 w-4" />
-            重绘
-          </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => void copySource()}>
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             {copied ? "已复制" : "复制源代码"}
@@ -434,6 +423,18 @@ function MermaidDiagram({
           <Button type="button" variant="outline" size="sm" disabled={!svg} onClick={downloadSvg}>
             <Download className="h-4 w-4" />
             下载 SVG
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-3"
+            title={error ? "把 Mermaid 语法错误发送给 AI 重新生成" : "让 AI 重新生成更好的 Mermaid 图"}
+            disabled={isStreaming || !onRequestRedraw}
+            onClick={requestRedraw}
+          >
+            <Sparkles className="h-4 w-4" />
+            重绘
           </Button>
         </div>
       </div>

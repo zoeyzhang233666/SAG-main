@@ -181,7 +181,7 @@ function parseJsonDocuments(text: string, fallbackTitle?: string): ManualKnowled
 
 function looksLikeKnowledgeExport(value: Record<string, any>): value is Record<string, any> & { documents: any[] } {
   return value.schemaVersion === 1 &&
-    isRecord(value.idPolicy) &&
+    (value.idPolicy == null || isRecord(value.idPolicy)) &&
     isRecord(value.project) &&
     Array.isArray(value.documents);
 }

@@ -46,6 +46,9 @@ interface MultiOptions {
 
 type SearchProgressEmitter = (event: SearchProgressEvent) => void;
 const MAX_SEARCH_RESULTS = MAX_SEARCH_TOP_K;
+const FAST_ENTITY_OVERFETCH_MULTIPLIER = 3;
+const MAX_FAST_ENTITY_CANDIDATES = 100;
+const MAX_ENTITY_VARIANTS_PER_NORMALIZED_NAME = 2;
 
 export class SearchService {
   constructor(
@@ -110,27 +113,34 @@ export class SearchService {
       timings
     };
 
-    const queryVector = await timed(timings, "queryEmbedding", () => this.embeddings.generate(input.query), emit, {
+    const queryEmbedding = await timedOptional(timings, "queryEmbedding", () => this.embeddings.generate(input.query), emit, {
       title: "查询向量化",
       detail: "把用户问题转成向量，用于召回相关事件和切片。"
-    });
+    }, (error) => `查询向量化不可用，已继续使用文本检索：${formatSearchError(error)}`);
+    const queryVector = queryEmbedding.value;
+    if (!queryVector) {
+      appendFallbackReason(trace, queryEmbedding.fallbackDetail);
+    }
 
     let queryEntities: string[] = [];
     let recalledEntities: EntityRecord[] = [];
     if (searchMode === "fast") {
-      recalledEntities = await timed(timings, "step1Bm25Entities", () => searchEntitiesByText({
+      const matchedEntities = await timed(timings, "step1Bm25Entities", () => searchEntitiesByText({
         sourceIds: input.sourceIds,
         query: input.query,
-        limit: options.entityTopK
+        limit: resolveFastEntityCandidateLimit(options.entityTopK)
       }), emit, {
         title: "BM25 匹配查询实体",
         detail: "直接用用户问题在实体库做全文/BM25 匹配，不调用 LLM 抽取 key。"
       });
-      queryEntities = recalledEntities.map((entity) => entity.name);
+      recalledEntities = diversifyEntitiesByNormalizedName(matchedEntities, options.entityTopK);
+      queryEntities = uniqueEntityNames(recalledEntities.map((entity) => entity.name));
       trace.queryEntities = queryEntities;
       emitSearchStep(emit, timings, "step1Bm25Entities", {
         title: "BM25 匹配查询实体",
-        detail: recalledEntities.length === 0 ? "没有匹配到查询实体" : `匹配到 ${recalledEntities.length} 个查询实体`,
+        detail: recalledEntities.length === 0
+          ? "没有匹配到查询实体"
+          : `匹配到 ${matchedEntities.length} 个候选实体，按名称和证据分数去重后保留 ${recalledEntities.length} 个`,
         payload: recalledEntities.map((entity) => ({
           id: entity.id,
           name: entity.name,
@@ -139,10 +149,10 @@ export class SearchService {
         }))
       });
     } else {
-      queryEntities = await timed(timings, "step1ExtractEntities", () => this.llm.extractNamedEntities(input.query), emit, {
+      queryEntities = uniqueEntityNames(await timed(timings, "step1ExtractEntities", () => this.llm.extractNamedEntities(input.query), emit, {
         title: "抽取查询实体",
         detail: "识别用户问题中的关键实体。"
-      });
+      }));
       trace.queryEntities = queryEntities;
       emitSearchStep(emit, timings, "step1ExtractEntities", {
         title: "抽取查询实体",
@@ -151,22 +161,34 @@ export class SearchService {
       });
 
       recalledEntities = await timed(timings, "step2RetrieveEntities", async () => {
-        const exact = await searchEntitiesByName({
+        const exactPromise = searchEntitiesByName({
           sourceIds: input.sourceIds,
           names: queryEntities,
           limit: options.entityTopK
         });
-        const byVector: EntityRecord[] = [];
-        for (const entityName of queryEntities) {
-          const vector = await this.embeddings.generate(entityName);
-          byVector.push(...await searchEntitiesByVector({
-            sourceIds: input.sourceIds,
-            queryVector: vector,
-            topK: options.entityTopK,
-            threshold: options.keySimilarityThreshold
-          }));
+        const vectorPromise = queryVector && queryEntities.length > 0
+          ? timedOptional(timings, "step2EntityVectors", async () => {
+              const vectors = await this.embeddings.batchGenerate(queryEntities);
+              if (vectors.length !== queryEntities.length) {
+                throw new Error(`entity embedding count mismatch: expected=${queryEntities.length}, actual=${vectors.length}`);
+              }
+              const matches = await Promise.all(vectors.map((vector) => searchEntitiesByVector({
+                sourceIds: input.sourceIds,
+                queryVector: vector,
+                topK: options.entityTopK,
+                threshold: options.keySimilarityThreshold
+              })));
+              return matches.flat();
+            }, emit, {
+              title: "批量召回实体向量",
+              detail: "批量生成查询实体向量，并行召回相似实体。"
+            }, (error) => `实体向量召回不可用，已保留名称精确召回：${formatSearchError(error)}`)
+          : Promise.resolve({ value: [] as EntityRecord[], fallbackDetail: undefined });
+        const [exact, vectorResult] = await Promise.all([exactPromise, vectorPromise]);
+        if (vectorResult.fallbackDetail) {
+          appendFallbackReason(trace, vectorResult.fallbackDetail);
         }
-        return dedupeEntities([...exact, ...byVector]);
+        return dedupeEntities([...exact, ...(vectorResult.value ?? [])]);
       }, emit, {
         title: "召回相关实体",
         detail: "按实体名称和实体向量召回相关实体。"
@@ -186,38 +208,32 @@ export class SearchService {
       });
     }
 
-    const entityEventIds = await timed(timings, "step3EntityEvents", () => getEventIdsByEntityIds({
+    const entityEventIdsPromise = timed(timings, "step3EntityEvents", () => getEventIdsByEntityIds({
       entityIds: recalledEntities.map((entity) => entity.id),
       sourceIds: input.sourceIds
     }), emit, {
       title: "实体关联事件",
       detail: "读取召回实体关联的候选事件。"
     });
-    trace.entityEventIds = entityEventIds;
-    emitSearchStep(emit, timings, "step3EntityEvents", {
-      title: "实体关联事件",
-      detail: `找到 ${entityEventIds.length} 个实体关联事件`
-    });
-
-    const queryEvents = await timed(timings, "step3QueryEvents", () => searchEventsByTitleVector({
-      sourceIds: input.sourceIds,
-      queryVector,
-      topK: options.multiTopK * 3,
-      threshold: options.similarityThreshold
-    }).then((events) => events.slice(0, options.multiTopK)), emit, {
-      title: "标题向量召回事件",
-      detail: "按查询向量召回标题相关事件。"
-    });
-    trace.queryEventIds = queryEvents.map((event) => event.id);
-    trace.queryEvents = toTraceEvents(queryEvents);
-    appendEventSnapshots(trace, trace.queryEvents);
-    emitSearchStep(emit, timings, "step3QueryEvents", {
-      title: "标题向量召回事件",
-      detail: `召回 ${trace.queryEvents.length} 个标题相关事件`,
-      payload: trace.queryEvents
-    });
-
-    const textEvents = await timed(timings, "step3TextEvents", () => searchEventsByText({
+    const queryEventsPromise = queryVector
+      ? timed(timings, "step3QueryEvents", () => searchEventsByTitleVector({
+          sourceIds: input.sourceIds,
+          queryVector,
+          topK: options.multiTopK * 3,
+          threshold: options.similarityThreshold
+        }).then((events) => events.slice(0, options.multiTopK)), emit, {
+          title: "标题向量召回事件",
+          detail: "按查询向量召回标题相关事件。"
+        })
+      : Promise.resolve([] as EventRecord[]);
+    if (!queryVector) {
+      timings.step3QueryEvents = 0;
+      emitSearchStep(emit, timings, "step3QueryEvents", {
+        title: "标题向量召回事件",
+        detail: "查询向量不可用，标题向量召回已降级并跳过。"
+      }, "failed");
+    }
+    const textEventsPromise = timed(timings, "step3TextEvents", () => searchEventsByText({
       sourceIds: input.sourceIds,
       query: input.query,
       limit: options.multiTopK,
@@ -226,6 +242,28 @@ export class SearchService {
       title: "事件文本匹配",
       detail: "直接在事件标题、摘要和内容中匹配用户问题。"
     });
+    const [entityEventIds, queryEvents, textEvents] = await Promise.all([
+      entityEventIdsPromise,
+      queryEventsPromise,
+      textEventsPromise
+    ]);
+    trace.entityEventIds = entityEventIds;
+    emitSearchStep(emit, timings, "step3EntityEvents", {
+      title: "实体关联事件",
+      detail: `找到 ${entityEventIds.length} 个实体关联事件`
+    });
+
+    trace.queryEventIds = queryEvents.map((event) => event.id);
+    trace.queryEvents = toTraceEvents(queryEvents);
+    appendEventSnapshots(trace, trace.queryEvents);
+    if (queryVector) {
+      emitSearchStep(emit, timings, "step3QueryEvents", {
+        title: "标题向量召回事件",
+        detail: `召回 ${trace.queryEvents.length} 个标题相关事件`,
+        payload: trace.queryEvents
+      });
+    }
+
     trace.textEventIds = textEvents.map((event) => event.id);
     trace.textEvents = toTraceEvents(textEvents);
     appendEventSnapshots(trace, trace.textEvents);
@@ -241,13 +279,34 @@ export class SearchService {
       ...textEvents.map((event) => event.id)
     ]);
     if (seedEventIds.length === 0) {
-      trace.fallbackReason = "no seed events; used vector chunk search";
+      const fallbackDetail = queryVector
+        ? "no seed events; used vector chunk search"
+        : "no seed events; query embedding unavailable and text retrieval found no matches";
+      appendFallbackReason(trace, fallbackDetail);
       emitSearchStep(emit, timings, "fallback", {
         title: "降级路径",
-        detail: trace.fallbackReason
+        detail: fallbackDetail
       });
-      const fallback = await this.vectorSearch({ ...input, strategy: "vector", topK: options.maxSections }, emit);
-      return { ...fallback, trace: input.returnTrace ? trace : undefined };
+      if (!queryVector) {
+        return {
+          traceId,
+          sections: [],
+          trace: input.returnTrace ? trace : undefined
+        };
+      }
+      const fallbackSections = await timed(timings, "fallbackVectorChunks", () => searchChunksByVector({
+        sourceIds: input.sourceIds,
+        queryVector,
+        topK: options.maxSections
+      }), emit, {
+        title: "向量召回切片",
+        detail: "按查询向量召回最相近的文档切片。"
+      });
+      return {
+        traceId,
+        sections: fallbackSections.slice(0, options.maxSections).map((section) => ({ ...section })),
+        trace: input.returnTrace ? trace : undefined
+      };
     }
 
     const seedEvents = await timed(timings, "step4FetchDetails", () => getEventsWithEntityIds(seedEventIds), emit, {
@@ -279,6 +338,11 @@ export class SearchService {
     });
 
     const coarseRanked = await timed(timings, "step6CoarseRank", async () => {
+      if (!queryVector) {
+        const candidateEventIds = unique([...seedEventIds, ...expanded.eventsetIds, ...expanded.eventset1Ids]);
+        const candidateEvents = await getEventsWithEntityIds(candidateEventIds);
+        return rankEventsByTextFallback(input.query, candidateEventIds, candidateEvents, options.maxEvents);
+      }
       if (options.subStrategy === "multi") {
         return coarseRankEventsByContent({
           sourceIds: input.sourceIds,
@@ -304,8 +368,10 @@ export class SearchService {
         : [];
       return [...eventsetRanked, ...eventset1Ranked];
     }, emit, {
-      title: "粗排事件",
-      detail: "按事件内容向量相似度粗排候选事件。"
+      title: queryVector ? "粗排事件" : "文本粗排事件",
+      detail: queryVector
+        ? "按事件内容向量相似度粗排候选事件。"
+        : "查询向量不可用，按文本命中、候选顺序和事件关联粗排候选事件。"
     });
     trace.coarseRankedEventIds = coarseRanked.map((event) => event.id);
     trace.coarseRankedEvents = toTraceEvents(coarseRanked);
@@ -314,8 +380,10 @@ export class SearchService {
       : [];
     appendEventSnapshots(trace, trace.coarseRankedEvents);
     emitSearchStep(emit, timings, "step6CoarseRank", {
-      title: "粗排事件",
-      detail: `粗排得到 ${trace.coarseRankedEvents.length} 个候选事件`,
+      title: queryVector ? "粗排事件" : "文本粗排事件",
+      detail: queryVector
+        ? `粗排得到 ${trace.coarseRankedEvents.length} 个候选事件`
+        : `文本粗排得到 ${trace.coarseRankedEvents.length} 个候选事件`,
       payload: trace.coarseRankedEvents
     });
 
@@ -339,12 +407,13 @@ export class SearchService {
         : "让 LLM 根据问题从候选事件中选择最终事件。"
     });
     if (selectedIds.length === 0) {
-      trace.fallbackReason = searchMode === "fast"
+      const fallbackDetail = searchMode === "fast"
         ? "rerank model returned no ids; used coarse rank"
         : "llm rerank returned no ids; used coarse rank";
+      appendFallbackReason(trace, fallbackDetail);
       selectedIds = coarseRanked.slice(0, options.rerankTopK).map((event) => event.id);
     }
-    selectedIds = filterUsefulEventIds(input.query, selectedIds, coarseRanked, options.rerankTopK);
+    selectedIds = filterUsefulEventIds(input.query, selectedIds, coarseRanked, options.rerankTopK, Boolean(queryVector));
     trace.rerankedEventIds = selectedIds;
     const eventSnapshotById = new Map((trace.eventSnapshots ?? []).map((event) => [event.id, event]));
     trace.rerankedEvents = selectedIds.map((id) => eventSnapshotById.get(id)).filter((event): event is SearchTraceEvent => Boolean(event));
@@ -381,7 +450,7 @@ export class SearchService {
     initialEntityIds: string[];
     sourceIds: string[];
     query: string;
-    queryVector: number[];
+    queryVector: number[] | null;
     options: MultiOptions;
   }): Promise<{ eventsetIds: string[]; eventset1Ids: string[]; expandedEventIds: string[] }> {
     if (input.options.subStrategy === "multi") {
@@ -390,7 +459,7 @@ export class SearchService {
     const stageA = await this.expandOneHop(input.seedEvents, input.initialEntityIds, input.sourceIds, new Set(input.seedEvents.keys()));
     const trackedEntityIdsForB = unique([...input.initialEntityIds, ...stageA.expandedEntityIds]);
     let seedForB = stageA.events;
-    if (input.options.subStrategy === "hopllm") {
+    if (input.options.subStrategy === "hopllm" && input.queryVector) {
       const eventsetIds = unique([...input.seedEvents.keys(), ...stageA.eventIds]);
       const ranked = await coarseRankEventsByContent({
         sourceIds: input.sourceIds,
@@ -527,7 +596,35 @@ export class SearchService {
   }
 }
 
-function filterUsefulEventIds(query: string, selectedIds: string[], candidates: EventRecord[], limit: number): string[] {
+function rankEventsByTextFallback(
+  query: string,
+  eventIds: string[],
+  events: Map<string, EventRecord & { entityIds: string[] }>,
+  limit: number
+): EventRecord[] {
+  const ranked: EventRecord[] = [];
+  unique(eventIds).forEach((id, index) => {
+    const event = events.get(id);
+    if (!event) {
+      return;
+    }
+    ranked.push({
+      ...event,
+      score: Math.max(event.score ?? 0, lexicalEventScore(query, event), 1 / (index + 1))
+    });
+  });
+  return ranked
+    .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.rank - right.rank || left.id.localeCompare(right.id))
+    .slice(0, Math.max(1, limit));
+}
+
+function filterUsefulEventIds(
+  query: string,
+  selectedIds: string[],
+  candidates: EventRecord[],
+  limit: number,
+  hasReliableVectorScores = true
+): string[] {
   if (selectedIds.length === 0 || candidates.length === 0) {
     return [];
   }
@@ -537,6 +634,9 @@ function filterUsefulEventIds(query: string, selectedIds: string[], candidates: 
     .filter((event): event is EventRecord => Boolean(event));
   if (ordered.length === 0) {
     return [];
+  }
+  if (!hasReliableVectorScores) {
+    return ordered.slice(0, Math.max(1, limit)).map((event) => event.id);
   }
   const bestScore = Math.max(...ordered.map((event) => event.score ?? 0));
   const minVectorScore = Math.max(0.34, Math.min(0.62, bestScore - 0.12));
@@ -590,6 +690,10 @@ function normalizeSearchText(value: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
+function formatSearchError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function resolveMultiOptions(input: SearchInput, defaultSearchTopK: number): MultiOptions {
   const multi = input.multi ?? {};
   const topK = resolveFinalSearchTopK(input.topK ?? defaultSearchTopK);
@@ -616,6 +720,96 @@ function resolveFinalSearchTopK(value?: number): number {
     return MAX_SEARCH_RESULTS;
   }
   return Math.max(1, Math.min(Math.trunc(value), MAX_SEARCH_RESULTS));
+}
+
+function resolveFastEntityCandidateLimit(entityTopK: number): number {
+  return Math.max(
+    entityTopK,
+    Math.min(entityTopK * FAST_ENTITY_OVERFETCH_MULTIPLIER, MAX_FAST_ENTITY_CANDIDATES)
+  );
+}
+
+function uniqueEntityNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const name of names) {
+    const trimmed = name.normalize("NFKC").trim();
+    const key = trimmed.toLowerCase().replace(/\s+/g, "");
+    if (!trimmed || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+function diversifyEntitiesByNormalizedName(entities: EntityRecord[], limit: number): EntityRecord[] {
+  if (entities.length === 0 || limit <= 0) {
+    return [];
+  }
+  type IndexedEntity = { entity: EntityRecord; index: number };
+  const grouped = new Map<string, Map<string, IndexedEntity>>();
+  entities.forEach((entity, index) => {
+    const nameKey = (entity.normalizedName || entity.name)
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "") || entity.id;
+    const variantKey = `${entity.sourceId}\u0000${entity.type.normalize("NFKC").trim().toLowerCase()}`;
+    const variants = grouped.get(nameKey) ?? new Map<string, IndexedEntity>();
+    const current = variants.get(variantKey);
+    if (!current || compareEntityEvidence({ entity, index }, current) < 0) {
+      variants.set(variantKey, { entity, index });
+    }
+    grouped.set(nameKey, variants);
+  });
+
+  const groups = [...grouped.values()]
+    .map((variants) => [...variants.values()].sort(compareEntityEvidence))
+    .sort((left, right) => compareEntityEvidence(left[0], right[0]));
+  const selected: EntityRecord[] = [];
+  const seenIds = new Set<string>();
+  for (let variantIndex = 0; variantIndex < MAX_ENTITY_VARIANTS_PER_NORMALIZED_NAME; variantIndex += 1) {
+    const candidates = groups
+      .map((group) => group[variantIndex])
+      .filter((candidate): candidate is IndexedEntity => Boolean(candidate))
+      .sort(compareEntityEvidence);
+    for (const candidate of candidates) {
+      if (seenIds.has(candidate.entity.id)) {
+        continue;
+      }
+      seenIds.add(candidate.entity.id);
+      selected.push(candidate.entity);
+      if (selected.length >= limit) {
+        return selected;
+      }
+    }
+  }
+  return selected;
+}
+
+function compareEntityEvidence(
+  left: { entity: EntityRecord; index: number },
+  right: { entity: EntityRecord; index: number }
+): number {
+  const leftScore = Number.isFinite(left.entity.score) ? left.entity.score ?? 0 : 0;
+  const rightScore = Number.isFinite(right.entity.score) ? right.entity.score ?? 0 : 0;
+  return rightScore - leftScore || left.index - right.index || left.entity.id.localeCompare(right.entity.id);
+}
+
+function appendFallbackReason(trace: SearchTrace, detail?: string): void {
+  const normalized = detail?.trim();
+  if (!normalized) {
+    return;
+  }
+  if (!trace.fallbackReason) {
+    trace.fallbackReason = normalized;
+    return;
+  }
+  if (!trace.fallbackReason.split("; ").includes(normalized)) {
+    trace.fallbackReason = `${trace.fallbackReason}; ${normalized}`;
+  }
 }
 
 function collectNewEntityIds(
@@ -670,6 +864,34 @@ async function timed<T>(
       }, "failed");
     }
     throw error;
+  }
+}
+
+async function timedOptional<T>(
+  timings: Record<string, number>,
+  key: string,
+  fn: () => Promise<T>,
+  emit: SearchProgressEmitter | undefined,
+  step: { title: string; detail: string; payload?: unknown },
+  fallbackDetail: (error: unknown) => string
+): Promise<{ value: T | null; fallbackDetail?: string }> {
+  const start = performance.now();
+  if (emit && step) {
+    emitSearchStep(emit, timings, key, step, "running");
+  }
+  try {
+    const value = await fn();
+    timings[key] = Math.round((performance.now() - start) * 100) / 100;
+    emitSearchStep(emit, timings, key, step, "done");
+    return { value };
+  } catch (error) {
+    timings[key] = Math.round((performance.now() - start) * 100) / 100;
+    const detail = fallbackDetail(error);
+    emitSearchStep(emit, timings, key, {
+      ...step,
+      detail
+    }, "failed");
+    return { value: null, fallbackDetail: detail };
   }
 }
 

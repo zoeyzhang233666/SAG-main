@@ -98,7 +98,8 @@ describe("manual knowledge import", () => {
     expect(documents[0].chunks[0].event.entities[0]).toEqual({
       type: "原料",
       name: "环氧丙烷",
-      description: "开环聚合的原料"
+      description: "聚醚多元醇原料",
+      relation: "开环聚合的原料"
     });
   });
 });

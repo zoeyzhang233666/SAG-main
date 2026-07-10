@@ -26,6 +26,9 @@ const MAX_LOG_STRING_LENGTH = 6000;
 const MAX_LOG_ARRAY_ITEMS = 50;
 const MAX_LOG_OBJECT_KEYS = 80;
 const MAX_LOG_NUMERIC_ARRAY_PREVIEW_ITEMS = 16;
+const MAX_ERROR_DETAIL_LENGTH = 1200;
+const MAX_ERROR_CAUSE_DEPTH = 4;
+const MAX_AGGREGATE_ERROR_ITEMS = 4;
 const logs: ModelCallLogRecord[] = [];
 const importedLogIds = new Set<string>();
 const importedLogIdQueue: string[] = [];
@@ -56,11 +59,88 @@ export function createModelCallLogger(input: {
         status: "FAILED",
         request: input.request,
         response,
-        error: error instanceof Error ? error.message : String(error),
+        error: formatModelCallError(error),
         durationMs: Math.round(performance.now() - started)
       });
     }
   };
+}
+
+export function formatModelCallError(error: unknown): string {
+  const details: string[] = [];
+  collectModelCallErrorDetails(error, details, 0, new Set<unknown>());
+  const unique = [...new Set(details.map((item) => item.trim()).filter(Boolean))];
+  const formatted = unique.length > 0
+    ? unique.map((item, index) => index === 0 ? item : `cause: ${item}`).join(" | ")
+    : String(error);
+  return formatted.length <= MAX_ERROR_DETAIL_LENGTH
+    ? formatted
+    : `${formatted.slice(0, MAX_ERROR_DETAIL_LENGTH)}…`;
+}
+
+function collectModelCallErrorDetails(
+  value: unknown,
+  output: string[],
+  depth: number,
+  seen: Set<unknown>
+): void {
+  if (value == null || depth > MAX_ERROR_CAUSE_DEPTH || seen.has(value)) {
+    return;
+  }
+  seen.add(value);
+  if (value instanceof Error) {
+    const record = value as Error & {
+      code?: unknown;
+      errno?: unknown;
+      syscall?: unknown;
+      hostname?: unknown;
+      address?: unknown;
+      port?: unknown;
+      cause?: unknown;
+      errors?: unknown;
+    };
+    const context = [
+      readErrorField(record.code),
+      value.message?.trim(),
+      readErrorField(record.syscall),
+      readErrorField(record.hostname),
+      readErrorField(record.address),
+      readErrorField(record.port)
+    ].filter(Boolean);
+    if (context.length > 0) {
+      output.push([...new Set(context)].join(" "));
+    } else if (value.name) {
+      output.push(value.name);
+    }
+    if (Array.isArray(record.errors)) {
+      for (const nested of record.errors.slice(0, MAX_AGGREGATE_ERROR_ITEMS)) {
+        collectModelCallErrorDetails(nested, output, depth + 1, seen);
+      }
+    }
+    collectModelCallErrorDetails(record.cause, output, depth + 1, seen);
+    return;
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const detail = [
+      readErrorField(record.code),
+      readErrorField(record.message),
+      readErrorField(record.syscall),
+      readErrorField(record.hostname)
+    ].filter(Boolean);
+    if (detail.length > 0) {
+      output.push([...new Set(detail)].join(" "));
+    }
+    collectModelCallErrorDetails(record.cause, output, depth + 1, seen);
+    return;
+  }
+  output.push(String(value));
+}
+
+function readErrorField(value: unknown): string {
+  return typeof value === "string" || typeof value === "number"
+    ? String(value).trim()
+    : "";
 }
 
 export function listModelCallLogs(afterSequence = 0): {
