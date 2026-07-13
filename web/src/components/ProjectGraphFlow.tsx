@@ -26,6 +26,7 @@ import type {
   ProjectGraphEntityRecord,
   ProjectGraphEventRecord,
   ProjectGraphRecord,
+  ProjectGraphSuggestionRecord,
 } from "../types";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
@@ -124,6 +125,11 @@ export function ProjectGraphFlow(props: {
   defaultLayoutStyle?: string;
   language: SupportedLanguage;
   onSearch?: (query: string) => void;
+  onRequestSuggestions?: (
+    query: string,
+    signal: AbortSignal,
+  ) => Promise<ProjectGraphSuggestionRecord[]>;
+  onSelectSuggestion?: (suggestion: ProjectGraphSuggestionRecord) => void;
   onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
@@ -148,6 +154,11 @@ function ProjectGraphCanvas(props: {
   defaultLayoutStyle?: string;
   language: SupportedLanguage;
   onSearch?: (query: string) => void;
+  onRequestSuggestions?: (
+    query: string,
+    signal: AbortSignal,
+  ) => Promise<ProjectGraphSuggestionRecord[]>;
+  onSelectSuggestion?: (suggestion: ProjectGraphSuggestionRecord) => void;
   onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
@@ -179,6 +190,11 @@ function ProjectGraphCanvas(props: {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [graphQuery, setGraphQuery] = useState("");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [remoteSuggestionState, setRemoteSuggestionState] = useState<{
+    query: string;
+    loading: boolean;
+    suggestions: GraphSuggestion[];
+  }>({ query: "", loading: false, suggestions: [] });
   const [activeQueryLabel, setActiveQueryLabel] = useState("");
   const [queryLinkedNodeIds, setQueryLinkedNodeIds] = useState<Set<string>>(
     new Set(),
@@ -345,10 +361,30 @@ function ProjectGraphCanvas(props: {
     [props.graph],
   );
   const eventDisplayLimit = getGraphEventDisplayLimit(layoutStyle);
-  const suggestions = useMemo(
+  const localSuggestions = useMemo(
     () => rankGraphSuggestions(props.graph, graphQuery, 10, eventDisplayLimit),
     [eventDisplayLimit, graphQuery, props.graph],
   );
+  const normalizedSuggestionQuery = graphQuery.trim();
+  const remoteSuggestions = useMemo(
+    () =>
+      remoteSuggestionState.query === normalizedSuggestionQuery
+        ? remoteSuggestionState.suggestions
+        : [],
+    [normalizedSuggestionQuery, remoteSuggestionState],
+  );
+  const suggestions = useMemo(
+    () =>
+      diversifyGraphSuggestions(
+        [...remoteSuggestions, ...localSuggestions].sort(compareGraphSuggestions),
+        10,
+      ),
+    [localSuggestions, remoteSuggestions],
+  );
+  const suggestionsLoading =
+    Boolean(normalizedSuggestionQuery && props.onRequestSuggestions) &&
+    (remoteSuggestionState.query !== normalizedSuggestionQuery ||
+      remoteSuggestionState.loading);
   const graphIdentity = useMemo(
     () =>
       [
@@ -572,6 +608,50 @@ function ProjectGraphCanvas(props: {
     if (!activeShowcase) return;
     applyShowcase(activeShowcase);
   }, [activeShowcase, graphIdentity, effectiveFocus?.key]);
+
+  useEffect(() => {
+    const query = graphQuery.trim();
+    if (!query || !suggestionsOpen || !props.onRequestSuggestions) {
+      setRemoteSuggestionState({ query: "", loading: false, suggestions: [] });
+      return;
+    }
+
+    const controller = new AbortController();
+    setRemoteSuggestionState({ query, loading: true, suggestions: [] });
+    const timer = window.setTimeout(() => {
+      void props
+        .onRequestSuggestions?.(query, controller.signal)
+        .then((items) => {
+          if (controller.signal.aborted) return;
+          setRemoteSuggestionState({
+            query,
+            loading: false,
+            suggestions: items.map((item) => ({
+              ...item,
+              remote: true,
+              visibleEventCount:
+                item.kind === "entity"
+                  ? Math.min(item.relatedEventCount ?? 0, eventDisplayLimit)
+                  : undefined,
+            })),
+          });
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          setRemoteSuggestionState({ query, loading: false, suggestions: [] });
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    eventDisplayLimit,
+    graphQuery,
+    props.onRequestSuggestions,
+    suggestionsOpen,
+  ]);
 
   useEffect(() => {
     if (effectiveFocus || !appliedFocusKeyRef.current) return;
@@ -1064,6 +1144,23 @@ function ProjectGraphCanvas(props: {
     applyEventBatch({ ...activeEventBatch, offset: nextOffset });
   }
 
+  function selectSuggestion(suggestion: GraphSuggestion) {
+    const shouldLoadFromProject =
+      Boolean(suggestion.remote) ||
+      (suggestion.kind === "entity" && Boolean(props.onSelectSuggestion));
+    if (!shouldLoadFromProject) {
+      revealSuggestion(suggestion);
+      return;
+    }
+    setGraphQuery(suggestion.label);
+    setSuggestionsOpen(false);
+    if (props.onSelectSuggestion) {
+      props.onSelectSuggestion(suggestion);
+      return;
+    }
+    props.onSearch?.(suggestion.label);
+  }
+
   function revealSuggestion(suggestion: GraphSuggestion) {
     appliedFocusKeyRef.current = null;
     setIgnoredFocusKey(props.focus?.key ?? null);
@@ -1313,9 +1410,12 @@ function ProjectGraphCanvas(props: {
           }}
           onFocus={() => setSuggestionsOpen(true)}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) {
+              return;
+            }
             if (event.key === "Enter" && suggestions[0]) {
               event.preventDefault();
-              revealSuggestion(suggestions[0]);
+              selectSuggestion(suggestions[0]);
               return;
             }
             if (event.key === "Enter") {
@@ -1338,11 +1438,11 @@ function ProjectGraphCanvas(props: {
             {suggestions.length > 0 ? (
               suggestions.map((suggestion) => (
                 <button
-                  key={`${suggestion.kind}-${suggestion.id}`}
+                  key={graphSuggestionDedupeKey(suggestion)}
                   type="button"
                   className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left hover:bg-accent"
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => revealSuggestion(suggestion)}
+                  onClick={() => selectSuggestion(suggestion)}
                 >
                   <span className="min-w-0 truncate text-sm">
                     <RichTextFragment text={suggestion.label} />
@@ -1352,6 +1452,14 @@ function ProjectGraphCanvas(props: {
                   </span>
                 </button>
               ))
+            ) : suggestionsLoading ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">
+                {graphText(
+                  props.language,
+                  "正在搜索全项目知识库…",
+                  "Searching the full project knowledge base…",
+                )}
+              </div>
             ) : (
               <div className="px-3 py-2 text-xs text-muted-foreground">
                 {graphText(
@@ -3073,8 +3181,11 @@ type GraphSuggestion = {
   kind: "chunk" | "entity" | "event";
   score: number;
   weight: number;
+  remote?: boolean;
   entityIds?: string[];
+  entityCount?: number;
   relatedEventCount?: number;
+  normalizedEntityName?: string;
   visibleEventCount?: number;
 };
 
@@ -3139,7 +3250,9 @@ function rankGraphSuggestions(
       score: score + 8,
       weight: relatedEventCount,
       entityIds: orderedEntities.map((entity) => entity.id),
+      entityCount: orderedEntities.length,
       relatedEventCount,
+      normalizedEntityName: graphEntitySuggestionGroupKey(representative),
       visibleEventCount: Math.min(
         relatedEventCount,
         eventDisplayLimit,
@@ -3207,18 +3320,32 @@ function addGraphSuggestion(
 }
 
 function graphSuggestionDedupeKey(suggestion: GraphSuggestion) {
-  if (suggestion.kind === "entity" && suggestion.entityIds?.length) {
-    return `${suggestion.kind}-${suggestion.entityIds.join("|")}`;
+  if (suggestion.kind === "entity") {
+    const nameKey =
+      suggestion.normalizedEntityName?.trim() ||
+      normalizeGraphEntityName(suggestion.label);
+    return `${suggestion.kind}-${nameKey || suggestion.id}`;
   }
   return `${suggestion.kind}-${suggestion.id}`;
 }
 
 function graphEntitySuggestionGroupKey(entity: ProjectGraphEntityRecord) {
   return (
-    normalizeGraphText(entity.normalizedName || entity.name) ||
-    normalizeGraphText(entity.name) ||
+    entity.normalizedName?.normalize("NFKC").trim().toLocaleLowerCase() ||
+    normalizeGraphEntityName(entity.name) ||
     entity.id
   );
+}
+
+function normalizeGraphEntityName(value: string): string {
+  return value
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[\u200B-\u200D\uFEFF\s]+/g, "")
+    .replace(/[‐‑‒–—−﹣]/g, "-")
+    .replace(/[、﹑]/g, ",")
+    .replace(/[·•・]/g, "·");
 }
 
 function formatGraphSuggestionKindLabel(
@@ -3227,19 +3354,15 @@ function formatGraphSuggestionKindLabel(
 ) {
   if (suggestion.kind === "chunk") return graphText(language, "切片", "Chunk");
   if (suggestion.kind === "event") return graphText(language, "事件", "Event");
+  const entityCount =
+    suggestion.entityCount ?? suggestion.entityIds?.length ?? 1;
   const relatedEventCount = suggestion.relatedEventCount ?? 0;
-  const visibleEventCount = suggestion.visibleEventCount ?? relatedEventCount;
-  if (relatedEventCount > visibleEventCount) {
-    return graphText(
-      language,
-      `实体 · 展示事件 ${visibleEventCount}/${relatedEventCount} 个`,
-      `Entity · showing ${visibleEventCount}/${relatedEventCount} events`,
-    );
-  }
   return graphText(
     language,
-    `实体 · 关联事件 ${relatedEventCount} 个`,
-    `Entity · ${relatedEventCount} related ${
+    `同名实体 ${entityCount} 个 · 相关事件 ${relatedEventCount} 个`,
+    `${entityCount} same-name ${
+      entityCount === 1 ? "entity" : "entities"
+    } · ${relatedEventCount} related ${
       relatedEventCount === 1 ? "event" : "events"
     }`,
   );

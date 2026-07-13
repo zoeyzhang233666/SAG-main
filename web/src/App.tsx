@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -59,6 +60,7 @@ import type {
   ModelCallLogRecord,
   ProjectGraphEntityRecord,
   ProjectGraphRecord,
+  ProjectGraphSuggestionRecord,
   ProjectStatsRecord,
   ChunkingMode,
   PublicAiProviderSettings,
@@ -158,12 +160,14 @@ type GraphFocus = {
   chunkIds: string[];
   eventIds: string[];
   entityIds: string[];
+  entityName?: string;
   primaryEntityId?: string;
 };
 type ProjectGraphRequestInput = {
   chunkIds?: string[];
   eventIds?: string[];
   entityIds?: string[];
+  entityName?: string;
   query?: string;
   limit?: number;
 };
@@ -735,6 +739,56 @@ function AppShell() {
       };
     });
   }
+
+  const requestProjectGraphSuggestions = useCallback(
+    async (query: string, signal: AbortSignal) => {
+      const projectId = selectedProjectId;
+      if (!projectId || !query.trim()) return [];
+      const response = await api.getProjectGraphSuggestions(
+        projectId,
+        { query, limit: 10 },
+        signal,
+      );
+      return response.suggestions;
+    },
+    [selectedProjectId],
+  );
+
+  const selectProjectGraphSuggestion = useCallback(
+    (suggestion: ProjectGraphSuggestionRecord) => {
+      const entityIds =
+        suggestion.kind === "entity"
+          ? uniqueStrings(
+              suggestion.entityIds?.length
+                ? suggestion.entityIds
+                : [suggestion.id],
+            )
+          : [];
+      const eventIds = suggestion.kind === "event" ? [suggestion.id] : [];
+      const chunkIds = suggestion.kind === "chunk" ? [suggestion.id] : [];
+      const entityName =
+        suggestion.kind === "entity"
+          ? suggestion.normalizedEntityName?.trim() || undefined
+          : undefined;
+      const key = [
+        "graph-suggestion",
+        suggestion.kind,
+        entityName ?? suggestion.id,
+        ...entityIds,
+      ].join(":");
+      setGraphFocus({
+        key,
+        query: suggestion.label,
+        chunkIds,
+        eventIds,
+        entityIds,
+        entityName,
+        primaryEntityId:
+          suggestion.kind === "entity" ? suggestion.id : undefined,
+      });
+    },
+    [],
+  );
 
   async function ensureProjectAssetDataLoaded(
     kind: ProjectAssetDataKind | "all" | null = "all",
@@ -2449,6 +2503,8 @@ function AppShell() {
                 isLoading={projectGraphStatus === "loading"}
                 defaultLayoutStyle={aiSettings?.graphDefaultLayoutStyle}
                 onSearch={searchProjectGraph}
+                onRequestSuggestions={requestProjectGraphSuggestions}
+                onSelectSuggestion={selectProjectGraphSuggestion}
                 onOpenChunk={(chunkId) => void openChunkDetail(chunkId)}
                 onOpenEvent={(eventId) => void openEventDetail(eventId)}
                 onOpenEntity={(entityId) => void openEntityDetail(entityId)}
@@ -6559,6 +6615,11 @@ function ProjectGraphWorkspace(props: {
   isLoading: boolean;
   defaultLayoutStyle?: string;
   onSearch: (query: string) => void;
+  onRequestSuggestions: (
+    query: string,
+    signal: AbortSignal,
+  ) => Promise<ProjectGraphSuggestionRecord[]>;
+  onSelectSuggestion: (suggestion: ProjectGraphSuggestionRecord) => void;
   onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
@@ -6636,6 +6697,8 @@ function ProjectGraphWorkspace(props: {
           defaultLayoutStyle={props.defaultLayoutStyle}
           language={language}
           onSearch={props.onSearch}
+          onRequestSuggestions={props.onRequestSuggestions}
+          onSelectSuggestion={props.onSelectSuggestion}
           onOpenChunk={props.onOpenChunk}
           onOpenEvent={props.onOpenEvent}
           onOpenEntity={props.onOpenEntity}
@@ -11906,9 +11969,13 @@ function buildProjectGraphRequestInput(
   const chunkIds = uniqueStrings(focus?.chunkIds ?? []).slice(0, 80);
   const eventIds = uniqueStrings(focus?.eventIds ?? []).slice(0, 160);
   const entityIds = uniqueStrings(focus?.entityIds ?? []).slice(0, 120);
+  const entityName = focus?.entityName?.trim() ?? "";
   const query = focus?.query.trim() ?? "";
   const hasFocus =
-    chunkIds.length > 0 || eventIds.length > 0 || entityIds.length > 0;
+    chunkIds.length > 0 ||
+    eventIds.length > 0 ||
+    entityIds.length > 0 ||
+    Boolean(entityName);
   if (!hasFocus) {
     if (query) {
       return { query, limit: 240 };
@@ -11919,6 +11986,7 @@ function buildProjectGraphRequestInput(
     chunkIds,
     eventIds,
     entityIds,
+    entityName: entityName || undefined,
     limit: 240,
   };
 }
@@ -11931,6 +11999,7 @@ function buildProjectGraphLoadKey(
     projectId,
     input.limit ?? "",
     input.query ?? "",
+    input.entityName ?? "",
     uniqueStrings(input.chunkIds ?? []).sort().join(","),
     uniqueStrings(input.eventIds ?? []).sort().join(","),
     uniqueStrings(input.entityIds ?? []).sort().join(","),

@@ -177,6 +177,20 @@ export interface ProjectGraphRecord {
   }>;
 }
 
+export type ProjectGraphSuggestionKind = "chunk" | "entity" | "event";
+
+export interface ProjectGraphSuggestionRecord {
+  id: string;
+  kind: ProjectGraphSuggestionKind;
+  label: string;
+  score: number;
+  weight: number;
+  entityIds?: string[];
+  entityCount?: number;
+  relatedEventCount?: number;
+  normalizedEntityName?: string;
+}
+
 export type SearchStreamEvent =
   | SearchProgressEvent
   | { type: "done"; result: SearchResult }

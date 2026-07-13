@@ -20,6 +20,7 @@ import type {
   ProjectGraphEntityRecord,
   ProjectGraphEventRecord,
   ProjectGraphRecord,
+  ProjectGraphSuggestionRecord,
   ProjectStatsRecord,
   SourceRecord
 } from "../types.js";
@@ -621,6 +622,204 @@ export async function searchEntitiesByText(input: {
     [input.sourceIds, query, input.limit]
   );
   return result.rows.map(entityFromRow);
+}
+
+export async function searchProjectGraphSuggestions(input: {
+  sourceId: string;
+  tenantId: string;
+  query: string;
+  limit?: number;
+}): Promise<ProjectGraphSuggestionRecord[]> {
+  const query = input.query.trim();
+  if (!query) {
+    return [];
+  }
+  const limit = Math.min(20, Math.max(1, Math.floor(input.limit ?? 10)));
+  const candidateLimit = Math.max(18, limit * 3);
+  const result = await pool.query(
+    `
+      with q as (
+        select
+          websearch_to_tsquery('simple', $3) as tsq,
+          lower($3) as raw_query
+      ),
+      entity_candidates as (
+        select
+          ent.id,
+          ent.name,
+          ent.normalized_name,
+          greatest(
+            case when ent.normalized_name = q.raw_query then 1000 else 0 end,
+            case when ent.normalized_name like q.raw_query || '%' then 900 else 0 end,
+            case when ent.normalized_name like '%' || q.raw_query || '%' then 800 else 0 end,
+            coalesce(ts_rank_cd(ent.search_text, q.tsq) * 300, 0),
+            similarity(ent.normalized_name, q.raw_query) * 500
+          ) + 20 as score
+        from entities ent
+        cross join q
+        where ent.source_id = $1
+          and exists (
+            select 1
+            from event_entities active_ee
+            join events active_e on active_e.id = active_ee.event_id
+            join documents active_d on active_d.id = active_e.document_id
+            join sources active_s on active_s.id = active_e.source_id
+            where active_ee.entity_id = ent.id
+              and active_e.source_id = $1
+              and active_s.tenant_id = $2
+              and active_s.archived_at is null
+              and active_d.archived_at is null
+              and active_e.deleted_at is null
+          )
+          and (
+            ent.search_text @@ q.tsq
+            or ent.normalized_name % q.raw_query
+            or ent.normalized_name like '%' || q.raw_query || '%'
+            or q.raw_query like '%' || ent.normalized_name || '%'
+          )
+      ),
+      entity_matches as (
+        select
+          (array_agg(ec.id order by ec.score desc, ec.name, ec.id))[1] as id,
+          'entity'::text as kind,
+          (array_agg(ec.name order by ec.score desc, length(ec.name) desc, ec.name, ec.id))[1] as label,
+          max(ec.score) as score,
+          count(distinct ee.event_id)::int as weight,
+          array_agg(distinct ec.id order by ec.id)::uuid[] as entity_ids,
+          count(distinct ee.event_id)::int as related_event_count,
+          count(distinct ec.id)::int as entity_count,
+          ec.normalized_name as normalized_entity_name
+        from entity_candidates ec
+        join event_entities ee on ee.entity_id = ec.id
+        join events e on e.id = ee.event_id
+        join documents d on d.id = e.document_id
+        join sources s on s.id = e.source_id
+        where e.source_id = $1
+          and s.tenant_id = $2
+          and s.archived_at is null
+          and d.archived_at is null
+          and e.deleted_at is null
+        group by ec.normalized_name
+        order by score desc, weight desc, label
+        limit $4
+      ),
+      event_matches as (
+        select
+          e.id,
+          'event'::text as kind,
+          e.title as label,
+          greatest(
+            case when lower(e.title) = q.raw_query then 960 else 0 end,
+            case when lower(e.title) like q.raw_query || '%' then 860 else 0 end,
+            case when lower(e.title) like '%' || q.raw_query || '%' then 760 else 0 end,
+            coalesce(ts_rank_cd(e.search_text, q.tsq) * 280, 0),
+            similarity(lower(e.title), q.raw_query) * 420
+          ) as score,
+          count(distinct ee.entity_id)::int as weight,
+          null::uuid[] as entity_ids,
+          null::int as related_event_count,
+          null::int as entity_count,
+          null::text as normalized_entity_name
+        from events e
+        join documents d on d.id = e.document_id
+        join sources s on s.id = e.source_id
+        left join event_entities ee on ee.event_id = e.id
+        cross join q
+        where e.source_id = $1
+          and s.tenant_id = $2
+          and s.archived_at is null
+          and d.archived_at is null
+          and e.deleted_at is null
+          and (
+            e.search_text @@ q.tsq
+            or lower(e.title) like '%' || q.raw_query || '%'
+            or lower(e.title) % q.raw_query
+          )
+        group by e.id, q.raw_query, q.tsq
+        order by score desc, weight desc, e.rank, e.title
+        limit $4
+      ),
+      chunk_matches as (
+        select
+          c.id,
+          'chunk'::text as kind,
+          coalesce(
+            nullif(btrim(c.heading), ''),
+            left(regexp_replace(c.content, E'\\s+', ' ', 'g'), 80)
+          ) as label,
+          greatest(
+            case when lower(coalesce(c.heading, '')) = q.raw_query then 920 else 0 end,
+            case when lower(coalesce(c.heading, '')) like q.raw_query || '%' then 820 else 0 end,
+            case when lower(coalesce(c.heading, '')) like '%' || q.raw_query || '%' then 720 else 0 end,
+            coalesce(ts_rank_cd(c.search_text, q.tsq) * 260, 0),
+            similarity(lower(coalesce(c.heading, '')), q.raw_query) * 380
+          ) as score,
+          count(distinct e.id)::int as weight,
+          null::uuid[] as entity_ids,
+          null::int as related_event_count,
+          null::int as entity_count,
+          null::text as normalized_entity_name
+        from source_chunks c
+        join sources s on s.id = c.source_id
+        left join documents d on d.id = c.document_id
+        left join events e on e.chunk_id = c.id and e.deleted_at is null
+        cross join q
+        where c.source_id = $1
+          and s.tenant_id = $2
+          and s.archived_at is null
+          and (d.id is null or d.archived_at is null)
+          and (
+            c.search_text @@ q.tsq
+            or lower(coalesce(c.heading, '')) like '%' || q.raw_query || '%'
+            or lower(coalesce(c.heading, '')) % q.raw_query
+          )
+        group by c.id, q.raw_query, q.tsq
+        order by score desc, weight desc, c.rank, label
+        limit $4
+      )
+      select
+        id,
+        kind,
+        label,
+        score,
+        weight,
+        entity_ids,
+        related_event_count,
+        entity_count,
+        normalized_entity_name
+      from (
+        select * from entity_matches
+        union all
+        select * from event_matches
+        union all
+        select * from chunk_matches
+      ) matches
+      where score > 0
+      order by score desc, weight desc, label
+      limit $5
+    `,
+    [input.sourceId, input.tenantId, query, candidateLimit, limit]
+  );
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    kind: String(row.kind) as ProjectGraphSuggestionRecord["kind"],
+    label: String(row.label),
+    score: Number(row.score ?? 0),
+    weight: Number(row.weight ?? 0),
+    entityIds: Array.isArray(row.entity_ids)
+      ? row.entity_ids.map(String)
+      : undefined,
+    entityCount:
+      row.entity_count == null ? undefined : Number(row.entity_count),
+    relatedEventCount:
+      row.related_event_count == null
+        ? undefined
+        : Number(row.related_event_count),
+    normalizedEntityName:
+      row.normalized_entity_name == null
+        ? undefined
+        : String(row.normalized_entity_name)
+  }));
 }
 
 export async function getEventIdsByEntityIds(input: {
@@ -1231,12 +1430,37 @@ export async function getProjectGraph(input: {
   chunkIds?: string[];
   eventIds?: string[];
   entityIds?: string[];
+  entityName?: string;
   query?: string;
   limit?: number;
 }): Promise<ProjectGraphRecord> {
   const chunkIds = uniqueIds(input.chunkIds);
   const requestedEventIds = uniqueIds(input.eventIds);
   const graphQuery = input.query?.trim() ?? "";
+  const normalizedEntityName = input.entityName?.trim() ?? "";
+  const exactEntityGroupIds = normalizedEntityName
+    ? (
+        await pool.query(
+          `
+            select distinct ent.id
+            from entities ent
+            join event_entities ee on ee.entity_id = ent.id
+            join events e on e.id = ee.event_id
+            join documents d on d.id = e.document_id
+            join sources s on s.id = e.source_id
+            where ent.source_id = $1
+              and ent.normalized_name = $3
+              and e.source_id = $1
+              and s.tenant_id = $2
+              and s.archived_at is null
+              and d.archived_at is null
+              and e.deleted_at is null
+            order by ent.id
+          `,
+          [input.sourceId, input.tenantId, normalizedEntityName]
+        )
+      ).rows.map((row) => String(row.id))
+    : [];
   const queryMatchedEntityIds = graphQuery
     ? (await searchEntitiesByText({
         sourceIds: [input.sourceId],
@@ -1244,14 +1468,22 @@ export async function getProjectGraph(input: {
         limit: 80
       })).map((entity) => entity.id)
     : [];
-  const requestedEntityIds = uniqueIds([
-    ...uniqueIds(input.entityIds),
-    ...queryMatchedEntityIds
-  ]);
+  const graphCollectionLimit = normalizedEntityName
+    ? Number.MAX_SAFE_INTEGER
+    : MAX_PROJECT_GRAPH_LIMIT;
+  const requestedEntityIds = uniqueIds(
+    [
+      ...uniqueIds(input.entityIds),
+      ...exactEntityGroupIds,
+      ...queryMatchedEntityIds
+    ],
+    graphCollectionLimit
+  );
   const hasFocus =
     chunkIds.length > 0 ||
     requestedEventIds.length > 0 ||
     requestedEntityIds.length > 0 ||
+    normalizedEntityName.length > 0 ||
     graphQuery.length > 0;
   const limit = clampProjectGraphLimit(input.limit, hasFocus);
 
@@ -1309,7 +1541,7 @@ export async function getProjectGraph(input: {
             end,
             ae.rank,
             ae.id
-          limit $6
+          limit $6::int
         `,
         [
           input.sourceId,
@@ -1317,7 +1549,7 @@ export async function getProjectGraph(input: {
           requestedEventIds,
           chunkIds,
           requestedEntityIds,
-          limit,
+          normalizedEntityName ? null : limit,
           graphQuery
         ]
       )
@@ -1383,16 +1615,22 @@ export async function getProjectGraph(input: {
     rank: Number(row.rank ?? 0),
     entityIds: Array.isArray(row.entity_ids) ? row.entity_ids.map(String) : []
   }));
-  const entityIds = uniqueIds([
-    ...requestedEntityIds,
-    ...events.flatMap((event) => event.entityIds)
-  ]);
-  const chunkIdsForGraph = uniqueIds([
-    ...chunkIds,
-    ...events
-      .map((event) => event.chunkId)
-      .filter((id): id is string => Boolean(id))
-  ]);
+  const entityIds = uniqueIds(
+    [
+      ...requestedEntityIds,
+      ...events.flatMap((event) => event.entityIds)
+    ],
+    graphCollectionLimit
+  );
+  const chunkIdsForGraph = uniqueIds(
+    [
+      ...chunkIds,
+      ...events
+        .map((event) => event.chunkId)
+        .filter((id): id is string => Boolean(id))
+    ],
+    graphCollectionLimit
+  );
   const chunksResult =
     chunkIdsForGraph.length === 0
       ? { rows: [] as Record<string, unknown>[] }

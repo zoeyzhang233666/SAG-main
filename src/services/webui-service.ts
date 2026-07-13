@@ -25,6 +25,7 @@ import {
   listSources,
   restoreDocument,
   restoreSource,
+  searchProjectGraphSuggestions,
   updateChunk,
   updateDocument,
   updateEntity,
@@ -478,10 +479,23 @@ export class WebuiService {
 
   async getProjectGraph(
     projectId: string,
-    input: { chunkIds?: string[]; eventIds?: string[]; entityIds?: string[]; query?: string; limit?: number } = {},
+    input: { chunkIds?: string[]; eventIds?: string[]; entityIds?: string[]; entityName?: string; query?: string; limit?: number } = {},
     tenantId = config.DEFAULT_TENANT_ID
   ) {
     return getProjectGraph({ sourceId: projectId, tenantId, ...input });
+  }
+
+  async searchProjectGraphSuggestions(
+    projectId: string,
+    input: { query: string; limit?: number },
+    tenantId = config.DEFAULT_TENANT_ID
+  ) {
+    return searchProjectGraphSuggestions({
+      sourceId: projectId,
+      tenantId,
+      query: input.query,
+      limit: input.limit
+    });
   }
 
   async updateDocument(

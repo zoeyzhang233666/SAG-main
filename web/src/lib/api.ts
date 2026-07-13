@@ -11,6 +11,7 @@ import type {
   ModelCallLogRecord,
   ManualImportFormat,
   ProjectGraphRecord,
+  ProjectGraphSuggestionRecord,
   ProjectStatsRecord,
   PublicAiProviderSettings,
   PublicMcpSettings,
@@ -42,7 +43,10 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       ...init,
       headers
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
     throw new Error("无法连接本地 SAG 服务。请确认后端仍在运行；若正在导入大文件，请更新并重启后端后重试。");
   }
   const text = await response.text();
@@ -103,17 +107,31 @@ export const api = {
 
   async getProjectGraph(
     projectId: string,
-    input: { chunkIds?: string[]; eventIds?: string[]; entityIds?: string[]; query?: string; limit?: number } = {},
+    input: { chunkIds?: string[]; eventIds?: string[]; entityIds?: string[]; entityName?: string; query?: string; limit?: number } = {},
   ) {
     const params = new URLSearchParams();
     if (input.chunkIds?.length) params.set("chunkIds", input.chunkIds.join(","));
     if (input.eventIds?.length) params.set("eventIds", input.eventIds.join(","));
     if (input.entityIds?.length) params.set("entityIds", input.entityIds.join(","));
+    if (input.entityName?.trim()) params.set("entityName", input.entityName.trim());
     if (input.query?.trim()) params.set("query", input.query.trim());
     if (input.limit) params.set("limit", String(input.limit));
     const query = params.toString();
     return request<{ graph: ProjectGraphRecord }>(
       `/api/projects/${projectId}/graph${query ? `?${query}` : ""}`,
+    );
+  },
+
+  async getProjectGraphSuggestions(
+    projectId: string,
+    input: { query: string; limit?: number },
+    signal?: AbortSignal,
+  ) {
+    const params = new URLSearchParams({ q: input.query.trim() });
+    if (input.limit) params.set("limit", String(input.limit));
+    return request<{ suggestions: ProjectGraphSuggestionRecord[] }>(
+      `/api/projects/${projectId}/graph/suggestions?${params.toString()}`,
+      { signal, cache: "no-store" },
     );
   },
 

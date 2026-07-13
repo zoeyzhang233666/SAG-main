@@ -103,8 +103,14 @@ const graphQuerySchema = z.object({
   chunkIds: z.string().optional(),
   eventIds: z.string().optional(),
   entityIds: z.string().optional(),
+  entityName: z.string().trim().max(240).optional(),
   query: z.string().trim().max(120).optional(),
   limit: z.coerce.number().int().positive().max(300).optional()
+});
+
+const graphSuggestionsQuerySchema = z.object({
+  q: z.string().trim().min(1).max(120),
+  limit: z.coerce.number().int().positive().max(20).default(10)
 });
 
 function parseUuidList(value?: string) {
@@ -424,9 +430,25 @@ export function buildHttpServer() {
         chunkIds: parseUuidList(query.chunkIds),
         eventIds: parseUuidList(query.eventIds),
         entityIds: parseUuidList(query.entityIds),
+        entityName: query.entityName,
         query: query.query,
         limit: query.limit
       })
+    };
+  });
+
+  app.get("/api/projects/:projectId/graph/suggestions", async (request) => {
+    const params = request.params as { projectId: string };
+    const query = graphSuggestionsQuerySchema.parse(request.query);
+    z.string().uuid().parse(params.projectId);
+    return {
+      suggestions: await webuiService.searchProjectGraphSuggestions(
+        params.projectId,
+        {
+          query: query.q,
+          limit: query.limit
+        }
+      )
     };
   });
 
