@@ -210,6 +210,16 @@ export function buildHttpServer() {
     }
   });
 
+  const desktopToken = process.env.SAG_DESKTOP_ACCESS_TOKEN;
+  if (desktopToken) {
+    app.addHook("onRequest", async (request, reply) => {
+      if (request.headers["x-sag-desktop-token"] !== desktopToken ||
+          request.headers.host !== "127.0.0.1:" + config.HTTP_PORT) {
+        return reply.code(401).send({ error: { code: "DESKTOP_UNAUTHORIZED", message: "Desktop session required" } });
+      }
+    });
+  }
+
   app.get("/health", async () => ({
     ok: true,
     service: "sag"
