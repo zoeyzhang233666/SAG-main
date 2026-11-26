@@ -14,3 +14,9 @@ backups/
 
 backups/
 *.dump
+
+desktop/build/
+desktop/release/
+postgres-runtime/
+pg-source/
+pgvector-source/

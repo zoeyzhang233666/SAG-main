@@ -1,0 +1,195 @@
+name: Desktop installers (V1)
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: desktop-v1-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  native:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            label: macOS ARM64 runtime
+            arch: arm64
+          - runner: windows-2025
+            label: Windows x64 runtime
+            arch: x64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.5'
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11'
+      - name: Confirm native architecture
+        shell: bash
+        run: test "$(node -p 'process.arch')" = "${{ matrix.arch }}"
+      - name: Install locked dependencies
+        shell: bash
+        run: npm ci --no-audit
+      - name: Audit V1 and desktop dependency locks
+        shell: bash
+        run: |
+          npm audit --audit-level=high
+          npm audit --prefix desktop --audit-level=high
+      - name: Build existing V1 frontend and backend
+        shell: bash
+        run: |
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Build PostgreSQL 16 and pgvector from pinned upstream sources
+        shell: bash
+        run: |
+          git init pg-source
+          git -C pg-source fetch --depth=1 https://github.com/postgres/postgres.git c0534eb02de050ac1035ad7b3ad7c3f02980f153
+          git -C pg-source checkout --detach FETCH_HEAD
+          git init pgvector-source
+          git -C pgvector-source fetch --depth=1 https://github.com/pgvector/pgvector.git f37c13f68b57d2c3472b2214fbcff699d6d34876
+          git -C pgvector-source checkout --detach FETCH_HEAD
+      - name: Compile native database (macOS)
+        if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '12.0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install bison flex
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          prefix="$GITHUB_WORKSPACE/postgres-runtime"
+          cd pg-source
+          ./configure --prefix="$prefix" --without-icu --without-readline --without-zlib
+          make -j 4
+          make install
+          # V1 uses PostgreSQL contrib extensions for text matching and normalization.
+          make -C contrib/pg_trgm all install
+          make -C contrib/unaccent all install
+          cd ../pgvector-source
+          make PG_CONFIG="$prefix/bin/pg_config" OPTFLAGS="-O2"
+          make PG_CONFIG="$prefix/bin/pg_config" install
+      - name: Compile native database (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pip install meson ninja
+          if ($LASTEXITCODE -ne 0) { throw 'Build tool install failed' }
+          choco install winflexbison3 -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'winflexbison install failed' }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs) { throw 'Visual Studio compiler not found' }
+          $prefix = "$env:GITHUB_WORKSPACE/postgres-runtime" -replace '\\','/'
+          $script = @"
+          @echo off
+          call "$vs\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
+          cd /d "$env:GITHUB_WORKSPACE\pg-source"
+          meson setup build --prefix="$prefix" --libdir=lib --buildtype=release --auto-features=disabled -Dssl=none -Duuid=none || exit /b 1
+          ninja -C build || exit /b 1
+          ninja -C build install || exit /b 1
+          rem Meson names the MSVC import library postgres.exe.lib; pgvector expects postgres.lib.
+          if not exist "$env:GITHUB_WORKSPACE\postgres-runtime\lib\postgres.lib" (
+            copy /Y "$env:GITHUB_WORKSPACE\postgres-runtime\lib\postgres.exe.lib" "$env:GITHUB_WORKSPACE\postgres-runtime\lib\postgres.lib" || exit /b 1
+          )
+          if not exist "$env:GITHUB_WORKSPACE\postgres-runtime\lib\postgres.lib" exit /b 1
+          cd /d "$env:GITHUB_WORKSPACE\pgvector-source"
+          set "PGROOT=$env:GITHUB_WORKSPACE\postgres-runtime"
+          nmake /F Makefile.win || exit /b 1
+          nmake /F Makefile.win install || exit /b 1
+          "@
+          $script | Set-Content -Encoding ascii "$env:RUNNER_TEMP\build-pg.cmd"
+          cmd.exe /d /c "$env:RUNNER_TEMP\build-pg.cmd"
+          if ($LASTEXITCODE -ne 0) { throw 'Native database build failed' }
+      - name: Smoke test relocated database and V1 migrations
+        shell: bash
+        run: node desktop/scripts/smoke-db.mjs
+      - name: Install locked Electron toolchain
+        working-directory: desktop
+        shell: bash
+        run: npm ci --no-audit
+      - name: Stage independent V1 runtime
+        shell: bash
+        run: |
+          node desktop/scripts/stage.mjs
+          npm ci --omit=dev --no-audit --prefix desktop/build/resources/backend
+      - name: Build desktop installer
+        working-directory: desktop
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_FOR_PULL_REQUEST: 'true'
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            npm run package -- --mac --arm64
+          else
+            npm run package -- --win --x64
+          fi
+      - name: Verify and launch actual Mac DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg=$(find desktop/release -maxdepth 1 -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          hdiutil verify "$dmg"
+          mount_dir=$(mktemp -d)
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$dmg"
+          install_dir=$(mktemp -d)
+          trap 'hdiutil detach "$mount_dir"; rmdir "$mount_dir"; rm -rf "$install_dir"' EXIT
+          app="$install_dir/SAG V1.app"
+          ditto "$mount_dir/SAG V1.app" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          file "$app/Contents/MacOS/SAG V1" | grep -F arm64
+          file "$app/Contents/Resources/postgres/bin/postgres" | grep -F arm64
+          node desktop/scripts/smoke-app.mjs "$app/Contents/MacOS/SAG V1"
+      - name: Verify and launch installed Windows EXE
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem desktop/release -Filter 'SAG-V1-Setup-*-win-x64.exe' | Select-Object -First 1
+          if (!$installer) { throw 'Missing Windows installer' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'SAG V1 installed'
+          $p = Start-Process -FilePath $installer.FullName -ArgumentList ('/S /D=' + $installDir) -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer exited $($p.ExitCode)" }
+          $exe = Join-Path $installDir 'SAG V1.exe'
+          node desktop/scripts/smoke-app.mjs $exe
+          if ($LASTEXITCODE -ne 0) { throw 'Installed application smoke failed' }
+      - name: Generate installer SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd desktop/release
+          if [ "$RUNNER_OS" = macOS ]; then
+            set -- SAG-V1-*-mac-arm64.dmg
+          else
+            set -- SAG-V1-Setup-*-win-x64.exe
+          fi
+          test "$#" -eq 1 && test -f "$1"
+          node -e 'const [file] = process.argv.slice(1); const fs = require("node:fs"); const hash = require("node:crypto").createHash("sha256"); fs.createReadStream(file).on("data", chunk => hash.update(chunk)).on("end", () => fs.writeFileSync(file + ".sha256", hash.digest("hex") + "  " + file + "\n"));' "$1"
+      - name: Upload verified installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sag-v1-${{ matrix.arch }}
+          path: |
+            desktop/release/SAG-V1-*-mac-arm64.dmg
+            desktop/release/SAG-V1-Setup-*-win-x64.exe
+            desktop/release/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

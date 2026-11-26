@@ -22,10 +22,10 @@ const webIndexFile = path.join(webDistDir, "index.html");
 const MAX_HTTP_BODY_BYTES = 64 * 1024 * 1024;
 
 const ingestSchema = z.object({
-  sourceId: z.string().uuid().optional(),
+  sourceId: z.guid().optional(),
   title: z.string().min(1),
   content: z.string().min(1),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   extract: z.boolean().optional(),
   waitForCompletion: z.boolean().optional(),
   chunking: z.object({
@@ -37,7 +37,7 @@ const ingestSchema = z.object({
 
 const searchSchema = z.object({
   query: z.string().min(1),
-  sourceIds: z.array(z.string().uuid()).min(1),
+  sourceIds: z.array(z.guid()).min(1),
   strategy: z.enum(["vector", "multi"]).optional(),
   searchMode: z.enum(["standard", "fast"]).optional(),
   subStrategy: z.enum(["multi", "multi1", "hopllm"]).optional(),
@@ -59,7 +59,7 @@ const searchSchema = z.object({
 });
 
 const uploadSchema = z.object({
-  sourceId: z.string().uuid().optional(),
+  sourceId: z.guid().optional(),
   title: z.string().min(1).optional(),
   fileName: z.string().min(1),
   content: z.string(),
@@ -72,7 +72,7 @@ const uploadSchema = z.object({
 });
 
 const structuredImportSchema = z.object({
-  sourceId: z.string().uuid(),
+  sourceId: z.guid(),
   title: z.string().min(1).optional(),
   fileName: z.string().min(1).optional(),
   format: z.enum(["auto", "json", "csv", "markdown"]).default("auto"),
@@ -80,7 +80,7 @@ const structuredImportSchema = z.object({
 });
 
 const structuredImportFileJobQuerySchema = z.object({
-  sourceId: z.string().uuid(),
+  sourceId: z.guid(),
   title: z.string().min(1).optional(),
   fileName: z.string().min(1),
   format: z.enum(["auto", "json", "csv", "markdown"]).default("auto")
@@ -119,7 +119,7 @@ function parseUuidList(value?: string) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
-    .map((item) => z.string().uuid().parse(item));
+    .map((item) => z.guid().parse(item));
 }
 
 const projectUpdateSchema = z.object({
@@ -156,7 +156,7 @@ const entityUpdateSchema = z.object({
 
 const createMcpSessionSchema = z.object({
   title: z.string().min(1).optional(),
-  sourceIds: z.array(z.string().uuid()).optional()
+  sourceIds: z.array(z.guid()).optional()
 });
 
 const mcpMessageSchema = z.object({
@@ -170,7 +170,7 @@ const mermaidRepairSchema = z.object({
 });
 
 const chunkAssetsSchema = z.object({
-  chunkIds: z.array(z.string().uuid()).min(1).max(50)
+  chunkIds: z.array(z.guid()).min(1).max(50)
 });
 
 const aiSettingsSchema = z.object({
@@ -209,6 +209,16 @@ export function buildHttpServer() {
       }
     }
   });
+
+  const desktopToken = process.env.SAG_DESKTOP_ACCESS_TOKEN;
+  if (desktopToken) {
+    app.addHook("onRequest", async (request, reply) => {
+      if (request.headers["x-sag-desktop-token"] !== desktopToken ||
+          request.headers.host !== "127.0.0.1:" + request.raw.socket.localPort) {
+        return reply.code(401).send({ error: { code: "DESKTOP_UNAUTHORIZED", message: "Desktop session required" } });
+      }
+    });
+  }
 
   app.get("/health", async () => ({
     ok: true,
@@ -353,7 +363,7 @@ export function buildHttpServer() {
 
   app.patch("/api/projects/:projectId", async (request) => {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     const input = projectUpdateSchema.parse(request.body);
     return {
       project: await webuiService.updateProject(params.projectId, input)
@@ -362,7 +372,7 @@ export function buildHttpServer() {
 
   app.post("/api/projects/:projectId/archive", async (request) => {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       project: await webuiService.archiveProject(params.projectId)
     };
@@ -370,7 +380,7 @@ export function buildHttpServer() {
 
   app.post("/api/projects/:projectId/restore", async (request) => {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       project: await webuiService.restoreProject(params.projectId)
     };
@@ -379,7 +389,7 @@ export function buildHttpServer() {
   app.delete("/api/projects/:projectId", async (request, reply) => {
     const params = request.params as { projectId: string };
     const query = request.query as { permanent?: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     if (query.permanent !== "true") {
       return reply.code(400).send({
         error: {
@@ -394,7 +404,7 @@ export function buildHttpServer() {
   app.get("/api/sources/:sourceId/documents", async (request) => {
     const params = request.params as { sourceId: string };
     const query = request.query as { includeArchived?: string };
-    z.string().uuid().parse(params.sourceId);
+    z.guid().parse(params.sourceId);
     return {
       documents: await webuiService.listDocuments(params.sourceId, {
         includeArchived: query.includeArchived === "true"
@@ -405,7 +415,7 @@ export function buildHttpServer() {
   app.get("/api/projects/:projectId/documents", async (request) => {
     const params = request.params as { projectId: string };
     const query = request.query as { includeArchived?: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       documents: await webuiService.listDocuments(params.projectId, {
         includeArchived: query.includeArchived === "true"
@@ -415,7 +425,7 @@ export function buildHttpServer() {
 
   app.get("/api/projects/:projectId/stats", async (request) => {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       stats: await webuiService.getProjectStats(params.projectId)
     };
@@ -424,7 +434,7 @@ export function buildHttpServer() {
   app.get("/api/projects/:projectId/graph", async (request) => {
     const params = request.params as { projectId: string };
     const query = graphQuerySchema.parse(request.query);
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       graph: await webuiService.getProjectGraph(params.projectId, {
         chunkIds: parseUuidList(query.chunkIds),
@@ -440,7 +450,7 @@ export function buildHttpServer() {
   app.get("/api/projects/:projectId/graph/suggestions", async (request) => {
     const params = request.params as { projectId: string };
     const query = graphSuggestionsQuerySchema.parse(request.query);
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       suggestions: await webuiService.searchProjectGraphSuggestions(
         params.projectId,
@@ -454,7 +464,7 @@ export function buildHttpServer() {
 
   app.get("/api/projects/:projectId/chunks", async (request) => {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       chunks: await webuiService.listProjectChunks(params.projectId)
     };
@@ -462,7 +472,7 @@ export function buildHttpServer() {
 
   app.get("/api/projects/:projectId/events", async (request) => {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       events: await webuiService.listProjectEvents(params.projectId)
     };
@@ -470,7 +480,7 @@ export function buildHttpServer() {
 
   app.get("/api/projects/:projectId/entities", async (request) => {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       entities: await webuiService.listProjectEntities(params.projectId)
     };
@@ -483,7 +493,7 @@ export function buildHttpServer() {
   ) {
     const params = request.params as { projectId: string };
     const query = request.query as { format?: string; profile?: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     const format = z.enum(["csv", "json"]).default("csv").parse(query.format);
     const profile = forcedProfile ?? z.enum(["simple", "full"]).default("simple").parse(query.profile);
     const exported = await projectExportService.exportProject(params.projectId, format, profile);
@@ -500,7 +510,7 @@ export function buildHttpServer() {
     forcedProfile?: "simple" | "full"
   ) {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     const query = exportFilesQuerySchema.parse(request.query);
     const profile = forcedProfile ?? query.profile;
     const exported = await projectExportService.exportProjectArchive(params.projectId, {
@@ -585,7 +595,7 @@ export function buildHttpServer() {
 
   app.get("/api/documents/import-structured/jobs/:jobId", async (request, reply) => {
     const params = request.params as { jobId: string };
-    z.string().uuid().parse(params.jobId);
+    z.guid().parse(params.jobId);
     const job = webuiService.getUploadJob(params.jobId);
     if (!job) {
       return reply.code(404).send(notFound("IMPORT_JOB_NOT_FOUND", "导入任务不存在"));
@@ -595,7 +605,7 @@ export function buildHttpServer() {
 
   app.get("/api/documents/upload/jobs/:jobId", async (request, reply) => {
     const params = request.params as { jobId: string };
-    z.string().uuid().parse(params.jobId);
+    z.guid().parse(params.jobId);
     const job = webuiService.getUploadJob(params.jobId);
     if (!job) {
       return reply.code(404).send(notFound("UPLOAD_JOB_NOT_FOUND", "上传任务不存在"));
@@ -605,7 +615,7 @@ export function buildHttpServer() {
 
   app.get("/api/documents/:documentId", async (request, reply) => {
     const params = request.params as { documentId: string };
-    z.string().uuid().parse(params.documentId);
+    z.guid().parse(params.documentId);
     const document = await webuiService.getDocument(params.documentId);
     if (!document) {
       return reply.code(404).send(notFound("DOCUMENT_NOT_FOUND", "文档不存在"));
@@ -615,7 +625,7 @@ export function buildHttpServer() {
 
   app.patch("/api/documents/:documentId", async (request) => {
     const params = request.params as { documentId: string };
-    z.string().uuid().parse(params.documentId);
+    z.guid().parse(params.documentId);
     const input = documentUpdateSchema.parse(request.body);
     return {
       document: await webuiService.updateDocument(params.documentId, input)
@@ -624,7 +634,7 @@ export function buildHttpServer() {
 
   app.post("/api/documents/:documentId/archive", async (request) => {
     const params = request.params as { documentId: string };
-    z.string().uuid().parse(params.documentId);
+    z.guid().parse(params.documentId);
     return {
       document: await webuiService.archiveDocument(params.documentId)
     };
@@ -632,7 +642,7 @@ export function buildHttpServer() {
 
   app.post("/api/documents/:documentId/restore", async (request) => {
     const params = request.params as { documentId: string };
-    z.string().uuid().parse(params.documentId);
+    z.guid().parse(params.documentId);
     return {
       document: await webuiService.restoreDocument(params.documentId)
     };
@@ -641,7 +651,7 @@ export function buildHttpServer() {
   app.delete("/api/documents/:documentId", async (request, reply) => {
     const params = request.params as { documentId: string };
     const query = request.query as { permanent?: string };
-    z.string().uuid().parse(params.documentId);
+    z.guid().parse(params.documentId);
     if (query.permanent !== "true") {
       return reply.code(400).send({
         error: {
@@ -655,7 +665,7 @@ export function buildHttpServer() {
 
   app.get("/api/documents/:documentId/chunks", async (request) => {
     const params = request.params as { documentId: string };
-    z.string().uuid().parse(params.documentId);
+    z.guid().parse(params.documentId);
     return {
       chunks: await webuiService.listChunks(params.documentId)
     };
@@ -663,7 +673,7 @@ export function buildHttpServer() {
 
   app.patch("/api/chunks/:chunkId", async (request) => {
     const params = request.params as { chunkId: string };
-    z.string().uuid().parse(params.chunkId);
+    z.guid().parse(params.chunkId);
     const input = chunkUpdateSchema.parse(request.body);
     return {
       chunk: await webuiService.updateChunk(params.chunkId, input)
@@ -672,13 +682,13 @@ export function buildHttpServer() {
 
   app.delete("/api/chunks/:chunkId", async (request) => {
     const params = request.params as { chunkId: string };
-    z.string().uuid().parse(params.chunkId);
+    z.guid().parse(params.chunkId);
     return webuiService.deleteChunk(params.chunkId);
   });
 
   app.get("/api/documents/:documentId/events", async (request) => {
     const params = request.params as { documentId: string };
-    z.string().uuid().parse(params.documentId);
+    z.guid().parse(params.documentId);
     return {
       events: await webuiService.listEvents(params.documentId)
     };
@@ -686,7 +696,7 @@ export function buildHttpServer() {
 
   app.get("/api/documents/:documentId/entities", async (request) => {
     const params = request.params as { documentId: string };
-    z.string().uuid().parse(params.documentId);
+    z.guid().parse(params.documentId);
     return {
       entities: await webuiService.listEntities(params.documentId)
     };
@@ -779,7 +789,7 @@ export function buildHttpServer() {
 
   app.get("/api/events/:eventId", async (request, reply) => {
     const params = request.params as { eventId: string };
-    z.string().uuid().parse(params.eventId);
+    z.guid().parse(params.eventId);
     const event = await webuiService.getEvent(params.eventId);
     if (!event) {
       return reply.code(404).send(notFound("EVENT_NOT_FOUND", "事件不存在"));
@@ -789,7 +799,7 @@ export function buildHttpServer() {
 
   app.patch("/api/events/:eventId", async (request) => {
     const params = request.params as { eventId: string };
-    z.string().uuid().parse(params.eventId);
+    z.guid().parse(params.eventId);
     const input = eventUpdateSchema.parse(request.body);
     return {
       detail: await webuiService.updateEvent(params.eventId, input)
@@ -798,13 +808,13 @@ export function buildHttpServer() {
 
   app.delete("/api/events/:eventId", async (request) => {
     const params = request.params as { eventId: string };
-    z.string().uuid().parse(params.eventId);
+    z.guid().parse(params.eventId);
     return webuiService.deleteEvent(params.eventId);
   });
 
   app.get("/api/entities/:entityId", async (request, reply) => {
     const params = request.params as { entityId: string };
-    z.string().uuid().parse(params.entityId);
+    z.guid().parse(params.entityId);
     const entity = await webuiService.getEntity(params.entityId);
     if (!entity) {
       return reply.code(404).send(notFound("ENTITY_NOT_FOUND", "实体不存在"));
@@ -814,7 +824,7 @@ export function buildHttpServer() {
 
   app.patch("/api/entities/:entityId", async (request) => {
     const params = request.params as { entityId: string };
-    z.string().uuid().parse(params.entityId);
+    z.guid().parse(params.entityId);
     const input = entityUpdateSchema.parse(request.body);
     return {
       detail: await webuiService.updateEntity(params.entityId, input)
@@ -823,7 +833,7 @@ export function buildHttpServer() {
 
   app.delete("/api/entities/:entityId", async (request) => {
     const params = request.params as { entityId: string };
-    z.string().uuid().parse(params.entityId);
+    z.guid().parse(params.entityId);
     return webuiService.deleteEntity(params.entityId);
   });
 
@@ -839,7 +849,7 @@ export function buildHttpServer() {
 
   app.get("/api/projects/:projectId/mcp/sessions", async (request) => {
     const params = request.params as { projectId: string };
-    z.string().uuid().parse(params.projectId);
+    z.guid().parse(params.projectId);
     return {
       sessions: await mcpAgentService.listSessions({ sourceId: params.projectId })
     };
@@ -847,7 +857,7 @@ export function buildHttpServer() {
 
   app.get("/api/mcp/sessions/:sessionId", async (request, reply) => {
     const params = request.params as { sessionId: string };
-    z.string().uuid().parse(params.sessionId);
+    z.guid().parse(params.sessionId);
     const detail = await mcpAgentService.getSession(params.sessionId);
     if (!detail) {
       return reply.code(404).send(notFound("MCP_SESSION_NOT_FOUND", "MCP 会话不存在"));
@@ -857,7 +867,7 @@ export function buildHttpServer() {
 
   app.post("/api/mcp/sessions/:sessionId/clear", async (request, reply) => {
     const params = request.params as { sessionId: string };
-    z.string().uuid().parse(params.sessionId);
+    z.guid().parse(params.sessionId);
     const detail = await mcpAgentService.clearSession(params.sessionId);
     if (!detail) {
       return reply.code(404).send(notFound("MCP_SESSION_NOT_FOUND", "MCP 会话不存在"));
@@ -867,13 +877,13 @@ export function buildHttpServer() {
 
   app.delete("/api/mcp/sessions/:sessionId", async (request) => {
     const params = request.params as { sessionId: string };
-    z.string().uuid().parse(params.sessionId);
+    z.guid().parse(params.sessionId);
     return mcpAgentService.deleteSession(params.sessionId);
   });
 
   app.post("/api/mcp/sessions/:sessionId/messages", async (request, reply) => {
     const params = request.params as { sessionId: string };
-    z.string().uuid().parse(params.sessionId);
+    z.guid().parse(params.sessionId);
     const input = mcpMessageSchema.parse(request.body);
     const result = await mcpAgentService.runUserMessage({
       sessionId: params.sessionId,
@@ -885,7 +895,7 @@ export function buildHttpServer() {
 
   app.post("/api/mcp/sessions/:sessionId/messages/stream", async (request, reply) => {
     const params = request.params as { sessionId: string };
-    z.string().uuid().parse(params.sessionId);
+    z.guid().parse(params.sessionId);
     const input = mcpMessageSchema.parse(request.body);
     const abortController = new AbortController();
     let completed = false;

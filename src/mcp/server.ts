@@ -21,7 +21,7 @@ export function buildMcpServer(): McpServer {
     {
       title: z.string().min(1),
       content: z.string().min(1),
-      metadata: z.record(z.unknown()).optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
       extract: z.boolean().optional(),
       waitForCompletion: z.boolean().optional(),
       chunking: z.object({
@@ -98,7 +98,7 @@ export function buildMcpServer(): McpServer {
   server.tool(
     "sag_get_event",
     {
-      eventId: z.string().uuid()
+      eventId: z.guid()
     },
     async (input) => {
       const result = await graphService.getEvent(input.eventId);
@@ -111,7 +111,7 @@ export function buildMcpServer(): McpServer {
 
 function readConfiguredSourceId(): string {
   const sourceId = process.env.SAG_MCP_SOURCE_ID?.trim() || process.env.SAG_MCP_PROJECT_ID?.trim();
-  const parsed = z.string().uuid().safeParse(sourceId);
+  const parsed = z.guid().safeParse(sourceId);
   if (!parsed.success) {
     throw new Error("MCP server must be started with SAG_MCP_SOURCE_ID set to the current project id.");
   }

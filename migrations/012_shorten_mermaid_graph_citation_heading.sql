@@ -1,6 +1,6 @@
 -- Normalize the Mermaid diagram citation section heading.
 -- This migration is safe to run even if the heading has already been updated.
-update ai_settings
+update ai_provider_settings
 set metadata = jsonb_set(
   coalesce(metadata, '{}'::jsonb),
   '{mermaidTemplate}',
@@ -14,7 +14,7 @@ set metadata = jsonb_set(
   true
 ),
 updated_at = now()
-where source_id is null
+where id = 'global'
   and metadata ? 'mermaidTemplate'
   and (
     metadata->>'mermaidTemplate' like '%图谱引用说明%'

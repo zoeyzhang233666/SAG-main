@@ -1,0 +1,21 @@
+{
+  "name": "sag-v1-desktop",
+  "productName": "SAG V1",
+  "version": "0.1.2",
+  "private": true,
+  "description": "SAG V1 standalone desktop preview",
+  "author": "ChemCloud",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/zoeyzhang233666/SAG-main",
+  "main": "main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "electron": "43.8.13",
+    "electron-builder": "26.18.0"
+  },
+  "scripts": {
+    "package": "electron-builder --config electron-builder.config.cjs --publish never"
+  }
+}

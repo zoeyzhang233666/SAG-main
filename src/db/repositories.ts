@@ -397,6 +397,11 @@ export async function getAnyDefaultEntityType(client?: Queryable): Promise<strin
   return String(result.rows[0].id);
 }
 
+// Graph writes in one project can touch the same entity rows in different orders.
+export async function lockProjectGraph(client: Queryable, sourceId: string): Promise<void> {
+  await client.query("select id from sources where id = $1 for no key update", [sourceId]);
+}
+
 export async function upsertEntity(input: {
   sourceId: string;
   type: string;
@@ -1288,7 +1293,7 @@ export async function deleteDocument(input: {
         from documents d
         join sources s on s.id = d.source_id
         where d.id = $1 and s.tenant_id = $2
-        for update
+        for no key update of s
       `,
       [input.documentId, input.tenantId]
     );
