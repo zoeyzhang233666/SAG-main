@@ -38,7 +38,7 @@ try {
     assert.ok(!await isListening(Number(origin.port)), 'Backend still running after app quit');
     assert.ok(!fs.existsSync(path.join(data, 'postgres-data', 'postmaster.pid')), 'PostgreSQL still running after app quit');
   }
-  console.log('Desktop import, Hypergraph rendering, restart persistence and process shutdown passed.');
+  console.log('Desktop import, Hypergraph, Chain Atlas entity details, restart persistence and process shutdown passed.');
 } catch (error) {
   for (const name of ['desktop.log', 'backend.log', 'postgres-control.log', 'postgres.log']) {
     const file = path.join(data, 'logs', name);

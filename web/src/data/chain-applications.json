@@ -1,0 +1,4049 @@
+{
+  "version": "v3.0",
+  "roots": [
+    {"label":"采矿业","code":"B", "children": [
+      {"label":"煤炭开采和洗选业","code":"B-06", "children": [
+        {"label":"烟煤和无烟煤开采洗选 [★]","code":"A-06-0610", "children": [
+          {"label":"浮选剂", "children": [
+            {"label":"捕收剂 ← 柴油/煤油(C-2511)"},
+            {"label":"起泡剂"}
+          ]},
+          {"label":"矿井水处理剂"},
+          {"label":"防爆抑尘剂"},
+          {"label":"洗煤絮凝剂 ← 聚丙烯酰胺(C-2662)"}
+        ]},
+        {"label":"褐煤开采洗选 [★]","code":"A-06-0620", "children": [
+          {"label":"浮选剂"},
+          {"label":"矿井水处理剂"},
+          {"label":"抑尘剂"}
+        ]},
+        {"label":"其他煤炭采选 [★]","code":"A-06-0690", "children": [
+          {"label":"絮凝剂"},
+          {"label":"抑尘剂"}
+        ]}
+      ]},
+      {"label":"石油和天然气开采业","code":"B-07", "children": [
+        {"label":"陆地石油开采 [★]","code":"A-07-0711", "children": [
+          {"label":"钻井液化学品", "children": [
+            {"label":"膨润土"},
+            {"label":"聚合物"},
+            {"label":"加重剂"}
+          ]},
+          {"label":"采油用化学品", "children": [
+            {"label":"破乳剂 ← 表面活性剂(C-2661)"},
+            {"label":"缓蚀剂"},
+            {"label":"防蜡剂"}
+          ]},
+          {"label":"压裂液化学品 ← 瓜尔胶/交联剂", "children": [
+            {"label":"瓜尔胶"},
+            {"label":"交联剂"},
+            {"label":"破胶剂"}
+          ]},
+          {"label":"注水处理剂"}
+        ]},
+        {"label":"海洋石油开采 [★]","code":"A-07-0712", "children": [
+          {"label":"钻井液化学品", "children": [
+            {"label":"膨润土"},
+            {"label":"聚合物"},
+            {"label":"加重剂"}
+          ]},
+          {"label":"采油用化学品", "children": [
+            {"label":"破乳剂 ← 表面活性剂(C-2661)"},
+            {"label":"缓蚀剂"},
+            {"label":"防蜡剂"}
+          ]},
+          {"label":"压裂液化学品 ← 瓜尔胶/交联剂", "children": [
+            {"label":"瓜尔胶"},
+            {"label":"交联剂"},
+            {"label":"破胶剂"}
+          ]},
+          {"label":"注水处理剂"},
+          {"label":"海水处理剂"},
+          {"label":"防腐蚀涂料"}
+        ]},
+        {"label":"陆地天然气开采 [★]","code":"A-07-0721", "children": [
+          {"label":"钻井液化学品"},
+          {"label":"脱硫剂 ← 甲基二乙醇胺(C-2614)", "children": [
+            {"label":"胺液"}
+          ]},
+          {"label":"脱水剂", "children": [
+            {"label":"三甘醇"}
+          ]},
+          {"label":"缓蚀剂"}
+        ]},
+        {"label":"海洋天然气及可燃冰开采 [★]","code":"A-07-0722", "children": [
+          {"label":"钻井液化学品"},
+          {"label":"脱硫剂 ← 甲基二乙醇胺(C-2614)", "children": [
+            {"label":"胺液"}
+          ]},
+          {"label":"脱水剂", "children": [
+            {"label":"三甘醇"}
+          ]},
+          {"label":"缓蚀剂"},
+          {"label":"海洋防腐"}
+        ]}
+      ]},
+      {"label":"黑色金属矿采选业","code":"B-08", "children": [
+        {"label":"铁矿采选 [★]","code":"A-08-0810", "children": [
+          {"label":"选矿药剂", "children": [
+            {"label":"捕收剂 ← 脂肪酸/胺类(C-2661)"},
+            {"label":"调整剂"},
+            {"label":"抑制剂"},
+            {"label":"絮凝剂 ← 聚丙烯酰胺"}
+          ]},
+          {"label":"浮选起泡剂"}
+        ]},
+        {"label":"锰矿、铬矿采选 [★]","code":"A-08-0820", "children": [
+          {"label":"选矿药剂"},
+          {"label":"浸出剂"}
+        ]},
+        {"label":"其他黑色金属矿采选 [★]","code":"A-08-0890", "children": [
+          {"label":"选矿药剂"}
+        ]}
+      ]},
+      {"label":"有色金属矿采选业","code":"B-09", "children": [
+        {"label":"铜矿采选 [★]","code":"A-09-0911", "children": [
+          {"label":"捕收剂", "children": [
+            {"label":"黄药 ← C-2661"},
+            {"label":"黑药"}
+          ]},
+          {"label":"调整剂", "children": [
+            {"label":"石灰 ← 非金属矿"},
+            {"label":"硫化钠"}
+          ]},
+          {"label":"抑制剂"},
+          {"label":"絮凝剂"},
+          {"label":"起泡剂"}
+        ]},
+        {"label":"铅锌矿采选 [★]","code":"A-09-0912", "children": [
+          {"label":"捕收剂", "children": [
+            {"label":"黄药 ← C-2661"},
+            {"label":"乙硫氮"}
+          ]},
+          {"label":"调整剂", "children": [
+            {"label":"硫酸锌"},
+            {"label":"氰化物"}
+          ]},
+          {"label":"起泡剂"}
+        ]},
+        {"label":"镍钴矿采选 [★]","code":"A-09-0913", "children": [
+          {"label":"捕收剂"},
+          {"label":"浸出剂", "children": [
+            {"label":"硫酸 ← C-2611"},
+            {"label":"氨水"}
+          ]},
+          {"label":"萃取剂 ← C-2661"}
+        ]},
+        {"label":"锡矿采选 [★]","code":"A-09-0914", "children": [
+          {"label":"捕收剂"},
+          {"label":"起泡剂"},
+          {"label":"调整剂"}
+        ]},
+        {"label":"锑矿采选 [★]","code":"A-09-0915", "children": [
+          {"label":"捕收剂"},
+          {"label":"调整剂"}
+        ]},
+        {"label":"铝矿采选 [★]","code":"A-09-0916", "children": [
+          {"label":"浮选捕收剂", "children": [
+            {"label":"脂肪酸 ← C-2661"}
+          ]},
+          {"label":"絮凝剂"}
+        ]},
+        {"label":"镁矿采选 [★]","code":"A-09-0917", "children": [
+          {"label":"选矿药剂"}
+        ]},
+        {"label":"其他常用有色金属矿采选 [★]","code":"A-09-0919", "children": [
+          {"label":"选矿药剂"}
+        ]},
+        {"label":"金矿采选 [★]","code":"A-09-0921", "children": [
+          {"label":"浸出剂", "children": [
+            {"label":"氰化物 ← C-2613"},
+            {"label":"硫脲"}
+          ]},
+          {"label":"萃取剂"},
+          {"label":"活性炭 ← C-2669"},
+          {"label":"絮凝剂"}
+        ]},
+        {"label":"银矿采选 [★]","code":"A-09-0922", "children": [
+          {"label":"浸出剂"},
+          {"label":"浮选药剂"}
+        ]},
+        {"label":"其他贵金属矿采选 [★]","code":"A-09-0929", "children": [
+          {"label":"选矿药剂"}
+        ]},
+        {"label":"钨钼矿采选 [★]","code":"A-09-0931", "children": [
+          {"label":"捕收剂"},
+          {"label":"调整剂"},
+          {"label":"絮凝剂"}
+        ]},
+        {"label":"稀土金属矿采选 [★]","code":"A-09-0932", "children": [
+          {"label":"萃取剂 ← C-2661", "children": [
+            {"label":"P507"},
+            {"label":"P204"}
+          ]},
+          {"label":"沉淀剂", "children": [
+            {"label":"草酸"},
+            {"label":"碳酸氢铵"}
+          ]},
+          {"label":"浮选剂"}
+        ]},
+        {"label":"放射性金属矿采选 [★]","code":"A-09-0933", "children": [
+          {"label":"浸出剂", "children": [
+            {"label":"硫酸 ← C-2611"},
+            {"label":"硝酸 ← C-2611"}
+          ]},
+          {"label":"萃取剂"}
+        ]},
+        {"label":"其他稀有金属矿采选 [★]","code":"A-09-0939", "children": [
+          {"label":"选矿药剂"}
+        ]}
+      ]},
+      {"label":"非金属矿采选业","code":"B-10", "children": [
+        {"label":"石灰石、石膏开采 [★]","code":"A-10-1011", "children": [
+          {"label":"直接作为建材 ← →C-26基础化学原料"},
+          {"label":"化工原料 ← →C-26基础化学原料"}
+        ]},
+        {"label":"建筑装饰用石开采 [★]","code":"A-10-1012", "children": [
+          {"label":"切割冷却液"},
+          {"label":"除尘剂"}
+        ]},
+        {"label":"耐火土石开采 [★]","code":"A-10-1013", "children": [
+          {"label":"直接作为耐火材料原料 ← →C-3089耐火材料"}
+        ]},
+        {"label":"粘土及其他土砂石开采 [★]","code":"A-10-1019", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"化学矿开采 [★★]","code":"A-10-1020", "children": [
+          {"label":"磷矿 ← →C-2611无机酸/C-2613无机盐/C-2622磷肥"},
+          {"label":"硫铁矿 ← →C-2611无机酸/C-2613无机盐/C-2622磷肥"},
+          {"label":"硼矿 ← →C-2611无机酸/C-2613无机盐/C-2622磷肥"},
+          {"label":"重晶石 ← →C-2611无机酸/C-2613无机盐/C-2622磷肥"},
+          {"label":"天青石等，直接作为化工原料 ← →C-2611无机酸/C-2613无机盐/C-2622磷肥"}
+        ]},
+        {"label":"采盐 [★★]","code":"A-10-1030", "children": [
+          {"label":"海盐 ← →C-2612无机碱（烧碱/纯碱）"},
+          {"label":"湖盐 ← →C-2612无机碱（烧碱/纯碱）"},
+          {"label":"矿盐，直接作为化工原料 ← →C-2612无机碱（烧碱/纯碱）", "children": [
+            {"label":"氯碱工业原料 ← →C-2612无机碱（烧碱/纯碱）"}
+          ]}
+        ]},
+        {"label":"石棉、云母矿采选 [★]","code":"A-10-1091", "children": [
+          {"label":"选矿药剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"石墨、滑石采选 [★]","code":"A-10-1092", "children": [
+          {"label":"浮选剂"},
+          {"label":"絮凝剂"}
+        ]},
+        {"label":"宝石、玉石采选 [★]","code":"A-10-1093", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他未列明非金属矿采选 [★]","code":"A-10-1099", "children": [
+          {"label":"选矿药剂"}
+        ]}
+      ]},
+      {"label":"开采专业及辅助性活动","code":"B-11", "children": [
+        {"label":"煤炭开采和洗选专业及辅助性活动 [★]","code":"A-11-1110", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"石油和天然气开采专业及辅助性活动 [★]","code":"A-11-1120", "children": [
+          {"label":"钻井液"},
+          {"label":"固井添加剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"其他开采专业及辅助性活动 [★]","code":"A-11-1190", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"其他采矿业","code":"B-12", "children": [
+        {"label":"其他采矿业 [★]","code":"A-12-1200", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]}
+    ]},
+    {"label":"制造业","code":"C", "children": [
+      {"label":"农副食品加工业","code":"C-13", "children": [
+        {"label":"稻谷加工 [★]","code":"A-13-1311", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"小麦加工 [★]","code":"A-13-1312", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"玉米加工 [★★]","code":"A-13-1313", "children": [
+          {"label":"浸泡用亚硫酸 ← C-2611"},
+          {"label":"淀粉提取化学品"}
+        ]},
+        {"label":"杂粮加工 [★]","code":"A-13-1314", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他谷物磨制 [★]","code":"A-13-1319", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"宠物饲料加工 [★★]","code":"A-13-1321", "children": [
+          {"label":"饲料添加剂 ← C-1495", "children": [
+            {"label":"维生素"},
+            {"label":"微量元素"},
+            {"label":"氨基酸"}
+          ]}
+        ]},
+        {"label":"其他饲料加工 [★★]","code":"A-13-1329", "children": [
+          {"label":"饲料添加剂", "children": [
+            {"label":"氨基酸 ← 发酵(C-2761)"},
+            {"label":"维生素"},
+            {"label":"微量元素螯合物"},
+            {"label":"酶制剂"},
+            {"label":"防霉剂 ← 丙酸/苯甲酸(C-2614)"},
+            {"label":"抗氧化剂"}
+          ]}
+        ]},
+        {"label":"食用植物油加工 [★★]","code":"A-13-1331", "children": [
+          {"label":"浸出溶剂", "children": [
+            {"label":"正己烷 ← C-2511石油制品"}
+          ]},
+          {"label":"脱胶剂", "children": [
+            {"label":"磷酸 ← C-2611"}
+          ]},
+          {"label":"脱色白土/活性炭"},
+          {"label":"脱酸碱", "children": [
+            {"label":"NaOH ← C-2612"}
+          ]},
+          {"label":"脱蜡助剂"}
+        ]},
+        {"label":"非食用植物油加工 [★★]","code":"A-13-1332", "children": [
+          {"label":"浸出溶剂"},
+          {"label":"精炼化学品"}
+        ]},
+        {"label":"制糖业 [★★]","code":"A-13-1340", "children": [
+          {"label":"石灰 ← 非金属矿", "children": [
+            {"label":"澄清剂"}
+          ]},
+          {"label":"二氧化硫", "children": [
+            {"label":"脱色"},
+            {"label":"杀菌"}
+          ]},
+          {"label":"絮凝剂 ← C-2662", "children": [
+            {"label":"聚丙烯酰胺"}
+          ]},
+          {"label":"离子交换树脂"}
+        ]},
+        {"label":"牲畜屠宰 [★]","code":"A-13-1351", "children": [
+          {"label":"消毒剂", "children": [
+            {"label":"次氯酸钠 ← C-2611"},
+            {"label":"过氧乙酸"}
+          ]},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"禽类屠宰 [★]","code":"A-13-1352", "children": [
+          {"label":"消毒剂"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"肉制品及副产品加工 [★★]","code":"A-13-1353", "children": [
+          {"label":"保水剂", "children": [
+            {"label":"三聚磷酸钠 ← C-2613"}
+          ]},
+          {"label":"发色剂", "children": [
+            {"label":"亚硝酸盐 ← C-2613"}
+          ]},
+          {"label":"抗氧化剂"},
+          {"label":"防腐剂"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"水产品冷冻加工 [★]","code":"A-13-1361", "children": [
+          {"label":"消毒剂"},
+          {"label":"保鲜剂"}
+        ]},
+        {"label":"鱼糜制品及水产品干腌制加工 [★]","code":"A-13-1362", "children": [
+          {"label":"防腐剂"},
+          {"label":"抗氧化剂"}
+        ]},
+        {"label":"鱼油提取及制品制造 [★]","code":"A-13-1363", "children": [
+          {"label":"提取溶剂 ← C-2511"},
+          {"label":"精炼化学品"}
+        ]},
+        {"label":"其他水产品加工 [★]","code":"A-13-1369", "children": [
+          {"label":"消毒剂"}
+        ]},
+        {"label":"蔬菜加工 [★]","code":"A-13-1371", "children": [
+          {"label":"护色剂", "children": [
+            {"label":"亚硫酸盐 ← C-2613"}
+          ]},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"食用菌加工 [★]","code":"A-13-1372", "children": [
+          {"label":"防腐剂"},
+          {"label":"护色剂"}
+        ]},
+        {"label":"水果和坚果加工 [★]","code":"A-13-1373", "children": [
+          {"label":"护色剂", "children": [
+            {"label":"抗坏血酸 ← C-2614"},
+            {"label":"柠檬酸 ← C-2614"}
+          ]},
+          {"label":"防腐剂"},
+          {"label":"甜味剂"}
+        ]},
+        {"label":"淀粉及淀粉制品制造 [★★]","code":"A-13-1391", "children": [
+          {"label":"浸泡用亚硫酸 ← C-2611"},
+          {"label":"酶制剂 ← 生物发酵", "children": [
+            {"label":"α-淀粉酶"},
+            {"label":"糖化酶"}
+          ]},
+          {"label":"硫酸 ← C-2611", "children": [
+            {"label":"酸水解"}
+          ]},
+          {"label":"氢氧化钠"}
+        ]},
+        {"label":"豆制品制造 [★]","code":"A-13-1392", "children": [
+          {"label":"凝固剂", "children": [
+            {"label":"硫酸钙 ← C-2613"},
+            {"label":"氯化镁 ← C-2613"},
+            {"label":"GDL"}
+          ]},
+          {"label":"消泡剂"}
+        ]},
+        {"label":"蛋品加工 [★]","code":"A-13-1393", "children": [
+          {"label":"防腐剂"}
+        ]},
+        {"label":"其他未列明农副食品加工 [★]","code":"A-13-1399", "children": [
+          {"label":"消毒剂"},
+          {"label":"防腐剂"}
+        ]}
+      ]},
+      {"label":"食品制造业","code":"C-14", "children": [
+        {"label":"糕点、面包制造 [★★]","code":"A-14-1411", "children": [
+          {"label":"膨松剂", "children": [
+            {"label":"碳酸氢钠 ← C-2612"},
+            {"label":"泡打粉"}
+          ]},
+          {"label":"乳化剂"},
+          {"label":"防腐剂"},
+          {"label":"着色剂"},
+          {"label":"食用香精 ← C-2684"}
+        ]},
+        {"label":"饼干及其他焙烤食品制造 [★★]","code":"A-14-1419", "children": [
+          {"label":"膨松剂"},
+          {"label":"乳化剂"},
+          {"label":"防腐剂"},
+          {"label":"香精 ← C-2684"}
+        ]},
+        {"label":"糖果、巧克力制造 [★★]","code":"A-14-1421", "children": [
+          {"label":"乳化剂", "children": [
+            {"label":"大豆磷脂 ← C-2661"},
+            {"label":"聚甘油蓖麻醇酯"}
+          ]},
+          {"label":"香精"},
+          {"label":"着色剂"},
+          {"label":"甜味剂 ← C-2614"}
+        ]},
+        {"label":"蜜饯制作 [★]","code":"A-14-1422", "children": [
+          {"label":"防腐剂", "children": [
+            {"label":"SO₂ ← C-2611"},
+            {"label":"苯甲酸"}
+          ]},
+          {"label":"甜味剂"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"米、面制品制造 [★]","code":"A-14-1431", "children": [
+          {"label":"防腐剂"},
+          {"label":"乳化剂"}
+        ]},
+        {"label":"速冻食品制造 [★]","code":"A-14-1432", "children": [
+          {"label":"抗氧化剂"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"方便面制造 [★★]","code":"A-14-1433", "children": [
+          {"label":"抗氧化剂", "children": [
+            {"label":"BHT ← C-2661"},
+            {"label":"TBHQ ← C-2661"}
+          ]},
+          {"label":"乳化剂"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"其他方便食品制造 [★]","code":"A-14-1439", "children": [
+          {"label":"防腐剂"},
+          {"label":"乳化剂"}
+        ]},
+        {"label":"液体乳制造 [★★]","code":"A-14-1441", "children": [
+          {"label":"稳定剂/乳化剂"},
+          {"label":"营养强化剂"},
+          {"label":"CIP清洗剂", "children": [
+            {"label":"NaOH ← C-2612"},
+            {"label":"硝酸 ← C-2611"}
+          ]},
+          {"label":"消泡剂"}
+        ]},
+        {"label":"乳粉制造 [★]","code":"A-14-1442", "children": [
+          {"label":"稳定剂"},
+          {"label":"营养强化剂", "children": [
+            {"label":"维生素"},
+            {"label":"矿物质"}
+          ]},
+          {"label":"消泡剂"}
+        ]},
+        {"label":"其他乳制品制造 [★]","code":"A-14-1449", "children": [
+          {"label":"稳定剂"},
+          {"label":"乳化剂"}
+        ]},
+        {"label":"肉、禽类罐头制造 [★]","code":"A-14-1451", "children": [
+          {"label":"发色剂", "children": [
+            {"label":"亚硝酸盐 ← C-2613"}
+          ]},
+          {"label":"防腐剂"},
+          {"label":"抗氧化剂"}
+        ]},
+        {"label":"水产品罐头制造 [★]","code":"A-14-1452", "children": [
+          {"label":"防腐剂"},
+          {"label":"抗氧化剂"}
+        ]},
+        {"label":"蔬菜、水果罐头制造 [★]","code":"A-14-1453", "children": [
+          {"label":"护色剂"},
+          {"label":"酸味剂"},
+          {"label":"甜味剂"}
+        ]},
+        {"label":"其他罐头食品制造 [★]","code":"A-14-1459", "children": [
+          {"label":"防腐剂"}
+        ]},
+        {"label":"味精制造 [★★]","code":"A-14-1461", "children": [
+          {"label":"发酵化学品", "children": [
+            {"label":"谷氨酸发酵"}
+          ]},
+          {"label":"硫酸 ← C-2611", "children": [
+            {"label":"提取"}
+          ]},
+          {"label":"液氨 ← C-2621", "children": [
+            {"label":"中和"}
+          ]},
+          {"label":"离子交换树脂"}
+        ]},
+        {"label":"酱油、食醋及类似制品制造 [★★]","code":"A-14-1462", "children": [
+          {"label":"发酵营养盐"},
+          {"label":"防腐剂", "children": [
+            {"label":"苯甲酸钠 ← C-2614"}
+          ]},
+          {"label":"着色剂", "children": [
+            {"label":"焦糖色 ← C-2643"}
+          ]}
+        ]},
+        {"label":"其他调味品、发酵制品制造 [★]","code":"A-14-1469", "children": [
+          {"label":"发酵化学品"},
+          {"label":"增鲜剂"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"营养食品制造 [★★]","code":"A-14-1491", "children": [
+          {"label":"营养强化剂", "children": [
+            {"label":"维生素 ← C-2710/C-2614"},
+            {"label":"矿物质"},
+            {"label":"氨基酸"}
+          ]},
+          {"label":"微胶囊壁材"}
+        ]},
+        {"label":"保健食品制造 [★]","code":"A-14-1492", "children": [
+          {"label":"提取溶剂"},
+          {"label":"功能性成分"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"冷冻饮品及食用冰制造 [★]","code":"A-14-1493", "children": [
+          {"label":"乳化剂"},
+          {"label":"稳定剂"},
+          {"label":"甜味剂"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"盐加工 [★]","code":"A-14-1494", "children": [
+          {"label":"碘酸钾 ← C-2613", "children": [
+            {"label":"加碘盐"}
+          ]},
+          {"label":"抗结剂", "children": [
+            {"label":"亚铁氰化钾"}
+          ]}
+        ]},
+        {"label":"食品及饲料添加剂制造 [★★★]","code":"A-14-1495", "children": [
+          {"label":"防腐剂"},
+          {"label":"抗氧化剂"},
+          {"label":"增味剂"},
+          {"label":"着色剂"},
+          {"label":"乳化剂"},
+          {"label":"营养强化剂"},
+          {"label":"酶制剂等全品类"}
+        ]},
+        {"label":"其他未列明食品制造 [★]","code":"A-14-1499", "children": [
+          {"label":"防腐剂"}
+        ]}
+      ]},
+      {"label":"酒、饮料和精制茶制造业","code":"C-15", "children": [
+        {"label":"酒精制造 [★★]","code":"A-15-1511", "children": [
+          {"label":"发酵助剂", "children": [
+            {"label":"酵母营养盐"},
+            {"label":"酶制剂 ← 生物发酵"}
+          ]},
+          {"label":"消泡剂"},
+          {"label":"清洗消毒剂"}
+        ]},
+        {"label":"白酒制造 [★]","code":"A-15-1512", "children": [
+          {"label":"发酵助剂"},
+          {"label":"过滤助剂", "children": [
+            {"label":"活性炭 ← C-2669"},
+            {"label":"硅藻土"}
+          ]},
+          {"label":"清洗消毒剂"}
+        ]},
+        {"label":"啤酒制造 [★★]","code":"A-15-1513", "children": [
+          {"label":"酶制剂"},
+          {"label":"澄清剂"},
+          {"label":"CO₂"},
+          {"label":"清洗消毒剂", "children": [
+            {"label":"NaOH ← C-2612"},
+            {"label":"过氧乙酸 ← C-2614"}
+          ]},
+          {"label":"硅藻土"}
+        ]},
+        {"label":"黄酒制造 [★]","code":"A-15-1514", "children": [
+          {"label":"发酵助剂"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"葡萄酒制造 [★]","code":"A-15-1515", "children": [
+          {"label":"酶制剂", "children": [
+            {"label":"果胶酶"}
+          ]},
+          {"label":"澄清剂", "children": [
+            {"label":"皂土"},
+            {"label":"明胶"}
+          ]},
+          {"label":"SO₂ ← C-2611", "children": [
+            {"label":"防腐"}
+          ]},
+          {"label":"过滤助剂"}
+        ]},
+        {"label":"其他酒制造 [★]","code":"A-15-1519", "children": [
+          {"label":"发酵助剂"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"碳酸饮料制造 [★★]","code":"A-15-1521", "children": [
+          {"label":"CO₂ ← C-2619"},
+          {"label":"甜味剂"},
+          {"label":"酸味剂", "children": [
+            {"label":"柠檬酸 ← C-2614"},
+            {"label":"磷酸 ← C-2611"}
+          ]},
+          {"label":"香精"},
+          {"label":"着色剂"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"瓶（罐）装饮用水制造 [★]","code":"A-15-1522", "children": [
+          {"label":"消毒剂", "children": [
+            {"label":"臭氧"},
+            {"label":"次氯酸钠 ← C-2611"}
+          ]},
+          {"label":"pH调节剂"}
+        ]},
+        {"label":"果菜汁及果菜汁饮料制造 [★★]","code":"A-15-1523", "children": [
+          {"label":"酶制剂", "children": [
+            {"label":"果胶酶"},
+            {"label":"纤维素酶"}
+          ]},
+          {"label":"抗氧化剂", "children": [
+            {"label":"VC ← C-2614"}
+          ]},
+          {"label":"稳定剂"},
+          {"label":"香精"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"含乳饮料和植物蛋白饮料制造 [★]","code":"A-15-1524", "children": [
+          {"label":"乳化剂 ← C-2661"},
+          {"label":"稳定剂"},
+          {"label":"香精"},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"固体饮料制造 [★]","code":"A-15-1525", "children": [
+          {"label":"甜味剂"},
+          {"label":"香精"},
+          {"label":"着色剂"},
+          {"label":"抗结剂"}
+        ]},
+        {"label":"茶饮料及其他饮料制造 [★]","code":"A-15-1529", "children": [
+          {"label":"防腐剂"},
+          {"label":"抗氧化剂"},
+          {"label":"香精"}
+        ]},
+        {"label":"精制茶加工 [★]","code":"A-15-1530", "children": [
+          {"label":"香精", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]}
+      ]},
+      {"label":"烟草制品业","code":"C-16", "children": [
+        {"label":"烟叶复烤 [★]","code":"A-16-1610", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"卷烟制造 [★★]","code":"A-16-1620", "children": [
+          {"label":"烟用香精香料 ← C-2684"},
+          {"label":"保润剂", "children": [
+            {"label":"丙二醇 ← C-2614"},
+            {"label":"甘油 ← C-2614"}
+          ]},
+          {"label":"防霉剂"},
+          {"label":"卷烟纸化学品"},
+          {"label":"滤嘴化学品", "children": [
+            {"label":"醋酸纤维 ← C-2812"},
+            {"label":"活性炭"}
+          ]}
+        ]},
+        {"label":"其他烟草制品制造 [★]","code":"A-16-1690", "children": [
+          {"label":"香精香料 ← C-2684"}
+        ]}
+      ]},
+      {"label":"纺织业","code":"C-17", "children": [
+        {"label":"棉纺纱加工 [★★]","code":"A-17-1711", "children": [
+          {"label":"浆料", "children": [
+            {"label":"PVA ← C-2651"},
+            {"label":"淀粉 ← C-1391"},
+            {"label":"丙烯酸酯"}
+          ]},
+          {"label":"抗静电剂"},
+          {"label":"润滑剂"}
+        ]},
+        {"label":"棉织造加工 [★★]","code":"A-17-1712", "children": [
+          {"label":"浆料"},
+          {"label":"浆纱助剂"}
+        ]},
+        {"label":"棉印染精加工 [★★★]","code":"A-17-1713", "children": [
+          {"label":"前处理剂", "children": [
+            {"label":"精练剂"},
+            {"label":"退浆剂"},
+            {"label":"漂白剂-双氧水 ← C-2619"}
+          ]},
+          {"label":"染料 ← C-2645", "children": [
+            {"label":"活性"},
+            {"label":"还原"}
+          ]},
+          {"label":"印染助剂 ← C-2661", "children": [
+            {"label":"匀染剂"},
+            {"label":"固色剂"},
+            {"label":"柔软剂"},
+            {"label":"防水剂"}
+          ]},
+          {"label":"后整理剂", "children": [
+            {"label":"阻燃剂"},
+            {"label":"抗菌剂"},
+            {"label":"抗紫外线"}
+          ]}
+        ]},
+        {"label":"毛条和毛纱线加工 [★]","code":"A-17-1721", "children": [
+          {"label":"和毛油 ← C-2661"},
+          {"label":"抗静电剂"}
+        ]},
+        {"label":"毛织造加工 [★]","code":"A-17-1722", "children": [
+          {"label":"浆料"}
+        ]},
+        {"label":"毛染整精加工 [★★]","code":"A-17-1723", "children": [
+          {"label":"染料 ← C-2645", "children": [
+            {"label":"酸性"},
+            {"label":"金属络合"}
+          ]},
+          {"label":"匀染剂"},
+          {"label":"固色剂"}
+        ]},
+        {"label":"麻纤维纺前加工和纺纱 [★]","code":"A-17-1731", "children": [
+          {"label":"脱胶剂", "children": [
+            {"label":"NaOH ← C-2612"},
+            {"label":"酸"}
+          ]},
+          {"label":"漂白剂"}
+        ]},
+        {"label":"麻织造加工 [★]","code":"A-17-1732", "children": [
+          {"label":"浆料"}
+        ]},
+        {"label":"麻染整精加工 [★★]","code":"A-17-1733", "children": [
+          {"label":"染料 ← C-2645"},
+          {"label":"印染助剂"}
+        ]},
+        {"label":"缫丝加工 [★]","code":"A-17-1741", "children": [
+          {"label":"精练剂", "children": [
+            {"label":"Na₂CO₃ ← C-2612"},
+            {"label":"肥皂"}
+          ]},
+          {"label":"漂白剂"}
+        ]},
+        {"label":"绢纺和丝织加工 [★]","code":"A-17-1742", "children": [
+          {"label":"浆料"},
+          {"label":"助剂"}
+        ]},
+        {"label":"丝印染精加工 [★★]","code":"A-17-1743", "children": [
+          {"label":"染料 ← C-2645", "children": [
+            {"label":"酸性"},
+            {"label":"直接"}
+          ]},
+          {"label":"印染助剂"}
+        ]},
+        {"label":"化纤织造加工 [★]","code":"A-17-1751", "children": [
+          {"label":"浆料"},
+          {"label":"抗静电剂"}
+        ]},
+        {"label":"化纤织物染整精加工 [★★★]","code":"A-17-1752", "children": [
+          {"label":"前处理剂"},
+          {"label":"染料 ← C-2645", "children": [
+            {"label":"分散"},
+            {"label":"阳离子"}
+          ]},
+          {"label":"印染助剂 ← C-2661"},
+          {"label":"后整理剂", "children": [
+            {"label":"防水"},
+            {"label":"阻燃"},
+            {"label":"柔软"}
+          ]}
+        ]},
+        {"label":"针织或钩针编织物织造 [★]","code":"A-17-1761", "children": [
+          {"label":"浆料"},
+          {"label":"润滑剂"}
+        ]},
+        {"label":"针织或钩针编织物印染精加工 [★★]","code":"A-17-1762", "children": [
+          {"label":"染料 ← C-2645"},
+          {"label":"印染助剂"}
+        ]},
+        {"label":"针织或钩针编织品制造 [★]","code":"A-17-1763", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"床上用品制造 [★]","code":"A-17-1771", "children": [
+          {"label":"柔软剂"},
+          {"label":"阻燃剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"毛巾类制品制造 [★]","code":"A-17-1772", "children": [
+          {"label":"柔软剂"}
+        ]},
+        {"label":"窗帘、布艺类产品制造 [★]","code":"A-17-1773", "children": [
+          {"label":"阻燃剂"},
+          {"label":"涂层剂"}
+        ]},
+        {"label":"其他家用纺织制成品制造 [★]","code":"A-17-1779", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"非织造布制造 [★★]","code":"A-17-1781", "children": [
+          {"label":"粘合剂", "children": [
+            {"label":"丙烯酸乳液 ← C-2651"},
+            {"label":"热熔胶 ← C-2651"}
+          ]},
+          {"label":"润湿剂"},
+          {"label":"抗静电剂"}
+        ]},
+        {"label":"绳、索、缆制造 [★]","code":"A-17-1782", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"纺织带和帘子布制造 [★]","code":"A-17-1783", "children": [
+          {"label":"浸渍胶", "children": [
+            {"label":"间苯二酚-甲醛-胶乳 ← C-2614"}
+          ]}
+        ]},
+        {"label":"篷、帆布制造 [★]","code":"A-17-1784", "children": [
+          {"label":"防水剂"},
+          {"label":"阻燃剂"}
+        ]},
+        {"label":"其他产业用纺织制成品制造 [★]","code":"A-17-1789", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"纺织服装、服饰业","code":"C-18", "children": [
+        {"label":"运动机织服装制造 [★]","code":"A-18-1811", "children": [
+          {"label":"面料整理剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"其他机织服装制造 [★]","code":"A-18-1819", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"运动休闲针织服装制造 [★]","code":"A-18-1821", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他针织或钩针编织服装制造 [★]","code":"A-18-1829", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"服饰制造 [★]","code":"A-18-1830", "children": [
+          {"label":"缝纫线处理剂"},
+          {"label":"胶粘剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]}
+      ]},
+      {"label":"皮革、毛皮、羽毛及其制品和制鞋业","code":"C-19", "children": [
+        {"label":"皮革鞣制-铬鞣 [★★]","code":"A-19-1910-01", "children": [
+          {"label":"铬鞣剂 ← C-2661", "children": [
+            {"label":"碱式硫酸铬"}
+          ]},
+          {"label":"脱灰剂", "children": [
+            {"label":"硫酸铵 ← C-2621"},
+            {"label":"氯化铵"}
+          ]},
+          {"label":"浸灰剂", "children": [
+            {"label":"硫化钠 ← C-2612"},
+            {"label":"石灰"}
+          ]},
+          {"label":"加脂剂"},
+          {"label":"涂饰剂", "children": [
+            {"label":"树脂"},
+            {"label":"颜料膏"}
+          ]}
+        ]},
+        {"label":"皮革鞣制-植鞣 [★]","code":"A-19-1910-02", "children": [
+          {"label":"植物鞣剂 ← 天然提取", "children": [
+            {"label":"荆树皮"},
+            {"label":"坚木栲胶"}
+          ]},
+          {"label":"脱灰剂"},
+          {"label":"加脂剂"},
+          {"label":"涂饰剂"}
+        ]},
+        {"label":"皮革鞣制-合成鞣 [★★]","code":"A-19-1910-03", "children": [
+          {"label":"合成鞣剂 ← C-2661", "children": [
+            {"label":"酚醛缩合物"},
+            {"label":"萘磺酸缩合物"}
+          ]},
+          {"label":"树脂鞣剂"},
+          {"label":"加脂剂"},
+          {"label":"涂饰剂"}
+        ]},
+        {"label":"皮革服装制造 [★]","code":"A-19-1921", "children": [
+          {"label":"胶粘剂 ← C-2646"},
+          {"label":"涂饰剂"}
+        ]},
+        {"label":"皮箱、包（袋）制造 [★]","code":"A-19-1922", "children": [
+          {"label":"胶粘剂"},
+          {"label":"表面处理剂"}
+        ]},
+        {"label":"皮手套及皮装饰制品制造 [★]","code":"A-19-1923", "children": [
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"其他皮革制品制造 [★]","code":"A-19-1929", "children": [
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"毛皮鞣制加工 [★]","code":"A-19-1931", "children": [
+          {"label":"鞣剂", "children": [
+            {"label":"铝鞣"},
+            {"label":"甲醛鞣 ← C-2614"}
+          ]},
+          {"label":"加脂剂"},
+          {"label":"漂白剂"}
+        ]},
+        {"label":"毛皮服装加工 [★]","code":"A-19-1932", "children": [
+          {"label":"染料"},
+          {"label":"整理剂"}
+        ]},
+        {"label":"其他毛皮制品加工 [★]","code":"A-19-1939", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"羽毛（绒）加工 [★]","code":"A-19-1941", "children": [
+          {"label":"消毒剂"},
+          {"label":"洗涤剂"}
+        ]},
+        {"label":"羽毛（绒）制品加工 [★]","code":"A-19-1942", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"纺织面料鞋制造 [★]","code":"A-19-1951", "children": [
+          {"label":"胶粘剂 ← C-2646"},
+          {"label":"涂料"}
+        ]},
+        {"label":"皮鞋制造 [★★]","code":"A-19-1952", "children": [
+          {"label":"胶粘剂 ← C-2646"},
+          {"label":"涂饰剂"},
+          {"label":"鞋底材料", "children": [
+            {"label":"PU ← C-2651"},
+            {"label":"橡胶"}
+          ]}
+        ]},
+        {"label":"塑料鞋制造 [★]","code":"A-19-1953", "children": [
+          {"label":"塑料原料"},
+          {"label":"增塑剂 ← C-2661"}
+        ]},
+        {"label":"橡胶鞋制造 [★★]","code":"A-19-1954", "children": [
+          {"label":"橡胶配合剂", "children": [
+            {"label":"硫化剂 ← C-2661"},
+            {"label":"促进剂"},
+            {"label":"防老剂"},
+            {"label":"炭黑 ← C-2643"}
+          ]}
+        ]},
+        {"label":"其他制鞋业 [★]","code":"A-19-1959", "children": [
+          {"label":"胶粘剂"}
+        ]}
+      ]},
+      {"label":"木材加工和木、竹、藤、棕、草制品业","code":"C-20", "children": [
+        {"label":"锯材加工 [★]","code":"A-20-2011", "children": [
+          {"label":"防腐剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"木片加工 [★]","code":"A-20-2012", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"单板加工 [★]","code":"A-20-2013", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他木材加工 [★]","code":"A-20-2019", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"胶合板制造 [★★]","code":"A-20-2021", "children": [
+          {"label":"胶粘剂", "children": [
+            {"label":"脲醛树脂"},
+            {"label":"酚醛树脂"},
+            {"label":"三聚氰胺甲醛树脂"},
+            {"label":"PVA ← C-2651"}
+          ]}
+        ]},
+        {"label":"纤维板制造 [★★]","code":"A-20-2022", "children": [
+          {"label":"胶粘剂", "children": [
+            {"label":"脲醛树脂"},
+            {"label":"酚醛树脂"}
+          ]},
+          {"label":"防水剂", "children": [
+            {"label":"石蜡乳液"}
+          ]}
+        ]},
+        {"label":"刨花板制造 [★★]","code":"A-20-2023", "children": [
+          {"label":"胶粘剂", "children": [
+            {"label":"脲醛树脂"},
+            {"label":"MDI ← C-2651"}
+          ]},
+          {"label":"防水剂"}
+        ]},
+        {"label":"其他人造板制造 [★]","code":"A-20-2029", "children": [
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"建筑用木料及木材组件加工 [★]","code":"A-20-2031", "children": [
+          {"label":"防腐剂", "children": [
+            {"label":"CCA ← C-2613无机盐"},
+            {"label":"ACQ"}
+          ]},
+          {"label":"阻燃剂"}
+        ]},
+        {"label":"木门窗制造 [★]","code":"A-20-2032", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"木楼梯制造 [★]","code":"A-20-2033", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"木地板制造 [★]","code":"A-20-2034", "children": [
+          {"label":"涂料 ← C-2641", "children": [
+            {"label":"UV漆"},
+            {"label":"水性漆"}
+          ]},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"木制容器制造 [★]","code":"A-20-2035", "children": [
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"软木制品及其他木制品制造 [★]","code":"A-20-2039", "children": [
+          {"label":"胶粘剂"},
+          {"label":"涂料"}
+        ]},
+        {"label":"竹制品制造 [★]","code":"A-20-2041", "children": [
+          {"label":"防霉剂"},
+          {"label":"涂料"}
+        ]},
+        {"label":"藤制品制造 [★]","code":"A-20-2042", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"棕制品制造 [★]","code":"A-20-2043", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"草及其他制品制造 [★]","code":"A-20-2049", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"家具制造业","code":"C-21", "children": [
+        {"label":"木质家具制造 [★]","code":"A-21-2110", "children": [
+          {"label":"涂料 ← C-2641", "children": [
+            {"label":"木器漆"},
+            {"label":"UV漆"}
+          ]},
+          {"label":"胶粘剂 ← C-2646"},
+          {"label":"填充材料"}
+        ]},
+        {"label":"竹、藤家具制造 [★]","code":"A-21-2120", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"金属家具制造 [★]","code":"A-21-2130", "children": [
+          {"label":"涂料 ← C-2641", "children": [
+            {"label":"粉末涂料 ← C-2641"}
+          ]},
+          {"label":"防锈剂"}
+        ]},
+        {"label":"塑料家具制造 [★]","code":"A-21-2140", "children": [
+          {"label":"塑料原料"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"其他家具制造 [★]","code":"A-21-2190", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"}
+        ]}
+      ]},
+      {"label":"造纸和纸制品业","code":"C-22", "children": [
+        {"label":"木竹浆制造 [★★★]","code":"A-22-2211", "children": [
+          {"label":"蒸煮液", "children": [
+            {"label":"NaOH+Na₂S-KP法 ← C-2612"},
+            {"label":"亚硫酸氢盐-SP法"}
+          ]},
+          {"label":"漂白剂", "children": [
+            {"label":"ClO₂ ← C-2611"},
+            {"label":"过氧化氢"},
+            {"label":"臭氧"}
+          ]},
+          {"label":"消泡剂"},
+          {"label":"蒽醌", "children": [
+            {"label":"蒸煮助剂"}
+          ]}
+        ]},
+        {"label":"非木竹浆制造 [★★]","code":"A-22-2212", "children": [
+          {"label":"蒸煮液", "children": [
+            {"label":"NaOH ← C-2612"}
+          ]},
+          {"label":"漂白剂"},
+          {"label":"消泡剂"}
+        ]},
+        {"label":"机制纸及纸板制造 [★★★]","code":"A-22-2221", "children": [
+          {"label":"施胶剂", "children": [
+            {"label":"AKD ← C-2662"},
+            {"label":"ASA ← C-2662"},
+            {"label":"松香"}
+          ]},
+          {"label":"增强剂", "children": [
+            {"label":"淀粉"},
+            {"label":"聚丙烯酰胺"}
+          ]},
+          {"label":"填料", "children": [
+            {"label":"GCC"},
+            {"label":"PCC ← C-2612"},
+            {"label":"滑石粉"}
+          ]},
+          {"label":"染料 ← C-2645"},
+          {"label":"助留剂"},
+          {"label":"消泡剂"},
+          {"label":"杀菌剂"}
+        ]},
+        {"label":"手工纸制造 [★]","code":"A-22-2222", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"加工纸制造 [★★]","code":"A-22-2223", "children": [
+          {"label":"涂布化学品", "children": [
+            {"label":"胶乳 ← C-2651"},
+            {"label":"淀粉"},
+            {"label":"颜料"},
+            {"label":"润滑剂"},
+            {"label":"抗水剂"}
+          ]},
+          {"label":"特种涂层化学品"}
+        ]},
+        {"label":"纸和纸板容器制造 [★]","code":"A-22-2231", "children": [
+          {"label":"胶粘剂 ← C-2646"},
+          {"label":"防水防油剂"}
+        ]},
+        {"label":"其他纸制品制造 [★]","code":"A-22-2239", "children": [
+          {"label":"胶粘剂"}
+        ]}
+      ]},
+      {"label":"印刷和记录媒介复制业","code":"C-23", "children": [
+        {"label":"书、报刊印刷 [★★]","code":"A-23-2311", "children": [
+          {"label":"油墨 ← C-2642", "children": [
+            {"label":"胶印油墨 ← C-2642"}
+          ]},
+          {"label":"润版液"},
+          {"label":"清洗剂"},
+          {"label":"上光油"}
+        ]},
+        {"label":"本册印制 [★]","code":"A-23-2312", "children": [
+          {"label":"油墨 ← C-2642"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"包装装潢及其他印刷 [★★]","code":"A-23-2319", "children": [
+          {"label":"油墨 ← C-2642", "children": [
+            {"label":"凹印"},
+            {"label":"柔印"},
+            {"label":"UV油墨 ← C-2642"}
+          ]},
+          {"label":"润版液"},
+          {"label":"清洗剂"},
+          {"label":"PS版/CTP版化学品"},
+          {"label":"上光油"}
+        ]},
+        {"label":"装订及印刷相关服务 [★]","code":"A-23-2320", "children": [
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"记录媒介复制 [★]","code":"A-23-2330", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"文教、工美、体育和娱乐用品制造业","code":"C-24", "children": [
+        {"label":"文具制造 [★]","code":"A-24-2411", "children": [
+          {"label":"胶水"},
+          {"label":"颜料"},
+          {"label":"塑料原料"}
+        ]},
+        {"label":"笔的制造 [★]","code":"A-24-2412", "children": [
+          {"label":"墨水 ← C-2669"},
+          {"label":"颜料"}
+        ]},
+        {"label":"教学用模型及教具制造 [★]","code":"A-24-2413", "children": [
+          {"label":"塑料原料"},
+          {"label":"涂料"}
+        ]},
+        {"label":"墨水、墨汁制造 [★★]","code":"A-24-2414", "children": [
+          {"label":"染料/颜料 ← C-2645"},
+          {"label":"溶剂", "children": [
+            {"label":"水"},
+            {"label":"乙醇"},
+            {"label":"乙二醇"}
+          ]},
+          {"label":"表面活性剂"},
+          {"label":"防腐剂"},
+          {"label":"增稠剂"}
+        ]},
+        {"label":"其他文教办公用品制造 [★]","code":"A-24-2419", "children": [
+          {"label":"塑料原料"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"A-24-2421~2429 乐器制造 [★]", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"雕塑工艺品制造 [★]","code":"A-24-2431", "children": [
+          {"label":"涂料"},
+          {"label":"树脂"}
+        ]},
+        {"label":"漆器工艺品制造 [★]","code":"A-24-2433", "children": [
+          {"label":"大漆/合成漆"},
+          {"label":"溶剂"}
+        ]},
+        {"label":"珠宝首饰及有关物品制造 [★]","code":"A-24-2438", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"球类制造 [★]","code":"A-24-2441", "children": [
+          {"label":"橡胶"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"电玩具制造 [★]","code":"A-24-2451", "children": [
+          {"label":"塑料原料"},
+          {"label":"涂料"},
+          {"label":"电池"}
+        ]},
+        {"label":"塑胶玩具制造 [★★]","code":"A-24-2452", "children": [
+          {"label":"塑料原料", "children": [
+            {"label":"PVC"},
+            {"label":"ABS"},
+            {"label":"PP"}
+          ]},
+          {"label":"增塑剂 ← C-2661"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"其他玩具制造 [★]","code":"A-24-2459", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"}
+        ]}
+      ]},
+      {"label":"石油、煤炭及其他燃料加工业","code":"C-25", "children": [
+        {"label":"原油加工-常减压蒸馏 [★★★]","code":"A-25-2511-01", "children": [
+          {"label":"破乳剂 ← 表面活性剂(C-2661)"},
+          {"label":"缓蚀剂"},
+          {"label":"阻垢剂"},
+          {"label":"消泡剂"},
+          {"label":"脱盐剂"}
+        ]},
+        {"label":"原油加工-催化裂化FCC [★★★]","code":"A-25-2511-02", "children": [
+          {"label":"FCC催化剂 ← 分子筛(C-2661)"},
+          {"label":"油浆阻垢剂"},
+          {"label":"抗磨剂"},
+          {"label":"CO助燃剂"},
+          {"label":"SOx转移剂"}
+        ]},
+        {"label":"原油加工-催化重整 [★★]","code":"A-25-2511-03", "children": [
+          {"label":"重整催化剂 ← 贵金属(C-2661)", "children": [
+            {"label":"Pt-Re"},
+            {"label":"Pt-Sn"}
+          ]},
+          {"label":"氯化物补充剂"},
+          {"label":"干燥剂"},
+          {"label":"吸附脱硫剂"}
+        ]},
+        {"label":"原油加工-加氢精制 [★★★]","code":"A-25-2511-04", "children": [
+          {"label":"加氢催化剂 ← C-2661"},
+          {"label":"保护剂", "children": [
+            {"label":"脱金属"},
+            {"label":"脱砷"}
+          ]},
+          {"label":"阻垢剂"},
+          {"label":"硫化剂"}
+        ]},
+        {"label":"原油加工-加氢裂化 [★★]","code":"A-25-2511-05", "children": [
+          {"label":"加氢裂化催化剂 ← C-2661"},
+          {"label":"高压缓蚀剂"}
+        ]},
+        {"label":"原油加工-延迟焦化 [★★]","code":"A-25-2511-06", "children": [
+          {"label":"消泡剂", "children": [
+            {"label":"硅油 ← C-2652硅橡胶"}
+          ]},
+          {"label":"防腐剂"}
+        ]},
+        {"label":"原油加工-烷基化 [★★]","code":"A-25-2511-07", "children": [
+          {"label":"硫酸/氢氟酸 ← C-2611", "children": [
+            {"label":"催化剂"}
+          ]},
+          {"label":"碱洗液"}
+        ]},
+        {"label":"原油加工-异构化 [★]","code":"A-25-2511-08", "children": [
+          {"label":"异构化催化剂 ← C-2661"},
+          {"label":"氯化物补充剂"}
+        ]},
+        {"label":"原油加工-润滑油生产 [★★]","code":"A-25-2511-09", "children": [
+          {"label":"粘度指数改进剂"},
+          {"label":"抗磨剂"},
+          {"label":"清净分散剂"},
+          {"label":"抗氧化剂"},
+          {"label":"防锈剂"},
+          {"label":"基础油"}
+        ]},
+        {"label":"原油加工-沥青生产 [★]","code":"A-25-2511-10", "children": [
+          {"label":"氧化剂"},
+          {"label":"改性剂", "children": [
+            {"label":"SBS ← C-2652"},
+            {"label":"APP"}
+          ]}
+        ]},
+        {"label":"其他原油制造 [★]","code":"A-25-2519", "children": [
+          {"label":"工艺化学品"}
+        ]},
+        {"label":"炼焦-焦炭生产 [★★]","code":"A-25-2521-01", "children": [
+          {"label":"煤预热化学品"},
+          {"label":"焦炉煤气净化剂"}
+        ]},
+        {"label":"炼焦-焦炉煤气 [★★]","code":"A-25-2521-02", "children": [
+          {"label":"脱硫剂 ← C-2662", "children": [
+            {"label":"HPF"},
+            {"label":"ADA法"}
+          ]},
+          {"label":"脱氰剂"},
+          {"label":"氨回收化学品"}
+        ]},
+        {"label":"炼焦-煤焦油加工 [★★★]","code":"A-25-2521-03", "children": [
+          {"label":"萘/蒽/菲/咔唑/苯酚/甲酚/吡啶/喹啉提取，溶剂"},
+          {"label":"萃取剂"}
+        ]},
+        {"label":"煤制合成气-煤气化 [★★]","code":"A-25-2522-01", "children": [
+          {"label":"水煤浆添加剂"},
+          {"label":"助熔剂"},
+          {"label":"缓蚀阻垢剂"},
+          {"label":"消泡剂"}
+        ]},
+        {"label":"煤制合成气-合成气净化 [★★]","code":"A-25-2522-02", "children": [
+          {"label":"脱硫剂", "children": [
+            {"label":"MDEA ← C-2614"},
+            {"label":"低温甲醇洗"}
+          ]},
+          {"label":"脱碳溶剂"}
+        ]},
+        {"label":"煤制合成气-甲醇合成 [★★]","code":"A-25-2522-03", "children": [
+          {"label":"甲醇合成催化剂 ← C-2661", "children": [
+            {"label":"Cu-Zn-Al"}
+          ]},
+          {"label":"精馏化学品"}
+        ]},
+        {"label":"煤制液体燃料-煤直接液化 [★]","code":"A-25-2523-01", "children": [
+          {"label":"加氢催化剂 ← C-2661"},
+          {"label":"溶剂", "children": [
+            {"label":"供氢溶剂"}
+          ]}
+        ]},
+        {"label":"煤制液体燃料-煤间接液化 [★★]","code":"A-25-2523-02", "children": [
+          {"label":"费托合成催化剂 ← C-2661", "children": [
+            {"label":"Co"},
+            {"label":"Fe基"}
+          ]},
+          {"label":"加氢精制催化剂 ← C-2661"}
+        ]},
+        {"label":"煤制品制造 [★]","code":"A-25-2524", "children": [
+          {"label":"粘结剂"},
+          {"label":"防水剂"}
+        ]},
+        {"label":"其他煤炭加工 [★]","code":"A-25-2529", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"核燃料加工 [★]","code":"A-25-2530", "children": [
+          {"label":"铀转化"},
+          {"label":"浓缩用化学品", "children": [
+            {"label":"UF₆"},
+            {"label":"HF ← C-2611"}
+          ]}
+        ]},
+        {"label":"生物质液体燃料-燃料乙醇 [★]","code":"A-25-2541-01", "children": [
+          {"label":"发酵化学品"},
+          {"label":"脱水剂", "children": [
+            {"label":"分子筛"}
+          ]}
+        ]},
+        {"label":"生物质液体燃料-生物柴油 [★★]","code":"A-25-2541-02", "children": [
+          {"label":"酯交换催化剂", "children": [
+            {"label":"NaOH ← C-2612"},
+            {"label":"KOH"},
+            {"label":"甲醇钠 ← C-2614"}
+          ]},
+          {"label":"甲醇 ← C-2614"},
+          {"label":"甘油回收化学品"}
+        ]},
+        {"label":"生物质致密成型燃料加工 [★]","code":"A-25-2542", "children": [
+          {"label":"粘结剂"}
+        ]}
+      ]},
+      {"label":"化学原料和化学制品制造业","code":"C-26", "children": [
+        {"label":"无机酸-硫酸 [★★★]","code":"A-26-2611-01", "children": [
+          {"label":"接触法", "children": [
+            {"label":"SO₂催化氧化→SO₃→吸收"}
+          ]},
+          {"label":"冶炼烟气制酸 ← C-32"}
+        ]},
+        {"label":"无机酸-盐酸 [★★★]","code":"A-26-2611-02", "children": [
+          {"label":"合成法", "children": [
+            {"label":"H₂+Cl₂"}
+          ]},
+          {"label":"副产盐酸", "children": [
+            {"label":"有机氯化反应副产"}
+          ]}
+        ]},
+        {"label":"无机酸-硝酸 [★★]","code":"A-26-2611-03", "children": [
+          {"label":"氨氧化法", "children": [
+            {"label":"NH₃→NO→NO₂→吸收 ← C-2621合成氨"}
+          ]}
+        ]},
+        {"label":"无机酸-磷酸 [★★]","code":"A-26-2611-04", "children": [
+          {"label":"热法磷酸", "children": [
+            {"label":"黄磷燃烧"}
+          ]},
+          {"label":"湿法磷酸", "children": [
+            {"label":"硫酸浸取磷矿 ← B-1020"}
+          ]}
+        ]},
+        {"label":"无机酸-氢氟酸 [★★]","code":"A-26-2611-05", "children": [
+          {"label":"萤石+硫酸反应法 ← B-1020"}
+        ]},
+        {"label":"无机酸-氯磺酸 [★]","code":"A-26-2611-06", "children": [
+          {"label":"HCl+SO₃合成法 ← C-2611"}
+        ]},
+        {"label":"无机碱-烧碱(NaOH) [★★★]","code":"A-26-2612-01", "children": [
+          {"label":"离子膜电解法"},
+          {"label":"隔膜电解法", "children": [
+            {"label":"食盐水电解"}
+          ]}
+        ]},
+        {"label":"无机碱-纯碱(Na₂CO₃) [★★★]","code":"A-26-2612-02", "children": [
+          {"label":"氨碱法 ← C-2621", "children": [
+            {"label":"索尔维法"}
+          ]},
+          {"label":"联碱法", "children": [
+            {"label":"联合制碱"}
+          ]}
+        ]},
+        {"label":"无机碱-硫化碱(Na₂S) [★]","code":"A-26-2612-03", "children": [
+          {"label":"煤粉还原硫酸钠法 ← B-06"}
+        ]},
+        {"label":"无机盐-铬盐 [★★]","code":"A-26-2613-01", "children": [
+          {"label":"铬铁矿氧化焙烧法 ← B-08", "children": [
+            {"label":"Na₂CrO₄→Na₂Cr₂O₇→Cr₂O₃"}
+          ]}
+        ]},
+        {"label":"无机盐-锰盐 [★]","code":"A-26-2613-02", "children": [
+          {"label":"硫酸锰 ← C-2611", "children": [
+            {"label":"软锰矿+硫酸 ← B-08"}
+          ]},
+          {"label":"高锰酸钾", "children": [
+            {"label":"电解氧化"}
+          ]}
+        ]},
+        {"label":"无机盐-钡盐 [★]","code":"A-26-2613-03", "children": [
+          {"label":"重晶石还原焙烧→BaS→碳酸钡 ← B-1020"},
+          {"label":"硫酸钡"}
+        ]},
+        {"label":"无机盐-锶盐 [★]","code":"A-26-2613-04", "children": [
+          {"label":"天青石碳还原法 ← B-1020"},
+          {"label":"碳酸锶转化法"}
+        ]},
+        {"label":"无机盐-锌盐 [★]","code":"A-26-2613-05", "children": [
+          {"label":"氧化锌+硫酸法 ← C-32"},
+          {"label":"氯化锌法"}
+        ]},
+        {"label":"无机盐-氰化物 [★★]","code":"A-26-2613-06", "children": [
+          {"label":"氰钠法", "children": [
+            {"label":"Na+NH₃+O₂"}
+          ]},
+          {"label":"丙烯腈副产HCN ← C-2511"}
+        ]},
+        {"label":"无机盐-磷酸盐 [★★]","code":"A-26-2613-07", "children": [
+          {"label":"热法"},
+          {"label":"湿法磷酸+碱中和 ← C-2611", "children": [
+            {"label":"三聚磷酸钠 ← C-2611"},
+            {"label":"六偏磷酸钠等 ← C-2611"}
+          ]}
+        ]},
+        {"label":"有机化学原料-烯烃 [★★★]","code":"A-26-2614-01", "children": [
+          {"label":"乙烯", "children": [
+            {"label":"石脑油蒸汽裂解 ← C-2511"}
+          ]},
+          {"label":"丙烯", "children": [
+            {"label":"FCC"},
+            {"label":"PDH"}
+          ]},
+          {"label":"丁二烯", "children": [
+            {"label":"C₄抽提"}
+          ]}
+        ]},
+        {"label":"有机化学原料-芳烃 [★★★]","code":"A-26-2614-02", "children": [
+          {"label":"苯"},
+          {"label":"甲苯"},
+          {"label":"二甲苯", "children": [
+            {"label":"催化重整"},
+            {"label":"CX分离"},
+            {"label":"芳烃联合"}
+          ]}
+        ]},
+        {"label":"有机化学原料-醇类 [★★★]","code":"A-26-2614-03", "children": [
+          {"label":"甲醇", "children": [
+            {"label":"合成气→甲醇 ← C-2522"}
+          ]},
+          {"label":"乙醇", "children": [
+            {"label":"发酵"},
+            {"label":"合成 ← C-2522"}
+          ]},
+          {"label":"乙二醇", "children": [
+            {"label":"环氧乙烷水合"}
+          ]}
+        ]},
+        {"label":"有机化学原料-醛酮酸 [★★]","code":"A-26-2614-04", "children": [
+          {"label":"甲醛", "children": [
+            {"label":"甲醇氧化 ← C-2614"}
+          ]},
+          {"label":"乙醛", "children": [
+            {"label":"乙烯氧化 ← C-2614"},
+            {"label":"乙醇脱氢"}
+          ]},
+          {"label":"醋酸", "children": [
+            {"label":"甲醇羰基化 ← C-2614"}
+          ]},
+          {"label":"丙酮", "children": [
+            {"label":"异丙苯法"}
+          ]}
+        ]},
+        {"label":"有机化学原料-卤代烃 [★★]","code":"A-26-2614-05", "children": [
+          {"label":"氯乙烯 ← C-2614", "children": [
+            {"label":"乙烯氧氯化 ← C-2614"}
+          ]},
+          {"label":"氯甲烷", "children": [
+            {"label":"甲醇氯化"}
+          ]},
+          {"label":"氟制冷剂"}
+        ]},
+        {"label":"有机化学原料-环氧乙烷 [★★]","code":"A-26-2614-06", "children": [
+          {"label":"乙烯直接氧化法 ← C-2614", "children": [
+            {"label":"Ag催化剂"}
+          ]}
+        ]},
+        {"label":"其他基础化学原料制造 [★★]","code":"A-26-2619", "children": [
+          {"label":"包括电子特气", "children": [
+            {"label":"高纯NF₃"},
+            {"label":"WF₆"},
+            {"label":"SiH₄等"}
+          ]},
+          {"label":"过氧化氢"},
+          {"label":"活性炭等"}
+        ]},
+        {"label":"氮肥-合成氨 [★★★]","code":"A-26-2621-01", "children": [
+          {"label":"哈伯法（N₂+3H₂→2NH₃），铁系催化剂"}
+        ]},
+        {"label":"氮肥-尿素 [★★★]","code":"A-26-2621-02", "children": [
+          {"label":"NH₃+CO₂→氨基甲酸铵→尿素 ← C-2621"}
+        ]},
+        {"label":"氮肥-硝酸铵 [★]","code":"A-26-2621-03", "children": [
+          {"label":"硝酸+氨中和 ← C-2611"}
+        ]},
+        {"label":"磷肥-过磷酸钙 [★]","code":"A-26-2622-01", "children": [
+          {"label":"磷矿+硫酸→普钙 ← B-1020"}
+        ]},
+        {"label":"磷肥-重过磷酸钙 [★]","code":"A-26-2622-02", "children": [
+          {"label":"磷矿+磷酸→重钙 ← C-2611"}
+        ]},
+        {"label":"磷肥-磷酸铵 [★★★]","code":"A-26-2622-03", "children": [
+          {"label":"磷酸+氨中和→MAP ← C-2611"},
+          {"label":"DAP"}
+        ]},
+        {"label":"钾肥-氯化钾 [★]","code":"A-26-2623-01", "children": [
+          {"label":"钾矿浮选 ← B-1020"},
+          {"label":"溶解结晶法"}
+        ]},
+        {"label":"钾肥-硫酸钾 [★]","code":"A-26-2623-02", "children": [
+          {"label":"曼海姆法", "children": [
+            {"label":"KCl+H₂SO₄ ← C-2623"}
+          ]},
+          {"label":"硫酸盐复分解法 ← C-2611"}
+        ]},
+        {"label":"复混肥料-NPK复合肥 [★★]","code":"A-26-2624-01", "children": [
+          {"label":"喷浆造粒"},
+          {"label":"料浆法"}
+        ]},
+        {"label":"复混肥料-BB肥 [★]","code":"A-26-2624-02", "children": [
+          {"label":"物理掺混法"}
+        ]},
+        {"label":"有机肥料及微生物肥料 [★]","code":"A-26-2625", "children": [
+          {"label":"发酵菌剂"},
+          {"label":"腐植酸"}
+        ]},
+        {"label":"其他肥料制造 [★]","code":"A-26-2629", "children": [
+          {"label":"缓控释肥包膜材料"}
+        ]},
+        {"label":"化学农药-杀虫剂 [★★★]","code":"A-26-2631-01", "children": [
+          {"label":"有机磷类"},
+          {"label":"拟除虫菊酯类"},
+          {"label":"新烟碱类合成"}
+        ]},
+        {"label":"化学农药-杀菌剂 [★★]","code":"A-26-2631-02", "children": [
+          {"label":"三唑类"},
+          {"label":"苯并咪唑类"},
+          {"label":"甲氧基丙烯酸酯类合成"}
+        ]},
+        {"label":"化学农药-除草剂 [★★★]","code":"A-26-2631-03", "children": [
+          {"label":"草甘膦"},
+          {"label":"百草枯"},
+          {"label":"2,4-D"},
+          {"label":"吡啶类合成"}
+        ]},
+        {"label":"化学农药-植物生长调节剂 [★]","code":"A-26-2631-04", "children": [
+          {"label":"乙烯利"},
+          {"label":"矮壮素"},
+          {"label":"芸苔素内酯合成"}
+        ]},
+        {"label":"生物化学农药及微生物农药 [★]","code":"A-26-2632", "children": [
+          {"label":"生物发酵"},
+          {"label":"提取"}
+        ]},
+        {"label":"涂料-建筑涂料 [★★★]","code":"A-26-2641-01", "children": [
+          {"label":"乳液 ← C-2651", "children": [
+            {"label":"丙烯酸"},
+            {"label":"VAE"}
+          ]},
+          {"label":"钛白粉 ← C-2643"},
+          {"label":"填料"},
+          {"label":"分散剂"},
+          {"label":"增稠剂"},
+          {"label":"消泡剂"}
+        ]},
+        {"label":"涂料-工业涂料 [★★]","code":"A-26-2641-02", "children": [
+          {"label":"树脂 ← C-2651", "children": [
+            {"label":"环氧"},
+            {"label":"聚氨酯"},
+            {"label":"醇酸"}
+          ]},
+          {"label":"颜料"},
+          {"label":"固化剂"},
+          {"label":"溶剂"}
+        ]},
+        {"label":"涂料-防腐涂料 [★★]","code":"A-26-2641-03", "children": [
+          {"label":"防腐树脂"},
+          {"label":"防锈颜料"},
+          {"label":"缓蚀剂"}
+        ]},
+        {"label":"涂料-汽车涂料 [★★]","code":"A-26-2641-04", "children": [
+          {"label":"电泳漆", "children": [
+            {"label":"阴极电泳树脂 ← C-2651"}
+          ]},
+          {"label":"面漆"},
+          {"label":"清漆"}
+        ]},
+        {"label":"涂料-船舶涂料 [★]","code":"A-26-2641-05", "children": [
+          {"label":"防污漆", "children": [
+            {"label":"氧化亚铜"},
+            {"label":"有机硅"}
+          ]},
+          {"label":"防锈漆"}
+        ]},
+        {"label":"油墨-胶印油墨 [★★]","code":"A-26-2642-01", "children": [
+          {"label":"连结料树脂 ← C-2651", "children": [
+            {"label":"松香改性酚醛"}
+          ]},
+          {"label":"颜料 ← C-2643"},
+          {"label":"矿物油"},
+          {"label":"大豆油"}
+        ]},
+        {"label":"油墨-凹印油墨 [★]","code":"A-26-2642-02", "children": [
+          {"label":"聚酰胺/硝酸纤维素树脂"},
+          {"label":"颜料"},
+          {"label":"溶剂", "children": [
+            {"label":"乙酸乙酯"},
+            {"label":"甲苯"}
+          ]}
+        ]},
+        {"label":"油墨-UV油墨 [★]","code":"A-26-2642-03", "children": [
+          {"label":"丙烯酸酯低聚物/单体 ← C-2651"},
+          {"label":"光引发剂"}
+        ]},
+        {"label":"工业颜料-钛白粉 [★★★]","code":"A-26-2643-01", "children": [
+          {"label":"硫酸法 ← C-2611"},
+          {"label":"氯化法", "children": [
+            {"label":"钛铁矿→TiO₂ ← B-09"}
+          ]}
+        ]},
+        {"label":"工业颜料-氧化铁 [★]","code":"A-26-2643-02", "children": [
+          {"label":"硫酸亚铁+NaOH→沉淀氧化法 ← C-2613副产"}
+        ]},
+        {"label":"工业颜料-铬黄 [★]","code":"A-26-2643-03", "children": [
+          {"label":"铬酸盐+铅盐沉淀法"}
+        ]},
+        {"label":"工业颜料-炭黑 [★★★]","code":"A-26-2643-04", "children": [
+          {"label":"炉法", "children": [
+            {"label":"烃类不完全燃烧"}
+          ]}
+        ]},
+        {"label":"工艺美术颜料制造 [★]","code":"A-26-2644", "children": [
+          {"label":"天然颜料"},
+          {"label":"合成颜料"}
+        ]},
+        {"label":"染料-活性染料 [★★]","code":"A-26-2645-01", "children": [
+          {"label":"三聚氯氰+芳胺缩合→活性基团引入 ← C-2614"}
+        ]},
+        {"label":"染料-分散染料 [★★]","code":"A-26-2645-02", "children": [
+          {"label":"偶氮"},
+          {"label":"蒽醌结构合成"}
+        ]},
+        {"label":"染料-酸性染料 [★]","code":"A-26-2645-03", "children": [
+          {"label":"偶氮"},
+          {"label":"蒽醌结构磺化"}
+        ]},
+        {"label":"染料-还原染料 [★]","code":"A-26-2645-04", "children": [
+          {"label":"蒽醌衍生物缩合闭环"}
+        ]},
+        {"label":"密封用填料及类似品制造 [★★]","code":"A-26-2646", "children": [
+          {"label":"硅酮密封胶"},
+          {"label":"聚氨酯密封胶"},
+          {"label":"环氧胶"}
+        ]},
+        {"label":"初级形态塑料-聚乙烯PE [★★★]","code":"A-26-2651-01", "children": [
+          {"label":"高压法", "children": [
+            {"label":"LDPE"}
+          ]},
+          {"label":"气相法（LLDPE/HDPE），Z-N"},
+          {"label":"茂金属催化剂"}
+        ]},
+        {"label":"初级形态塑料-聚丙烯PP [★★★]","code":"A-26-2651-02", "children": [
+          {"label":"液相本体法"},
+          {"label":"气相法，Z-N催化剂"}
+        ]},
+        {"label":"初级形态塑料-聚氯乙烯PVC [★★★]","code":"A-26-2651-03", "children": [
+          {"label":"乙烯氧氯化→氯乙烯→悬浮 ← C-2614"},
+          {"label":"乳液聚合"}
+        ]},
+        {"label":"初级形态塑料-PS/ABS [★★]","code":"A-26-2651-04", "children": [
+          {"label":"本体"},
+          {"label":"悬浮聚合，ABS接枝共聚"}
+        ]},
+        {"label":"初级形态塑料-聚碳酸酯PC [★]","code":"A-26-2651-05", "children": [
+          {"label":"光气界面法 ← C-2614"},
+          {"label":"酯交换法"}
+        ]},
+        {"label":"初级形态塑料-聚酰胺PA [★]","code":"A-26-2651-06", "children": [
+          {"label":"尼龙6", "children": [
+            {"label":"己内酰胺开环 ← C-2653"}
+          ]},
+          {"label":"尼龙66", "children": [
+            {"label":"己二酸+己二胺缩聚 ← C-2614"}
+          ]}
+        ]},
+        {"label":"初级形态塑料-PET [★★]","code":"A-26-2651-07", "children": [
+          {"label":"PTA+EG酯交换 ← C-2653"},
+          {"label":"直接酯化缩聚"}
+        ]},
+        {"label":"初级形态塑料-特种工程塑料 [★]","code":"A-26-2651-08", "children": [
+          {"label":"POM"},
+          {"label":"PPO"},
+          {"label":"PPS"},
+          {"label":"PEEK"},
+          {"label":"PI"},
+          {"label":"PSU等"}
+        ]},
+        {"label":"初级形态塑料-热固性树脂 [★★★]","code":"A-26-2651-09", "children": [
+          {"label":"酚醛", "children": [
+            {"label":"苯酚+甲醛缩合"}
+          ]},
+          {"label":"环氧", "children": [
+            {"label":"双酚A+环氧氯丙烷 ← C-2614"}
+          ]},
+          {"label":"PU", "children": [
+            {"label":"异氰酸酯+聚醚"}
+          ]}
+        ]},
+        {"label":"初级形态塑料-醇酸/丙烯酸树脂 [★★]","code":"A-26-2651-10", "children": [
+          {"label":"醇酸", "children": [
+            {"label":"多元醇+多元酸+植物油"}
+          ]},
+          {"label":"丙烯酸酯乳液 ← C-2614"}
+        ]},
+        {"label":"合成橡胶-丁苯橡胶SBR [★★]","code":"A-26-2652-01", "children": [
+          {"label":"乳液聚合"},
+          {"label":"溶液聚合，丁二烯+苯乙烯"}
+        ]},
+        {"label":"合成橡胶-顺丁橡胶BR [★]","code":"A-26-2652-02", "children": [
+          {"label":"稀土"},
+          {"label":"镍"},
+          {"label":"锂系催化剂溶液聚合"}
+        ]},
+        {"label":"合成橡胶-丁腈橡胶NBR [★]","code":"A-26-2652-03", "children": [
+          {"label":"乳液聚合，丁二烯+丙烯腈 ← C-2614"}
+        ]},
+        {"label":"合成橡胶-氯丁橡胶CR [★]","code":"A-26-2652-04", "children": [
+          {"label":"乳液聚合，氯丁二烯 ← C-2614"}
+        ]},
+        {"label":"合成橡胶-乙丙橡胶EPM/EPDM [★]","code":"A-26-2652-05", "children": [
+          {"label":"茂金属催化剂溶液聚合，乙烯+丙烯"}
+        ]},
+        {"label":"合成橡胶-硅橡胶 [★]","code":"A-26-2652-06", "children": [
+          {"label":"DMC开环聚合 ← C-2619"}
+        ]},
+        {"label":"合成纤维单体-己内酰胺 [★★]","code":"A-26-2653-01", "children": [
+          {"label":"环己酮-羟胺法 ← C-2614", "children": [
+            {"label":"拉西法"}
+          ]},
+          {"label":"甲苯法 ← C-2614"}
+        ]},
+        {"label":"合成纤维单体-PTA [★★★]","code":"A-26-2653-02", "children": [
+          {"label":"对二甲苯液相氧化法 ← C-2614"}
+        ]},
+        {"label":"合成纤维单体-丙烯腈 [★★]","code":"A-26-2653-03", "children": [
+          {"label":"丙烯氨氧化法 ← C-2614", "children": [
+            {"label":"Sohio法"}
+          ]}
+        ]},
+        {"label":"合成纤维单体-尼龙66盐 [★]","code":"A-26-2653-04", "children": [
+          {"label":"己二酸+己二胺中和成盐"}
+        ]},
+        {"label":"其他合成材料制造 [★]","code":"A-26-2659", "children": [
+          {"label":"不饱和聚酯树脂"},
+          {"label":"离子交换树脂等"}
+        ]},
+        {"label":"化学试剂和助剂-催化剂 [★★]","code":"A-26-2661-01", "children": [
+          {"label":"FCC"},
+          {"label":"加氢"},
+          {"label":"重整"},
+          {"label":"氧化"},
+          {"label":"聚合催化剂制造"}
+        ]},
+        {"label":"化学试剂和助剂-表面活性剂 [★★★]","code":"A-26-2661-02", "children": [
+          {"label":"阴离子", "children": [
+            {"label":"LAS"},
+            {"label":"AES"}
+          ]},
+          {"label":"非离子", "children": [
+            {"label":"AEO"}
+          ]},
+          {"label":"阳离子"},
+          {"label":"两性离子合成"}
+        ]},
+        {"label":"化学试剂和助剂-水处理剂 [★★]","code":"A-26-2661-03", "children": [
+          {"label":"阻垢剂", "children": [
+            {"label":"膦酸"},
+            {"label":"聚丙烯酸"}
+          ]},
+          {"label":"缓蚀剂"},
+          {"label":"杀菌剂"},
+          {"label":"絮凝剂"}
+        ]},
+        {"label":"化学试剂和助剂-选矿药剂 [★]","code":"A-26-2661-04", "children": [
+          {"label":"黄药/黑药/脂肪酸类捕收剂"},
+          {"label":"起泡剂"}
+        ]},
+        {"label":"化学试剂和助剂-橡胶助剂 [★★]","code":"A-26-2661-05", "children": [
+          {"label":"硫化剂"},
+          {"label":"促进剂"},
+          {"label":"防老剂"},
+          {"label":"增塑剂"}
+        ]},
+        {"label":"化学试剂和助剂-塑料助剂 [★★]","code":"A-26-2661-06", "children": [
+          {"label":"增塑剂", "children": [
+            {"label":"邻苯二甲酸酯"}
+          ]},
+          {"label":"稳定剂"},
+          {"label":"抗氧剂"},
+          {"label":"阻燃剂"},
+          {"label":"润滑剂"}
+        ]},
+        {"label":"专项化学用品-水处理剂 [★★]","code":"A-26-2662-01", "children": [
+          {"label":"聚合氯化铝"},
+          {"label":"聚合硫酸铁"},
+          {"label":"聚丙烯酰胺"}
+        ]},
+        {"label":"专项化学用品-电子化学品 [★★]","code":"A-26-2662-02", "children": [
+          {"label":"超高纯试剂"},
+          {"label":"电子特气"},
+          {"label":"CMP抛光液"},
+          {"label":"电镀化学品"}
+        ]},
+        {"label":"专项化学用品-油田化学品 [★]","code":"A-26-2662-03", "children": [
+          {"label":"钻井液处理剂"},
+          {"label":"破乳剂"},
+          {"label":"压裂液化学品"}
+        ]},
+        {"label":"专项化学用品-皮革化学品 [★]","code":"A-26-2662-04", "children": [
+          {"label":"鞣剂"},
+          {"label":"加脂剂"},
+          {"label":"涂饰剂"}
+        ]},
+        {"label":"专项化学用品-造纸化学品 [★]","code":"A-26-2662-05", "children": [
+          {"label":"施胶剂"},
+          {"label":"增强剂"},
+          {"label":"消泡剂"},
+          {"label":"涂布化学品"}
+        ]},
+        {"label":"专项化学用品-纺织印染助剂 [★]","code":"A-26-2662-06", "children": [
+          {"label":"匀染剂"},
+          {"label":"柔软剂"},
+          {"label":"防水剂"},
+          {"label":"阻燃整理剂"}
+        ]},
+        {"label":"林产化学产品制造 [★]","code":"A-26-2663", "children": [
+          {"label":"松香"},
+          {"label":"松节油"},
+          {"label":"栲胶"},
+          {"label":"糠醛"}
+        ]},
+        {"label":"文化用信息化学品-感光材料 [★]","code":"A-26-2664-01", "children": [
+          {"label":"银盐感光材料"},
+          {"label":"PS版感光液"}
+        ]},
+        {"label":"文化用信息化学品-光刻胶 [★★]","code":"A-26-2664-02", "children": [
+          {"label":"g-line"},
+          {"label":"i-line"},
+          {"label":"KrF"},
+          {"label":"ArF"},
+          {"label":"EUV光刻胶"}
+        ]},
+        {"label":"文化用信息化学品-磁记录材料 [★]","code":"A-26-2664-03", "children": [
+          {"label":"磁粉"},
+          {"label":"磁带涂布化学品"}
+        ]},
+        {"label":"医学生产用信息化学品制造 [★]","code":"A-26-2665", "children": [
+          {"label":"诊断试剂化学品"},
+          {"label":"生物芯片材料"}
+        ]},
+        {"label":"环境污染处理专用药剂-絮凝剂 [★★]","code":"A-26-2666-01", "children": [
+          {"label":"聚合氯化铝"},
+          {"label":"聚丙烯酰胺"},
+          {"label":"聚硫酸铁"}
+        ]},
+        {"label":"环境污染处理专用药剂-吸附剂 [★]","code":"A-26-2666-02", "children": [
+          {"label":"活性炭"},
+          {"label":"沸石"},
+          {"label":"吸附树脂"}
+        ]},
+        {"label":"环境污染处理专用药剂-生物处理剂 [★]","code":"A-26-2666-03", "children": [
+          {"label":"微生物菌剂"},
+          {"label":"酶制剂"}
+        ]},
+        {"label":"动物胶制造 [★]","code":"A-26-2667", "children": [
+          {"label":"骨胶"},
+          {"label":"皮胶"},
+          {"label":"明胶"}
+        ]},
+        {"label":"其他专用化学产品制造 [★]","code":"A-26-2669", "children": [
+          {"label":"活性炭"},
+          {"label":"炭黑", "children": [
+            {"label":"特种"}
+          ]},
+          {"label":"气凝胶"}
+        ]},
+        {"label":"炸药及火工产品-工业炸药 [★]","code":"A-26-2671-01", "children": [
+          {"label":"铵油炸药"},
+          {"label":"乳化炸药"},
+          {"label":"水胶炸药"}
+        ]},
+        {"label":"炸药及火工产品-雷管/导火索 [★]","code":"A-26-2671-02", "children": [
+          {"label":"起爆药"},
+          {"label":"延期药"}
+        ]},
+        {"label":"焰火、鞭炮产品制造 [★]","code":"A-26-2672", "children": [
+          {"label":"烟火药剂"},
+          {"label":"氧化剂"},
+          {"label":"还原剂"}
+        ]},
+        {"label":"肥皂及洗涤剂-肥皂 [★]","code":"A-26-2681-01", "children": [
+          {"label":"油脂皂化 ← C-1331"},
+          {"label":"脂肪酸中和"}
+        ]},
+        {"label":"肥皂及洗涤剂-洗衣粉 [★★]","code":"A-26-2681-02", "children": [
+          {"label":"喷雾干燥，LAS ← C-2661"},
+          {"label":"AES"},
+          {"label":"助洗剂"},
+          {"label":"酶制剂"}
+        ]},
+        {"label":"肥皂及洗涤剂-液体洗涤剂 [★★]","code":"A-26-2681-03", "children": [
+          {"label":"液体洗衣液"},
+          {"label":"洗洁精配方混合"}
+        ]},
+        {"label":"化妆品-护肤品 [★★★]","code":"A-26-2682-01", "children": [
+          {"label":"油脂"},
+          {"label":"乳化剂 ← C-2661"},
+          {"label":"保湿剂"},
+          {"label":"活性成分 ← C-2614"},
+          {"label":"防腐剂"},
+          {"label":"增稠剂"}
+        ]},
+        {"label":"化妆品-彩妆 [★★]","code":"A-26-2682-02", "children": [
+          {"label":"着色颜料 ← C-2643"},
+          {"label":"珠光颜料 ← C-2643"},
+          {"label":"成膜剂"},
+          {"label":"油脂蜡基料"}
+        ]},
+        {"label":"化妆品-香水 [★]","code":"A-26-2682-03", "children": [
+          {"label":"香精 ← C-2684"},
+          {"label":"乙醇 ← C-2614"},
+          {"label":"色素"}
+        ]},
+        {"label":"口腔清洁用品制造 [★]","code":"A-26-2683", "children": [
+          {"label":"摩擦剂", "children": [
+            {"label":"CaCO₃ ← C-2613"},
+            {"label":"SiO₂ ← C-2613"}
+          ]},
+          {"label":"表面活性剂"},
+          {"label":"含氟化合物"},
+          {"label":"增稠剂"}
+        ]},
+        {"label":"香料香精-天然香料 [★]","code":"A-26-2684-01", "children": [
+          {"label":"植物提取"},
+          {"label":"蒸馏"},
+          {"label":"压榨"}
+        ]},
+        {"label":"香料香精-合成香料 [★★]","code":"A-26-2684-02", "children": [
+          {"label":"有机合成", "children": [
+            {"label":"如香兰素"},
+            {"label":"麝香"},
+            {"label":"醛酮类"}
+          ]}
+        ]},
+        {"label":"香料香精-食用香精 [★]","code":"A-26-2684-03", "children": [
+          {"label":"香料调配 ← C-2684"},
+          {"label":"溶剂"},
+          {"label":"载体"}
+        ]},
+        {"label":"香料香精-日化香精 [★]","code":"A-26-2684-04", "children": [
+          {"label":"香料调配 ← C-2684"},
+          {"label":"溶剂"}
+        ]},
+        {"label":"其他日用化学产品制造 [★]","code":"A-26-2689", "children": [
+          {"label":"宠物用品化学品"},
+          {"label":"家居除味剂等"}
+        ]}
+      ]},
+      {"label":"医药制造业","code":"C-27", "children": [
+        {"label":"化学药品原料药-抗生素类 [★★★]","code":"A-27-2710-01", "children": [
+          {"label":"发酵提取", "children": [
+            {"label":"青霉素"},
+            {"label":"头孢菌素"}
+          ]},
+          {"label":"半合成", "children": [
+            {"label":"酰化"},
+            {"label":"扩环"}
+          ]}
+        ]},
+        {"label":"化学药品原料药-心血管类 [★★]","code":"A-27-2710-02", "children": [
+          {"label":"有机合成", "children": [
+            {"label":"他汀类"},
+            {"label":"ACEI"},
+            {"label":"ARB"}
+          ]}
+        ]},
+        {"label":"化学药品原料药-抗肿瘤类 [★★]","code":"A-27-2710-03", "children": [
+          {"label":"有机合成", "children": [
+            {"label":"烷化剂"},
+            {"label":"抗代谢"},
+            {"label":"铂类"},
+            {"label":"靶向药"}
+          ]}
+        ]},
+        {"label":"化学药品原料药-神经系统类 [★★]","code":"A-27-2710-04", "children": [
+          {"label":"有机合成", "children": [
+            {"label":"镇痛"},
+            {"label":"镇静"},
+            {"label":"抗抑郁"},
+            {"label":"抗癫痫"}
+          ]}
+        ]},
+        {"label":"化学药品原料药-消化系统类 [★]","code":"A-27-2710-05", "children": [
+          {"label":"有机合成", "children": [
+            {"label":"PPI"},
+            {"label":"抗酸"},
+            {"label":"H₂受体拮抗剂"}
+          ]}
+        ]},
+        {"label":"化学药品原料药-解热镇痛类 [★★]","code":"A-27-2710-06", "children": [
+          {"label":"有机合成", "children": [
+            {"label":"阿司匹林"},
+            {"label":"对乙酰氨基酚"},
+            {"label":"布洛芬"}
+          ]}
+        ]},
+        {"label":"化学药品原料药-激素类 [★]","code":"A-27-2710-07", "children": [
+          {"label":"半合成"},
+          {"label":"全合成", "children": [
+            {"label":"甾体激素"},
+            {"label":"性激素"},
+            {"label":"皮质激素"}
+          ]}
+        ]},
+        {"label":"化学药品原料药-维生素类 [★★]","code":"A-27-2710-08", "children": [
+          {"label":"合成"},
+          {"label":"发酵", "children": [
+            {"label":"VC"},
+            {"label":"VE"},
+            {"label":"VB族"},
+            {"label":"VA"},
+            {"label":"VD₃"}
+          ]}
+        ]},
+        {"label":"化学药品制剂-片剂 [★]","code":"A-27-2720-01", "children": [
+          {"label":"填充剂"},
+          {"label":"粘合剂"},
+          {"label":"崩解剂"},
+          {"label":"润滑剂"},
+          {"label":"包衣材料"}
+        ]},
+        {"label":"化学药品制剂-胶囊 [★]","code":"A-27-2720-02", "children": [
+          {"label":"明胶胶囊壳 ← C-2667"},
+          {"label":"HPMC胶囊壳"},
+          {"label":"填充辅料"}
+        ]},
+        {"label":"化学药品制剂-注射剂 [★]","code":"A-27-2720-03", "children": [
+          {"label":"注射级溶剂"},
+          {"label":"表面活性剂"},
+          {"label":"冻干赋形剂"},
+          {"label":"pH调节剂"}
+        ]},
+        {"label":"化学药品制剂-口服液 [★]","code":"A-27-2720-04", "children": [
+          {"label":"防腐剂"},
+          {"label":"甜味剂"},
+          {"label":"增稠剂"},
+          {"label":"香精"}
+        ]},
+        {"label":"中药饮片加工 [★]","code":"A-27-2730", "children": [
+          {"label":"炮制辅料", "children": [
+            {"label":"酒"},
+            {"label":"醋"},
+            {"label":"蜜"},
+            {"label":"药汁"}
+          ]}
+        ]},
+        {"label":"中成药生产 [★]","code":"A-27-2740", "children": [
+          {"label":"提取溶剂", "children": [
+            {"label":"乙醇 ← C-2614"},
+            {"label":"水"}
+          ]},
+          {"label":"大孔吸附树脂"},
+          {"label":"制剂辅料"}
+        ]},
+        {"label":"兽用药品制造 [★]","code":"A-27-2750", "children": [
+          {"label":"兽药原料"},
+          {"label":"制剂辅料"}
+        ]},
+        {"label":"生物药品制造 [★★]","code":"A-27-2761", "children": [
+          {"label":"培养基组分"},
+          {"label":"缓冲盐"},
+          {"label":"层析填料"},
+          {"label":"超滤膜"},
+          {"label":"冻干保护剂"}
+        ]},
+        {"label":"基因工程药物和疫苗制造 [★]","code":"A-27-2762", "children": [
+          {"label":"生物试剂"},
+          {"label":"培养基"},
+          {"label":"纯化介质"}
+        ]},
+        {"label":"卫生材料及医药用品制造 [★]","code":"A-27-2770", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"药用辅料及包装材料 [★★]","code":"A-27-2780", "children": [
+          {"label":"药用级玻璃 ← C-30"},
+          {"label":"塑料 ← C-2651"},
+          {"label":"橡胶塞"},
+          {"label":"铝箔涂层"},
+          {"label":"干燥剂"}
+        ]}
+      ]},
+      {"label":"化学纤维制造业","code":"C-28", "children": [
+        {"label":"化纤浆粕制造 [★]","code":"A-28-2811", "children": [
+          {"label":"蒸煮化学品", "children": [
+            {"label":"NaOH ← C-2612"},
+            {"label":"CS₂消耗少"}
+          ]}
+        ]},
+        {"label":"人造纤维-粘胶长丝 [★★]","code":"A-28-2812-01", "children": [
+          {"label":"溶液纺丝", "children": [
+            {"label":"NaOH+CS₂→黄酸酯→酸浴凝固 ← C-2614"}
+          ]},
+          {"label":"纺丝油剂"},
+          {"label":"酸浴", "children": [
+            {"label":"H₂SO₄ ← C-2611"},
+            {"label":"Na₂SO₄"},
+            {"label":"ZnSO₄"}
+          ]}
+        ]},
+        {"label":"人造纤维-粘胶短纤 [★★]","code":"A-28-2812-02", "children": [
+          {"label":"溶液纺丝", "children": [
+            {"label":"NaOH+CS₂→黄酸酯→酸浴凝固 ← C-2614"}
+          ]},
+          {"label":"纺丝油剂"},
+          {"label":"酸浴", "children": [
+            {"label":"H₂SO₄ ← C-2611"},
+            {"label":"Na₂SO₄"},
+            {"label":"ZnSO₄"}
+          ]}
+        ]},
+        {"label":"人造纤维-醋酸纤维 [★]","code":"A-28-2812-03", "children": [
+          {"label":"醋酸纤维素+丙酮溶液纺丝 ← C-2614"}
+        ]},
+        {"label":"合成纤维-锦纶6 [★★]","code":"A-28-2821-01", "children": [
+          {"label":"熔体纺丝", "children": [
+            {"label":"己内酰胺开环聚合→纺丝 ← C-2653"}
+          ]},
+          {"label":"纺丝油剂"}
+        ]},
+        {"label":"合成纤维-锦纶66 [★]","code":"A-28-2821-02", "children": [
+          {"label":"熔体纺丝", "children": [
+            {"label":"尼龙66盐缩聚→纺丝 ← C-2653"}
+          ]},
+          {"label":"纺丝油剂"}
+        ]},
+        {"label":"合成纤维-涤纶长丝 [★★★]","code":"A-28-2822-01", "children": [
+          {"label":"熔体纺丝", "children": [
+            {"label":"PTA+EG→PET→纺丝 ← C-2653"}
+          ]},
+          {"label":"纺丝油剂"},
+          {"label":"消光剂", "children": [
+            {"label":"TiO₂ ← C-2643"}
+          ]}
+        ]},
+        {"label":"合成纤维-涤纶短纤 [★★]","code":"A-28-2822-02", "children": [
+          {"label":"熔体纺丝", "children": [
+            {"label":"PTA+EG→PET→纺丝 ← C-2653"}
+          ]},
+          {"label":"纺丝油剂"},
+          {"label":"消光剂", "children": [
+            {"label":"TiO₂ ← C-2643"}
+          ]}
+        ]},
+        {"label":"腈纶纤维制造 [★★]","code":"A-28-2823", "children": [
+          {"label":"湿法/干法纺丝", "children": [
+            {"label":"DMF ← C-2614"},
+            {"label":"NaSCN溶剂"}
+          ]},
+          {"label":"纺丝油剂"}
+        ]},
+        {"label":"维纶纤维制造 [★]","code":"A-28-2824", "children": [
+          {"label":"湿法纺丝", "children": [
+            {"label":"PVA水溶液→硫酸钠凝固浴 ← C-2651"}
+          ]},
+          {"label":"纺丝油剂"}
+        ]},
+        {"label":"丙纶纤维制造 [★]","code":"A-28-2825", "children": [
+          {"label":"熔体纺丝", "children": [
+            {"label":"PP→纺丝 ← C-2651"}
+          ]},
+          {"label":"纺丝油剂"}
+        ]},
+        {"label":"氨纶纤维制造 [★★]","code":"A-28-2826", "children": [
+          {"label":"干法纺丝", "children": [
+            {"label":"DMF ← C-2614"},
+            {"label":"DMAC溶液纺丝"}
+          ]},
+          {"label":"纺丝油剂"}
+        ]},
+        {"label":"其他合成纤维制造 [★]","code":"A-28-2829", "children": [
+          {"label":"特种纤维", "children": [
+            {"label":"芳纶"},
+            {"label":"UHMWPE等"}
+          ]}
+        ]},
+        {"label":"生物基化学纤维-PLA纤维 [★]","code":"A-28-2831-01", "children": [
+          {"label":"熔体纺丝", "children": [
+            {"label":"聚乳酸→纺丝 ← 发酵"}
+          ]}
+        ]},
+        {"label":"生物基化学纤维-PHA纤维 [★]","code":"A-28-2831-02", "children": [
+          {"label":"熔体纺丝"},
+          {"label":"湿法纺丝"}
+        ]},
+        {"label":"生物基、淀粉基新材料制造 [★]","code":"A-28-2832", "children": [
+          {"label":"淀粉改性 ← C-1391"},
+          {"label":"PLA"},
+          {"label":"PBAT合成"}
+        ]}
+      ]},
+      {"label":"橡胶和塑料制品业","code":"C-29", "children": [
+        {"label":"轮胎-全钢子午胎 [★★★]","code":"A-29-2911-01", "children": [
+          {"label":"天然胶/合成胶 ← C-2652"},
+          {"label":"炭黑/白炭黑 ← C-2643"},
+          {"label":"硫化体系", "children": [
+            {"label":"硫磺"},
+            {"label":"促进剂 ← C-2661"},
+            {"label":"氧化锌"}
+          ]},
+          {"label":"防老剂 ← C-2661"},
+          {"label":"粘合增进剂"},
+          {"label":"软化剂"}
+        ]},
+        {"label":"轮胎-半钢子午胎 [★★]","code":"A-29-2911-02", "children": [
+          {"label":"天然胶/合成胶 ← C-2652"},
+          {"label":"炭黑/白炭黑 ← C-2643"},
+          {"label":"硫化体系", "children": [
+            {"label":"硫磺"},
+            {"label":"促进剂 ← C-2661"},
+            {"label":"氧化锌"}
+          ]},
+          {"label":"防老剂 ← C-2661"},
+          {"label":"粘合增进剂"},
+          {"label":"软化剂"}
+        ]},
+        {"label":"轮胎-斜交胎 [★]","code":"A-29-2911-03", "children": [
+          {"label":"天然胶/合成胶 ← C-2652"},
+          {"label":"炭黑/白炭黑 ← C-2643"},
+          {"label":"硫化体系", "children": [
+            {"label":"硫磺"},
+            {"label":"促进剂 ← C-2661"},
+            {"label":"氧化锌"}
+          ]},
+          {"label":"防老剂 ← C-2661"},
+          {"label":"粘合增进剂"},
+          {"label":"软化剂"}
+        ]},
+        {"label":"轮胎-工程胎 [★]","code":"A-29-2911-04", "children": [
+          {"label":"天然胶/合成胶 ← C-2652"},
+          {"label":"炭黑/白炭黑 ← C-2643"},
+          {"label":"硫化体系", "children": [
+            {"label":"硫磺"},
+            {"label":"促进剂 ← C-2661"},
+            {"label":"氧化锌"}
+          ]},
+          {"label":"防老剂 ← C-2661"},
+          {"label":"粘合增进剂"},
+          {"label":"软化剂"}
+        ]},
+        {"label":"橡胶板管带-输送带 [★★]","code":"A-29-2912-01", "children": [
+          {"label":"生胶"},
+          {"label":"炭黑 ← C-2643"},
+          {"label":"硫化体系"},
+          {"label":"防老剂 ← C-2661"},
+          {"label":"阻燃剂"}
+        ]},
+        {"label":"橡胶板管带-V带 [★]","code":"A-29-2912-02", "children": [
+          {"label":"生胶"},
+          {"label":"炭黑 ← C-2643"},
+          {"label":"硫化体系"},
+          {"label":"防老剂 ← C-2661"},
+          {"label":"阻燃剂"}
+        ]},
+        {"label":"橡胶板管带-胶管 [★]","code":"A-29-2912-03", "children": [
+          {"label":"生胶"},
+          {"label":"炭黑 ← C-2643"},
+          {"label":"硫化体系"},
+          {"label":"防老剂 ← C-2661"},
+          {"label":"阻燃剂"}
+        ]},
+        {"label":"橡胶零件制造 [★]","code":"A-29-2913", "children": [
+          {"label":"生胶"},
+          {"label":"补强填料"},
+          {"label":"硫化体系"},
+          {"label":"防老剂 ← C-2661"},
+          {"label":"增塑剂"}
+        ]},
+        {"label":"再生橡胶制造 [★]","code":"A-29-2914", "children": [
+          {"label":"再生软化剂"},
+          {"label":"活化剂"},
+          {"label":"脱硫剂"}
+        ]},
+        {"label":"日用及医用橡胶制品制造 [★]","code":"A-29-2915", "children": [
+          {"label":"天然胶乳"},
+          {"label":"硫化剂"},
+          {"label":"促进剂"},
+          {"label":"防老剂"},
+          {"label":"表面处理剂"}
+        ]},
+        {"label":"运动场地用塑胶制造 [★]","code":"A-29-2916", "children": [
+          {"label":"PU树脂 ← C-2651"},
+          {"label":"EPDM颗粒"},
+          {"label":"固化剂"},
+          {"label":"催化剂"}
+        ]},
+        {"label":"其他橡胶制品制造 [★]","code":"A-29-2919", "children": [
+          {"label":"橡胶配合剂"}
+        ]},
+        {"label":"塑料薄膜-BOPP薄膜 [★★]","code":"A-29-2921-01", "children": [
+          {"label":"PP树脂 ← C-2651"},
+          {"label":"抗静电剂"},
+          {"label":"爽滑剂"},
+          {"label":"开口剂"}
+        ]},
+        {"label":"塑料薄膜-BOPET薄膜 [★]","code":"A-29-2921-02", "children": [
+          {"label":"PET树脂 ← C-2651"},
+          {"label":"抗静电剂"},
+          {"label":"爽滑剂"}
+        ]},
+        {"label":"塑料薄膜-CPP薄膜 [★]","code":"A-29-2921-03", "children": [
+          {"label":"PP树脂 ← C-2651"},
+          {"label":"增塑剂"}
+        ]},
+        {"label":"塑料薄膜-PE膜 [★★]","code":"A-29-2921-04", "children": [
+          {"label":"PE树脂 ← C-2651"},
+          {"label":"抗氧剂"},
+          {"label":"光稳定剂"}
+        ]},
+        {"label":"塑料薄膜-农膜 [★]","code":"A-29-2921-05", "children": [
+          {"label":"PE树脂 ← C-2651"},
+          {"label":"光稳定剂"},
+          {"label":"流滴剂"},
+          {"label":"保温剂"}
+        ]},
+        {"label":"塑料板管型材-PVC管材 [★★]","code":"A-29-2922-01", "children": [
+          {"label":"PVC树脂 ← C-2651"},
+          {"label":"热稳定剂 ← C-2661"},
+          {"label":"润滑剂"},
+          {"label":"填料"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"塑料板管型材-PE管材 [★]","code":"A-29-2922-02", "children": [
+          {"label":"PE树脂 ← C-2651"},
+          {"label":"抗氧剂"},
+          {"label":"炭黑 ← C-2643"}
+        ]},
+        {"label":"塑料板管型材-PPR管材 [★]","code":"A-29-2922-03", "children": [
+          {"label":"PP树脂 ← C-2651"},
+          {"label":"抗氧剂"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"塑料板管型材-型材 [★]","code":"A-29-2922-04", "children": [
+          {"label":"PVC树脂 ← C-2651"},
+          {"label":"稳定剂"},
+          {"label":"润滑剂"},
+          {"label":"填料"},
+          {"label":"抗冲改性剂"}
+        ]},
+        {"label":"塑料丝、绳及编织品制造 [★]","code":"A-29-2923", "children": [
+          {"label":"PP ← C-2651"},
+          {"label":"PE树脂"},
+          {"label":"抗氧剂"},
+          {"label":"光稳定剂"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"泡沫塑料-PU泡沫 [★★]","code":"A-29-2924-01", "children": [
+          {"label":"聚醚 ← C-2651"},
+          {"label":"异氰酸酯"},
+          {"label":"发泡剂"},
+          {"label":"催化剂"},
+          {"label":"匀泡剂"},
+          {"label":"阻燃剂"}
+        ]},
+        {"label":"泡沫塑料-EPS/XPS [★]","code":"A-29-2924-02", "children": [
+          {"label":"PS树脂 ← C-2651"},
+          {"label":"发泡剂", "children": [
+            {"label":"戊烷"},
+            {"label":"CO₂"}
+          ]},
+          {"label":"阻燃剂"}
+        ]},
+        {"label":"泡沫塑料-EPE [★]","code":"A-29-2924-03", "children": [
+          {"label":"PE树脂 ← C-2651"},
+          {"label":"发泡剂"},
+          {"label":"抗静电剂"}
+        ]},
+        {"label":"塑料人造革-PVC革 [★★]","code":"A-29-2925-01", "children": [
+          {"label":"PVC树脂 ← C-2651"},
+          {"label":"增塑剂 ← C-2661"},
+          {"label":"稳定剂"},
+          {"label":"发泡剂"},
+          {"label":"表面处理剂"}
+        ]},
+        {"label":"塑料合成革-PU革 [★★]","code":"A-29-2925-02", "children": [
+          {"label":"PU树脂 ← C-2651"},
+          {"label":"DMF溶剂 ← C-2614"},
+          {"label":"表面处理剂"},
+          {"label":"色浆"}
+        ]},
+        {"label":"塑料包装箱及容器制造 [★]","code":"A-29-2926", "children": [
+          {"label":"PET ← C-2651"},
+          {"label":"PE ← C-2651"},
+          {"label":"PP树脂"},
+          {"label":"抗静电剂"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"日用塑料制品制造 [★]","code":"A-29-2927", "children": [
+          {"label":"PP"},
+          {"label":"PE"},
+          {"label":"PS"},
+          {"label":"ABS树脂 ← C-2651"},
+          {"label":"着色剂"},
+          {"label":"抗氧剂"}
+        ]},
+        {"label":"人造草坪制造 [★]","code":"A-29-2928", "children": [
+          {"label":"PE ← C-2651"},
+          {"label":"PP树脂"},
+          {"label":"UV稳定剂"},
+          {"label":"填料"}
+        ]},
+        {"label":"塑料零件及其他塑料制品制造 [★]","code":"A-29-2929", "children": [
+          {"label":"各类工程塑料"},
+          {"label":"改性塑料"},
+          {"label":"添加剂"}
+        ]}
+      ]},
+      {"label":"非金属矿物制品业","code":"C-30", "children": [
+        {"label":"水泥-硅酸盐水泥 [★★]","code":"A-30-3011-01", "children": [
+          {"label":"石灰石+粘土+铁粉高温煅烧→熟料+石膏+混合材；助磨剂 ← B-1011", "children": [
+            {"label":"三乙醇胺"},
+            {"label":"醇类"}
+          ]}
+        ]},
+        {"label":"水泥-特种水泥 [★]","code":"A-30-3011-02", "children": [
+          {"label":"铝酸盐"},
+          {"label":"硫铝酸盐"},
+          {"label":"油井水泥，氧化铝"},
+          {"label":"萤石调整"}
+        ]},
+        {"label":"石灰和石膏制造 [★]","code":"A-30-3012", "children": [
+          {"label":"石灰石煅烧"},
+          {"label":"石膏煅烧"}
+        ]},
+        {"label":"水泥制品制造 [★★]","code":"A-30-3021", "children": [
+          {"label":"混凝土外加剂", "children": [
+            {"label":"减水剂 ← C-2662"},
+            {"label":"速凝剂"},
+            {"label":"引气剂"}
+          ]}
+        ]},
+        {"label":"砼结构构件制造 [★]","code":"A-30-3022", "children": [
+          {"label":"混凝土外加剂"}
+        ]},
+        {"label":"石棉水泥制品制造 [★]","code":"A-30-3023", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"轻质建筑材料制造 [★]","code":"A-30-3024", "children": [
+          {"label":"发泡剂"},
+          {"label":"稳泡剂"},
+          {"label":"石膏缓凝剂"}
+        ]},
+        {"label":"其他水泥类似制品制造 [★]","code":"A-30-3029", "children": [
+          {"label":"外加剂"}
+        ]},
+        {"label":"粘土砖瓦及建筑砌块制造 [★]","code":"A-30-3031", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"建筑用石加工 [★]","code":"A-30-3032", "children": [
+          {"label":"切割冷却液"},
+          {"label":"抛光剂"}
+        ]},
+        {"label":"防水建筑材料制造 [★★]","code":"A-30-3033", "children": [
+          {"label":"沥青 ← C-2511"},
+          {"label":"SBS改性剂 ← C-2652"},
+          {"label":"防水涂料"}
+        ]},
+        {"label":"隔热和隔音材料制造 [★]","code":"A-30-3034", "children": [
+          {"label":"发泡剂"},
+          {"label":"粘结剂"},
+          {"label":"阻燃剂"}
+        ]},
+        {"label":"其他建筑材料制造 [★]","code":"A-30-3039", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"平板玻璃-浮法玻璃 [★★]","code":"A-30-3041-01", "children": [
+          {"label":"配合料", "children": [
+            {"label":"石英砂 ← B-1011"},
+            {"label":"纯碱 ← C-2612"},
+            {"label":"石灰石"},
+            {"label":"芒硝"},
+            {"label":"长石"}
+          ]},
+          {"label":"澄清剂"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"平板玻璃-压延玻璃 [★]","code":"A-30-3041-02", "children": [
+          {"label":"配合料", "children": [
+            {"label":"石英砂 ← B-1011"},
+            {"label":"纯碱 ← C-2612"},
+            {"label":"石灰石"},
+            {"label":"芒硝"},
+            {"label":"长石"}
+          ]},
+          {"label":"澄清剂"},
+          {"label":"着色剂"}
+        ]},
+        {"label":"特种玻璃-光学玻璃 [★]","code":"A-30-3042-01", "children": [
+          {"label":"氧化铅 ← C-32"},
+          {"label":"氧化镧"},
+          {"label":"氧化钡"},
+          {"label":"稀土氧化物 ← C-3232"}
+        ]},
+        {"label":"特种玻璃-电子玻璃 [★]","code":"A-30-3042-02", "children": [
+          {"label":"硼硅"},
+          {"label":"铝硅"},
+          {"label":"高铝玻璃配合料"}
+        ]},
+        {"label":"特种玻璃-石英玻璃 [★]","code":"A-30-3042-03", "children": [
+          {"label":"高纯石英砂高温熔融 ← B-1011"}
+        ]},
+        {"label":"特种玻璃-微晶玻璃 [★]","code":"A-30-3042-04", "children": [
+          {"label":"玻璃+成核剂（TiO₂/氟化物）热处理 ← C-2643"}
+        ]},
+        {"label":"其他玻璃制造 [★]","code":"A-30-3049", "children": [
+          {"label":"配合料"}
+        ]},
+        {"label":"技术玻璃制品制造 [★]","code":"A-30-3051", "children": [
+          {"label":"镀膜化学品", "children": [
+            {"label":"银"},
+            {"label":"铜"},
+            {"label":"磁控溅射靶材 ← C-32"}
+          ]},
+          {"label":"钢化"},
+          {"label":"中空用密封胶"}
+        ]},
+        {"label":"光学玻璃制造 [★]","code":"A-30-3052", "children": [
+          {"label":"光学玻璃配合料"},
+          {"label":"光学镀膜材料"}
+        ]},
+        {"label":"玻璃仪器制造 [★]","code":"A-30-3053", "children": [
+          {"label":"硼硅玻璃配合料"}
+        ]},
+        {"label":"日用玻璃制品制造 [★]","code":"A-30-3054", "children": [
+          {"label":"着色剂"},
+          {"label":"脱色剂"}
+        ]},
+        {"label":"玻璃包装容器制造 [★]","code":"A-30-3055", "children": [
+          {"label":"着色剂"},
+          {"label":"脱色剂"}
+        ]},
+        {"label":"玻璃保温容器制造 [★]","code":"A-30-3056", "children": [
+          {"label":"镀银化学品", "children": [
+            {"label":"银镜反应"}
+          ]}
+        ]},
+        {"label":"制镜及类似品加工 [★]","code":"A-30-3057", "children": [
+          {"label":"镀银化学品"},
+          {"label":"保护漆"}
+        ]},
+        {"label":"其他玻璃制品制造 [★]","code":"A-30-3059", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"玻璃纤维-E玻纤 [★★]","code":"A-30-3061-01", "children": [
+          {"label":"玻璃配合料", "children": [
+            {"label":"硼硅铝体系"}
+          ]},
+          {"label":"浸润剂", "children": [
+            {"label":"淀粉"},
+            {"label":"硅烷偶联剂"}
+          ]}
+        ]},
+        {"label":"玻璃纤维-S玻纤/特种玻纤 [★]","code":"A-30-3061-02", "children": [
+          {"label":"高强度玻璃配合料"},
+          {"label":"特种浸润剂"}
+        ]},
+        {"label":"玻璃纤维增强塑料制品制造 [★★]","code":"A-30-3062", "children": [
+          {"label":"环氧"},
+          {"label":"不饱和聚酯"},
+          {"label":"乙烯基酯树脂 ← C-2651"},
+          {"label":"固化剂"},
+          {"label":"促进剂"},
+          {"label":"脱模剂"}
+        ]},
+        {"label":"建筑陶瓷-釉面砖 [★★]","code":"A-30-3071-01", "children": [
+          {"label":"釉料 ← C-2643", "children": [
+            {"label":"长石"},
+            {"label":"石英"},
+            {"label":"硼砂 ← B-1020"},
+            {"label":"氧化锌"},
+            {"label":"色釉料 ← C-2643"}
+          ]},
+          {"label":"解胶剂"},
+          {"label":"增塑剂"}
+        ]},
+        {"label":"建筑陶瓷-抛光砖 [★]","code":"A-30-3071-02", "children": [
+          {"label":"坯体化学品"},
+          {"label":"抛光磨料"}
+        ]},
+        {"label":"建筑陶瓷-瓷片 [★]","code":"A-30-3071-03", "children": [
+          {"label":"釉料"},
+          {"label":"印花釉"}
+        ]},
+        {"label":"卫生陶瓷制品制造 [★]","code":"A-30-3072", "children": [
+          {"label":"釉料"},
+          {"label":"色釉料"}
+        ]},
+        {"label":"特种陶瓷-电子陶瓷 [★]","code":"A-30-3073-01", "children": [
+          {"label":"氧化铝"},
+          {"label":"钛酸钡"},
+          {"label":"锆钛酸铅"},
+          {"label":"压电陶瓷粉体"}
+        ]},
+        {"label":"特种陶瓷-结构陶瓷 [★]","code":"A-30-3073-02", "children": [
+          {"label":"氧化锆 ← C-3232稀土"},
+          {"label":"碳化硅"},
+          {"label":"氮化硅粉体+烧结助剂"}
+        ]},
+        {"label":"特种陶瓷-生物陶瓷 [★]","code":"A-30-3073-03", "children": [
+          {"label":"羟基磷灰石"},
+          {"label":"生物活性玻璃"}
+        ]},
+        {"label":"日用陶瓷制品制造 [★]","code":"A-30-3074", "children": [
+          {"label":"釉料"},
+          {"label":"色釉料"}
+        ]},
+        {"label":"陈设艺术陶瓷制造 [★]","code":"A-30-3075", "children": [
+          {"label":"釉料"},
+          {"label":"色釉料"}
+        ]},
+        {"label":"园艺陶瓷制造 [★]","code":"A-30-3076", "children": [
+          {"label":"釉料"}
+        ]},
+        {"label":"其他陶瓷制品制造 [★]","code":"A-30-3079", "children": [
+          {"label":"釉料"}
+        ]},
+        {"label":"石棉制品制造 [★]","code":"A-30-3081", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"云母制品制造 [★]","code":"A-30-3082", "children": [
+          {"label":"粘结剂"}
+        ]},
+        {"label":"耐火材料-硅砖 [★]","code":"A-30-3089-01", "children": [
+          {"label":"石英原料+石灰 ← B-1011", "children": [
+            {"label":"矿化剂"}
+          ]}
+        ]},
+        {"label":"耐火材料-镁砖 [★]","code":"A-30-3089-02", "children": [
+          {"label":"菱镁矿（MgO）+结合剂 ← B-1020"}
+        ]},
+        {"label":"耐火材料-铝硅系 [★]","code":"A-30-3089-03", "children": [
+          {"label":"高铝矾土 ← B-1020"},
+          {"label":"粘土+结合剂"}
+        ]},
+        {"label":"耐火材料-不定形耐火材料 [★]","code":"A-30-3089-04", "children": [
+          {"label":"骨料+结合剂", "children": [
+            {"label":"磷酸盐 ← C-2613"},
+            {"label":"水玻璃 ← C-2612"},
+            {"label":"铝酸钙水泥"}
+          ]}
+        ]},
+        {"label":"石墨及碳素-石墨电极 [★★]","code":"A-30-3091-01", "children": [
+          {"label":"石油焦 ← C-2511"},
+          {"label":"针状焦+煤沥青 ← C-2521", "children": [
+            {"label":"粘结剂"},
+            {"label":"浸渍剂"}
+          ]}
+        ]},
+        {"label":"石墨及碳素-碳素电极 [★]","code":"A-30-3091-02", "children": [
+          {"label":"炭素材料+煤沥青 ← C-2521"}
+        ]},
+        {"label":"石墨及碳素-特种石墨 [★]","code":"A-30-3091-03", "children": [
+          {"label":"高纯石墨"},
+          {"label":"各向同性石墨"},
+          {"label":"膨胀石墨"}
+        ]},
+        {"label":"石墨及碳素-碳纤维 [★★]","code":"A-30-3091-04", "children": [
+          {"label":"PAN原丝→预氧化→碳化→石墨化 ← C-2823腈纶"}
+        ]},
+        {"label":"其他非金属矿物制品制造 [★]","code":"A-30-3099", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"黑色金属冶炼和压延加工业","code":"C-31", "children": [
+        {"label":"炼铁 [★★]","code":"A-31-3110", "children": [
+          {"label":"冶金辅料", "children": [
+            {"label":"石灰 ← 非金属矿"},
+            {"label":"萤石"},
+            {"label":"碳化硅"}
+          ]},
+          {"label":"耐火材料 ← C-3089"},
+          {"label":"保护渣"},
+          {"label":"连铸润滑剂"}
+        ]},
+        {"label":"炼钢 [★★]","code":"A-31-3120", "children": [
+          {"label":"造渣剂", "children": [
+            {"label":"石灰 ← 非金属矿"},
+            {"label":"萤石"}
+          ]},
+          {"label":"脱氧剂", "children": [
+            {"label":"铝"},
+            {"label":"硅铁"},
+            {"label":"锰铁"}
+          ]},
+          {"label":"脱硫剂"},
+          {"label":"耐火材料 ← C-3089"},
+          {"label":"保护渣"}
+        ]},
+        {"label":"钢压延加工 [★★]","code":"A-31-3130", "children": [
+          {"label":"轧制液 ← C-2661", "children": [
+            {"label":"乳化液"},
+            {"label":"矿物油"}
+          ]},
+          {"label":"酸洗酸", "children": [
+            {"label":"盐酸 ← C-2611"},
+            {"label":"硫酸 ← C-2611"},
+            {"label":"混酸"}
+          ]},
+          {"label":"防锈油"},
+          {"label":"表面处理剂"}
+        ]},
+        {"label":"铁合金-硅铁 [★]","code":"A-31-3140-01", "children": [
+          {"label":"石英+碳 ← B-1011", "children": [
+            {"label":"电炉冶炼"}
+          ]}
+        ]},
+        {"label":"铁合金-锰铁 [★]","code":"A-31-3140-02", "children": [
+          {"label":"锰矿+碳 ← B-0820"},
+          {"label":"硅", "children": [
+            {"label":"电炉冶炼"}
+          ]}
+        ]},
+        {"label":"铁合金-铬铁 [★]","code":"A-31-3140-03", "children": [
+          {"label":"铬矿+碳 ← B-0820"},
+          {"label":"硅", "children": [
+            {"label":"电炉冶炼"}
+          ]}
+        ]},
+        {"label":"铁合金-硅锰合金 [★]","code":"A-31-3140-04", "children": [
+          {"label":"锰矿+石英+碳", "children": [
+            {"label":"电炉冶炼"}
+          ]}
+        ]}
+      ]},
+      {"label":"有色金属冶炼和压延加工业","code":"C-32", "children": [
+        {"label":"铜冶炼 [★★]","code":"A-32-3211", "children": [
+          {"label":"选矿药剂"},
+          {"label":"熔剂", "children": [
+            {"label":"石英 ← B-1011"},
+            {"label":"石灰"}
+          ]},
+          {"label":"耐火材料"},
+          {"label":"硫酸 ← C-2611", "children": [
+            {"label":"电解"},
+            {"label":"制酸"}
+          ]}
+        ]},
+        {"label":"铅锌冶炼 [★]","code":"A-32-3212", "children": [
+          {"label":"熔剂"},
+          {"label":"耐火材料"},
+          {"label":"浸出剂", "children": [
+            {"label":"硫酸 ← C-2611"}
+          ]},
+          {"label":"锌粉", "children": [
+            {"label":"置换"}
+          ]}
+        ]},
+        {"label":"镍钴冶炼 [★]","code":"A-32-3213", "children": [
+          {"label":"浸出剂", "children": [
+            {"label":"硫酸 ← C-2611"},
+            {"label":"盐酸 ← C-2611"}
+          ]},
+          {"label":"萃取剂 ← C-2661"},
+          {"label":"离子交换树脂"}
+        ]},
+        {"label":"锡冶炼 [★]","code":"A-32-3214", "children": [
+          {"label":"熔剂"},
+          {"label":"酸浸化学品"}
+        ]},
+        {"label":"锑冶炼 [★]","code":"A-32-3215", "children": [
+          {"label":"熔剂"},
+          {"label":"碱浸出"}
+        ]},
+        {"label":"铝冶炼-氧化铝 [★★]","code":"A-32-3216-01", "children": [
+          {"label":"拜耳法", "children": [
+            {"label":"铝土矿+NaOH浸出→氢氧化铝→煅烧 ← B-0916"}
+          ]}
+        ]},
+        {"label":"铝冶炼-电解铝 [★★]","code":"A-32-3216-02", "children": [
+          {"label":"冰晶石 ← C-2613", "children": [
+            {"label":"Na₃AlF₆"}
+          ]},
+          {"label":"氟化铝 ← C-2613"},
+          {"label":"阳极糊", "children": [
+            {"label":"石油焦+煤沥青 ← C-2511"}
+          ]}
+        ]},
+        {"label":"镁冶炼 [★]","code":"A-32-3217", "children": [
+          {"label":"硅热法", "children": [
+            {"label":"硅铁还原白云石 ← C-3140"}
+          ]},
+          {"label":"电解法", "children": [
+            {"label":"MgCl₂电解"}
+          ]}
+        ]},
+        {"label":"硅冶炼 [★]","code":"A-32-3218", "children": [
+          {"label":"石英+碳（电炉冶炼），石英→工业硅 ← B-1011"}
+        ]},
+        {"label":"其他常用有色金属冶炼 [★]","code":"A-32-3219", "children": [
+          {"label":"熔剂"},
+          {"label":"耐火材料"}
+        ]},
+        {"label":"金冶炼 [★]","code":"A-32-3221", "children": [
+          {"label":"浸出剂", "children": [
+            {"label":"氰化物 ← C-2613"}
+          ]},
+          {"label":"活性炭"},
+          {"label":"萃取剂"}
+        ]},
+        {"label":"银冶炼 [★]","code":"A-32-3222", "children": [
+          {"label":"浸出剂"},
+          {"label":"还原剂"}
+        ]},
+        {"label":"其他贵金属冶炼 [★]","code":"A-32-3229", "children": [
+          {"label":"浸出剂"},
+          {"label":"萃取剂"}
+        ]},
+        {"label":"钨钼冶炼 [★]","code":"A-32-3231", "children": [
+          {"label":"碱浸出", "children": [
+            {"label":"NaOH ← C-2612"}
+          ]},
+          {"label":"酸沉淀"},
+          {"label":"还原", "children": [
+            {"label":"氢气"}
+          ]}
+        ]},
+        {"label":"稀土金属冶炼 [★★]","code":"A-32-3232", "children": [
+          {"label":"萃取剂 ← C-2661", "children": [
+            {"label":"P507"},
+            {"label":"P204"}
+          ]},
+          {"label":"盐酸/草酸 ← C-2611"},
+          {"label":"还原剂"}
+        ]},
+        {"label":"其他稀有金属冶炼 [★]","code":"A-32-3239", "children": [
+          {"label":"浸出剂"},
+          {"label":"萃取剂"}
+        ]},
+        {"label":"有色金属合金制造 [★]","code":"A-32-3240", "children": [
+          {"label":"熔剂"},
+          {"label":"除气剂"},
+          {"label":"变质剂"}
+        ]},
+        {"label":"铜压延加工 [★]","code":"A-32-3251", "children": [
+          {"label":"轧制液 ← C-2661"},
+          {"label":"酸洗酸"},
+          {"label":"防锈剂"}
+        ]},
+        {"label":"铝压延加工 [★]","code":"A-32-3252", "children": [
+          {"label":"轧制油"},
+          {"label":"表面处理剂"}
+        ]},
+        {"label":"贵金属压延加工 [★]","code":"A-32-3253", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"稀有稀土金属压延加工 [★]","code":"A-32-3254", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他有色金属压延加工 [★]","code":"A-32-3259", "children": [
+          {"label":"轧制液"}
+        ]}
+      ]},
+      {"label":"金属制品业","code":"C-33", "children": [
+        {"label":"金属结构制造 [★]","code":"A-33-3311", "children": [
+          {"label":"涂料 ← C-2641", "children": [
+            {"label":"防腐漆"}
+          ]},
+          {"label":"防锈剂"}
+        ]},
+        {"label":"金属门窗制造 [★]","code":"A-33-3312", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"密封胶"}
+        ]},
+        {"label":"A-33-3321~3329 金属工具制造 [★]", "children": [
+          {"label":"淬火介质"},
+          {"label":"防锈剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"集装箱制造 [★]","code":"A-33-3331", "children": [
+          {"label":"涂料 ← C-2641", "children": [
+            {"label":"重防腐漆"}
+          ]},
+          {"label":"焊材化学品"}
+        ]},
+        {"label":"金属压力容器制造 [★]","code":"A-33-3332", "children": [
+          {"label":"涂料"},
+          {"label":"焊材化学品"}
+        ]},
+        {"label":"金属包装容器及材料制造 [★]","code":"A-33-3333", "children": [
+          {"label":"内壁涂料 ← C-2641", "children": [
+            {"label":"环氧酚醛"}
+          ]},
+          {"label":"镀锡化学品"}
+        ]},
+        {"label":"金属丝绳及其制品制造 [★]","code":"A-33-3340", "children": [
+          {"label":"拉丝润滑剂"},
+          {"label":"磷化液 ← C-2661"},
+          {"label":"防锈剂"}
+        ]},
+        {"label":"A-33-3351~3359 建筑安全用金属制品 [★]", "children": [
+          {"label":"涂料"},
+          {"label":"防锈剂", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"金属表面处理及热处理加工 [★★★]","code":"A-33-3360", "children": [
+          {"label":"电镀化学品 ← C-2661", "children": [
+            {"label":"镀镍"},
+            {"label":"镀铬"},
+            {"label":"镀锌"},
+            {"label":"镀铜"}
+          ]},
+          {"label":"阳极氧化液"},
+          {"label":"磷化液"},
+          {"label":"酸洗剂 ← C-2611", "children": [
+            {"label":"盐酸 ← C-2611"},
+            {"label":"硫酸 ← C-2611"}
+          ]},
+          {"label":"防锈剂"},
+          {"label":"钝化液"},
+          {"label":"淬火介质"}
+        ]},
+        {"label":"生产专用搪瓷制品制造 [★]","code":"A-33-3371", "children": [
+          {"label":"搪瓷釉料", "children": [
+            {"label":"硼砂 ← B-1020"},
+            {"label":"石英"},
+            {"label":"长石"},
+            {"label":"氧化锑"},
+            {"label":"氟化物"}
+          ]}
+        ]},
+        {"label":"A-33-3372~3379 其他搪瓷制品制造 [★]", "children": [
+          {"label":"搪瓷釉料"}
+        ]},
+        {"label":"A-33-3381~3389 金属制日用品制造 [★]", "children": [
+          {"label":"表面处理剂"},
+          {"label":"抛光剂"}
+        ]},
+        {"label":"黑色金属铸造 [★★]","code":"A-33-3391", "children": [
+          {"label":"呋喃树脂 ← 糠醇(C-2614)"},
+          {"label":"冷芯盒树脂"},
+          {"label":"覆膜砂粘结剂"},
+          {"label":"铸造涂料"},
+          {"label":"固化剂"}
+        ]},
+        {"label":"有色金属铸造 [★]","code":"A-33-3392", "children": [
+          {"label":"铸造涂料"},
+          {"label":"脱模剂"},
+          {"label":"熔剂"}
+        ]},
+        {"label":"锻件及粉末冶金制品制造 [★]","code":"A-33-3393", "children": [
+          {"label":"淬火介质"},
+          {"label":"保护气氛"}
+        ]},
+        {"label":"其他未列明金属制品制造 [★]","code":"A-33-3399", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"通用设备制造业","code":"C-34", "children": [
+        {"label":"锅炉及原动设备制造 [★]","code":"A-34-341", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"防锈剂"},
+          {"label":"液压油"},
+          {"label":"切削液"}
+        ]},
+        {"label":"金属加工机械制造 [★]","code":"A-34-342", "children": [
+          {"label":"切削液 ← C-2661"},
+          {"label":"切削油"},
+          {"label":"清洗剂"},
+          {"label":"防锈剂"},
+          {"label":"热处理盐"}
+        ]},
+        {"label":"物料搬运设备制造 [★]","code":"A-34-343", "children": [
+          {"label":"液压油"},
+          {"label":"润滑脂"},
+          {"label":"涂料"}
+        ]},
+        {"label":"泵阀门压缩机及类似机械制造 [★]","code":"A-34-344", "children": [
+          {"label":"液压油"},
+          {"label":"密封材料"},
+          {"label":"涂料"}
+        ]},
+        {"label":"轴承齿轮和传动部件制造 [★]","code":"A-34-345", "children": [
+          {"label":"润滑油"},
+          {"label":"热处理介质"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"烘炉风机包装等设备制造 [★]","code":"A-34-346", "children": [
+          {"label":"涂料"},
+          {"label":"保温材料"}
+        ]},
+        {"label":"文化办公用机械制造 [★]","code":"A-34-347", "children": [
+          {"label":"涂料"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"通用零部件制造 [★]","code":"A-34-348", "children": [
+          {"label":"淬火介质"},
+          {"label":"防锈剂"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"其他通用设备制造业 [★]","code":"A-34-349", "children": [
+          {"label":"涂料"},
+          {"label":"防锈剂"}
+        ]}
+      ]},
+      {"label":"专用设备制造业","code":"C-35", "children": [
+        {"label":"采矿冶金建筑专用设备制造 [★]","code":"A-35-351", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"液压油"},
+          {"label":"耐磨材料"}
+        ]},
+        {"label":"炼油化工生产专用设备制造 [★]","code":"A-35-3521", "children": [
+          {"label":"特种涂料 ← C-2641"},
+          {"label":"耐腐蚀材料"},
+          {"label":"密封材料"}
+        ]},
+        {"label":"A-35-3522~3529 其他化工木材非金属加工专用设备制造 [★]", "children": [
+          {"label":"涂料"},
+          {"label":"液压油"}
+        ]},
+        {"label":"食品饮料烟草及饲料专用设备制造 [★]","code":"A-35-353", "children": [
+          {"label":"涂料"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"日用化工专用设备制造 [★]","code":"A-35-3543", "children": [
+          {"label":"不锈钢材料"},
+          {"label":"密封材料"}
+        ]},
+        {"label":"制药专用设备制造 [★]","code":"A-35-3544", "children": [
+          {"label":"不锈钢材料"},
+          {"label":"洁净材料"}
+        ]},
+        {"label":"A-35-3541~3549 印刷制药日化及日用品专用设备制造 [★]", "children": [
+          {"label":"涂料"},
+          {"label":"液压油"}
+        ]},
+        {"label":"纺织服装和皮革加工专用设备制造 [★]","code":"A-35-355", "children": [
+          {"label":"涂料"},
+          {"label":"液压油"}
+        ]},
+        {"label":"电子和电工机械专用设备制造 [★]","code":"A-35-356", "children": [
+          {"label":"涂料"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"农林牧渔专用机械制造 [★]","code":"A-35-357", "children": [
+          {"label":"涂料"},
+          {"label":"液压油"}
+        ]},
+        {"label":"医疗仪器设备及器械制造 [★]","code":"A-35-358", "children": [
+          {"label":"消毒剂"},
+          {"label":"清洗剂"},
+          {"label":"涂层材料"}
+        ]},
+        {"label":"环保邮政社会公共服务及其他专用设备制造 [★]","code":"A-35-359", "children": [
+          {"label":"涂料"},
+          {"label":"防锈剂"}
+        ]}
+      ]},
+      {"label":"汽车制造业","code":"C-36", "children": [
+        {"label":"汽柴油车整车制造 [★★]","code":"A-36-3611", "children": [
+          {"label":"汽车涂料 ← C-2641", "children": [
+            {"label":"电泳漆"},
+            {"label":"中涂"},
+            {"label":"面漆"},
+            {"label":"清漆"}
+          ]},
+          {"label":"胶粘剂 ← C-2646", "children": [
+            {"label":"结构胶"},
+            {"label":"密封胶"},
+            {"label":"折边胶"}
+          ]},
+          {"label":"防冻液 ← 乙二醇(C-2614)"},
+          {"label":"制动液"},
+          {"label":"润滑油"},
+          {"label":"清洗剂"},
+          {"label":"内饰材料", "children": [
+            {"label":"PU泡沫"},
+            {"label":"塑料件"}
+          ]}
+        ]},
+        {"label":"新能源车整车制造 [★★]","code":"A-36-3612", "children": [
+          {"label":"汽车涂料", "children": [
+            {"label":"电泳漆"},
+            {"label":"中涂"},
+            {"label":"面漆"},
+            {"label":"清漆"}
+          ]},
+          {"label":"胶粘剂", "children": [
+            {"label":"结构胶"},
+            {"label":"密封胶"},
+            {"label":"折边胶"}
+          ]},
+          {"label":"防冻液"},
+          {"label":"制动液"},
+          {"label":"润滑油"},
+          {"label":"清洗剂"},
+          {"label":"内饰材料", "children": [
+            {"label":"PU泡沫"},
+            {"label":"塑料件"}
+          ]},
+          {"label":"电池材料", "children": [
+            {"label":"正极"},
+            {"label":"负极"},
+            {"label":"电解液 ← 碳酸酯(C-2614)"},
+            {"label":"隔膜"}
+          ]},
+          {"label":"电机绝缘材料 ← C-2651"}
+        ]},
+        {"label":"汽车用发动机制造 [★]","code":"A-36-3620", "children": [
+          {"label":"切削液 ← C-2661"},
+          {"label":"清洗剂"},
+          {"label":"防锈剂"},
+          {"label":"涂料"}
+        ]},
+        {"label":"改装汽车制造 [★]","code":"A-36-3630", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"低速汽车制造 [★]","code":"A-36-3640", "children": [
+          {"label":"涂料"}
+        ]},
+        {"label":"电车制造 [★]","code":"A-36-3650", "children": [
+          {"label":"涂料"},
+          {"label":"绝缘材料"},
+          {"label":"电池材料"}
+        ]},
+        {"label":"汽车车身、挂车制造 [★]","code":"A-36-3660", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"胶粘剂"},
+          {"label":"密封胶"}
+        ]},
+        {"label":"汽车零部件及配件制造 [★★]","code":"A-36-3670", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"胶粘剂"},
+          {"label":"防冻液"},
+          {"label":"制动液"},
+          {"label":"润滑油"},
+          {"label":"清洗剂"},
+          {"label":"电镀化学品"},
+          {"label":"塑料件 ← C-2651"}
+        ]}
+      ]},
+      {"label":"铁路、船舶、航空航天和其他运输设备制造业","code":"C-37", "children": [
+        {"label":"铁路运输设备制造 [★]","code":"A-37-371", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"胶粘剂"},
+          {"label":"阻燃材料"},
+          {"label":"密封材料"}
+        ]},
+        {"label":"城市轨道交通设备制造 [★]","code":"A-37-372", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"},
+          {"label":"阻燃材料"}
+        ]},
+        {"label":"船舶及相关装置制造 [★★]","code":"A-37-373", "children": [
+          {"label":"船舶涂料", "children": [
+            {"label":"防污漆 ← 氧化亚铜/有机硅(C-2661)"},
+            {"label":"防腐漆"}
+          ]},
+          {"label":"密封剂"},
+          {"label":"阻燃材料"},
+          {"label":"液压油"},
+          {"label":"复合材料"}
+        ]},
+        {"label":"航空、航天器及设备制造 [★★]","code":"A-37-374", "children": [
+          {"label":"航空涂料", "children": [
+            {"label":"高温"},
+            {"label":"隐身"}
+          ]},
+          {"label":"密封剂"},
+          {"label":"阻燃材料"},
+          {"label":"高性能复合材料", "children": [
+            {"label":"碳纤维+环氧树脂 ← C-3091"}
+          ]},
+          {"label":"液压油"},
+          {"label":"航空燃料添加剂"}
+        ]},
+        {"label":"摩托车制造 [★]","code":"A-37-375", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"胶粘剂"},
+          {"label":"润滑油"}
+        ]},
+        {"label":"自行车和残疾人座车制造 [★]","code":"A-37-376", "children": [
+          {"label":"涂料 ← C-2641"},
+          {"label":"电镀化学品"}
+        ]},
+        {"label":"助动车制造 [★]","code":"A-37-377", "children": [
+          {"label":"涂料"},
+          {"label":"电池材料"}
+        ]},
+        {"label":"非公路休闲车及零配件制造 [★]","code":"A-37-378", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"潜水救捞及其他未列明运输设备制造 [★]","code":"A-37-379", "children": [
+          {"label":"涂料"},
+          {"label":"密封材料"}
+        ]}
+      ]},
+      {"label":"电气机械和器材制造业","code":"C-38", "children": [
+        {"label":"电机制造 [★]","code":"A-38-381", "children": [
+          {"label":"绝缘漆"},
+          {"label":"浸渍树脂"},
+          {"label":"磁性材料"},
+          {"label":"涂料"}
+        ]},
+        {"label":"A-38-3821~3823 变压器/电容器/配电开关制造 [★]", "children": [
+          {"label":"绝缘材料", "children": [
+            {"label":"变压器油"},
+            {"label":"绝缘纸"},
+            {"label":"绝缘漆"}
+          ]},
+          {"label":"SF₆气体 ← C-2619"},
+          {"label":"银浆/触头材料"}
+        ]},
+        {"label":"电力电子元器件制造 [★★]","code":"A-38-3824", "children": [
+          {"label":"电子化学品 ← C-2662"},
+          {"label":"焊料"},
+          {"label":"封装材料"},
+          {"label":"导热硅脂"}
+        ]},
+        {"label":"光伏设备及元器件制造 [★★]","code":"A-38-3825", "children": [
+          {"label":"多晶硅 ← C-3841产业链上游"},
+          {"label":"硅烷"},
+          {"label":"银浆"},
+          {"label":"EVA"},
+          {"label":"POE封装胶膜"},
+          {"label":"背板材料"}
+        ]},
+        {"label":"电线、电缆制造 [★★]","code":"A-38-3831", "children": [
+          {"label":"绝缘材料", "children": [
+            {"label":"PVC ← C-2651"},
+            {"label":"PE ← C-2651"},
+            {"label":"XLPE"},
+            {"label":"橡胶"}
+          ]},
+          {"label":"铜杆拉丝液"},
+          {"label":"护套材料"}
+        ]},
+        {"label":"光纤制造 [★]","code":"A-38-3832", "children": [
+          {"label":"四氯化硅"},
+          {"label":"光纤涂料"},
+          {"label":"着色油墨"}
+        ]},
+        {"label":"绝缘制品制造 [★★]","code":"A-38-3834", "children": [
+          {"label":"绝缘漆"},
+          {"label":"绝缘胶"},
+          {"label":"云母制品"},
+          {"label":"层压制品"},
+          {"label":"绝缘薄膜"}
+        ]},
+        {"label":"锂离子电池-正极材料 [★★★]","code":"A-38-3841-01", "children": [
+          {"label":"磷酸铁锂/三元材料（NCM/NCA）/钴酸锂/锰酸锂前驱体"},
+          {"label":"掺杂/包覆添加剂"},
+          {"label":"烧结助剂"}
+        ]},
+        {"label":"锂离子电池-负极材料 [★★]","code":"A-38-3841-02", "children": [
+          {"label":"石墨 ← B-1092"},
+          {"label":"硅碳负极"},
+          {"label":"包覆沥青 ← C-2521"},
+          {"label":"粘结剂"}
+        ]},
+        {"label":"锂离子电池-电解液 [★★★]","code":"A-38-3841-03", "children": [
+          {"label":"溶剂", "children": [
+            {"label":"EC"},
+            {"label":"DMC"},
+            {"label":"EMC"},
+            {"label":"DEC"}
+          ]},
+          {"label":"锂盐", "children": [
+            {"label":"LiPF₆ ← C-2613"},
+            {"label":"LiFSI"}
+          ]},
+          {"label":"添加剂", "children": [
+            {"label":"VC"},
+            {"label":"FEC"}
+          ]},
+          {"label":"除水/除酸剂"}
+        ]},
+        {"label":"锂离子电池-隔膜 [★★]","code":"A-38-3841-04", "children": [
+          {"label":"PE/PP/芳纶基体树脂 ← C-2651"},
+          {"label":"涂覆材料", "children": [
+            {"label":"Al₂O₃"},
+            {"label":"勃姆石"},
+            {"label":"PVDF"}
+          ]},
+          {"label":"成孔剂/萃取溶剂"}
+        ]},
+        {"label":"镍氢电池制造 [★]","code":"A-38-3842", "children": [
+          {"label":"氢氧化镍"},
+          {"label":"储氢合金"},
+          {"label":"KOH电解液 ← C-2612"}
+        ]},
+        {"label":"铅蓄电池制造 [★]","code":"A-38-3843", "children": [
+          {"label":"铅"},
+          {"label":"铅合金"},
+          {"label":"硫酸电解液 ← C-2611"},
+          {"label":"隔板材料"}
+        ]},
+        {"label":"锌锰电池制造 [★]","code":"A-38-3844", "children": [
+          {"label":"二氧化锰"},
+          {"label":"锌粉"},
+          {"label":"氯化铵"},
+          {"label":"氯化锌"},
+          {"label":"淀粉电解质"}
+        ]},
+        {"label":"其他电池制造 [★]","code":"A-38-3849", "children": [
+          {"label":"燃料电池"},
+          {"label":"固态电池材料"}
+        ]},
+        {"label":"家用电力器具制造 [★]","code":"A-38-385", "children": [
+          {"label":"涂料"},
+          {"label":"塑料件"},
+          {"label":"保温材料"},
+          {"label":"制冷剂 ← C-2614氟代烃"}
+        ]},
+        {"label":"非电力家用器具制造 [★]","code":"A-38-386", "children": [
+          {"label":"涂料"},
+          {"label":"密封材料"},
+          {"label":"太阳能吸热涂层"}
+        ]},
+        {"label":"电光源制造 [★]","code":"A-38-3871", "children": [
+          {"label":"荧光粉 ← C-2662"},
+          {"label":"汞"},
+          {"label":"惰性气体"},
+          {"label":"LED芯片用化学品", "children": [
+            {"label":"GaP"},
+            {"label":"GaN"},
+            {"label":"蓝宝石衬底"}
+          ]}
+        ]},
+        {"label":"A-38-3872~3879 照明灯具及其他照明器具制造 [★]", "children": [
+          {"label":"涂料"},
+          {"label":"塑料件"},
+          {"label":"导热材料"}
+        ]},
+        {"label":"其他电气机械及器材制造 [★]","code":"A-38-389", "children": [
+          {"label":"涂料"},
+          {"label":"塑料件"}
+        ]}
+      ]},
+      {"label":"计算机、通信和其他电子设备制造业","code":"C-39", "children": [
+        {"label":"计算机制造 [★]","code":"A-39-391", "children": [
+          {"label":"清洗剂"},
+          {"label":"焊料"},
+          {"label":"导热材料", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"通信设备制造 [★]","code":"A-39-392", "children": [
+          {"label":"清洗剂"},
+          {"label":"焊料"},
+          {"label":"封装材料"}
+        ]},
+        {"label":"广播电视设备制造 [★]","code":"A-39-393", "children": [
+          {"label":"涂料"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"雷达及配套设备制造 [★]","code":"A-39-394", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"非专业视听设备制造 [★]","code":"A-39-395", "children": [
+          {"label":"涂料"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"智能消费设备制造 [★]","code":"A-39-396", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"}
+        ]},
+        {"label":"电子真空器件制造 [★]","code":"A-39-3971", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"半导体分立器件制造 [★]","code":"A-39-3972", "children": [
+          {"label":"掺杂气体"},
+          {"label":"金属化化学品"},
+          {"label":"刻蚀化学品"}
+        ]},
+        {"label":"集成电路-光刻 [★★★]","code":"A-39-3973-01", "children": [
+          {"label":"光刻胶 ← C-2664", "children": [
+            {"label":"g-line"},
+            {"label":"i-line"},
+            {"label":"KrF"},
+            {"label":"ArF"}
+          ]},
+          {"label":"显影液"},
+          {"label":"抗反射涂层", "children": [
+            {"label":"BARC"},
+            {"label":"TARC"}
+          ]}
+        ]},
+        {"label":"集成电路-蚀刻 [★★★]","code":"A-39-3973-02", "children": [
+          {"label":"蚀刻液/蚀刻气体", "children": [
+            {"label":"含氟蚀刻气"},
+            {"label":"BOE"},
+            {"label":"磷酸 ← C-2611"}
+          ]},
+          {"label":"光刻胶去除剂"}
+        ]},
+        {"label":"集成电路-清洗 [★★★]","code":"A-39-3973-03", "children": [
+          {"label":"高纯过氧化氢"},
+          {"label":"高纯氨水"},
+          {"label":"高纯氢氟酸"},
+          {"label":"表面活性剂"},
+          {"label":"超纯水"}
+        ]},
+        {"label":"集成电路-薄膜沉积 [★★]","code":"A-39-3973-04", "children": [
+          {"label":"CVD前驱体 ← C-2662", "children": [
+            {"label":"TEOS"},
+            {"label":"HCDS"},
+            {"label":"HCDS等"}
+          ]},
+          {"label":"靶材 ← C-32"},
+          {"label":"反应气体"},
+          {"label":"高纯载气"}
+        ]},
+        {"label":"集成电路-CMP化学机械抛光 [★★]","code":"A-39-3973-05", "children": [
+          {"label":"抛光液 ← C-2662电子化学品", "children": [
+            {"label":"SiO₂溶胶"},
+            {"label":"Al₂O₃"}
+          ]},
+          {"label":"氧化剂", "children": [
+            {"label":"H₂O₂"}
+          ]},
+          {"label":"pH调节剂"},
+          {"label":"缓蚀剂"},
+          {"label":"抛光垫"}
+        ]},
+        {"label":"显示器件制造 [★★]","code":"A-39-3974", "children": [
+          {"label":"液晶材料 ← C-2664"},
+          {"label":"OLED发光材料"},
+          {"label":"偏光片"},
+          {"label":"彩色光阻"},
+          {"label":"取向剂"},
+          {"label":"蚀刻液"},
+          {"label":"光刻胶 ← C-2664"}
+        ]},
+        {"label":"半导体照明器件制造 [★]","code":"A-39-3975", "children": [
+          {"label":"GaN外延用MO源 ← C-2662"},
+          {"label":"高纯氨"},
+          {"label":"硅烷"},
+          {"label":"荧光粉"}
+        ]},
+        {"label":"光电子器件制造 [★]","code":"A-39-3976", "children": [
+          {"label":"光学镀膜材料"},
+          {"label":"光刻胶"}
+        ]},
+        {"label":"其他电子器件制造 [★]","code":"A-39-3979", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"电阻电容电感元件制造 [★]","code":"A-39-3981", "children": [
+          {"label":"陶瓷粉体 ← C-3073"},
+          {"label":"电极浆料"},
+          {"label":"电镀液"},
+          {"label":"烧结助剂"}
+        ]},
+        {"label":"电子电路制造（PCB） [★★]","code":"A-39-3982", "children": [
+          {"label":"覆铜板基材 ← C-2651/C-3062", "children": [
+            {"label":"FR-4环氧"},
+            {"label":"玻纤"}
+          ]},
+          {"label":"蚀刻液", "children": [
+            {"label":"氯化铜"},
+            {"label":"盐酸"},
+            {"label":"过氧化氢"}
+          ]},
+          {"label":"电镀液", "children": [
+            {"label":"铜 ← C-2651/C-3062"},
+            {"label":"镍"},
+            {"label":"金"}
+          ]},
+          {"label":"阻焊油墨"},
+          {"label":"微蚀液"}
+        ]},
+        {"label":"敏感元件及传感器制造 [★]","code":"A-39-3983", "children": [
+          {"label":"感光材料"},
+          {"label":"导电浆料"}
+        ]},
+        {"label":"电声器件及零件制造 [★]","code":"A-39-3984", "children": [
+          {"label":"胶粘剂"},
+          {"label":"磁体材料"}
+        ]},
+        {"label":"电子专用材料制造 [★★]","code":"A-39-3985", "children": [
+          {"label":"高纯金属"},
+          {"label":"半导体材料"},
+          {"label":"封装材料"},
+          {"label":"电子薄膜材料"}
+        ]},
+        {"label":"其他电子元件制造 [★]","code":"A-39-3989", "children": [
+          {"label":"焊料"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"其他电子设备制造 [★]","code":"A-39-3990", "children": [
+          {"label":"涂料"},
+          {"label":"胶粘剂"}
+        ]}
+      ]},
+      {"label":"仪器仪表制造业","code":"C-40", "children": [
+        {"label":"通用仪器仪表制造 [★]","code":"A-40-401", "children": [
+          {"label":"清洗剂"},
+          {"label":"标准气体"},
+          {"label":"校准液"},
+          {"label":"涂层材料"}
+        ]},
+        {"label":"专用仪器仪表制造 [★]","code":"A-40-402", "children": [
+          {"label":"传感器材料"},
+          {"label":"光学化学品"},
+          {"label":"标准物质"}
+        ]},
+        {"label":"钟表与计时仪器制造 [★]","code":"A-40-403", "children": [
+          {"label":"涂料"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"光学仪器制造 [★]","code":"A-40-404", "children": [
+          {"label":"光学玻璃镀膜材料 ← C-3052"},
+          {"label":"光学胶"},
+          {"label":"清洗剂"}
+        ]},
+        {"label":"衡器制造 [★]","code":"A-40-405", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他仪器仪表制造业 [★]","code":"A-40-409", "children": [
+          {"label":"涂料"},
+          {"label":"清洗剂"}
+        ]}
+      ]},
+      {"label":"其他制造业","code":"C-41", "children": [
+        {"label":"鬃毛加工、制刷及清扫工具制造 [★]","code":"A-41-4111", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他日用杂品制造 [★]","code":"A-41-4119", "children": [
+          {"label":"日用化学品", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"核辐射加工 [★]","code":"A-41-4120", "children": [
+          {"label":"核化学品", "children": [
+            {"label":"消耗少"}
+          ]}
+        ]},
+        {"label":"其他未列明制造业 [★]","code":"A-41-4190", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"废弃资源综合利用业","code":"C-42", "children": [
+        {"label":"金属废料和碎屑加工处理 [★]","code":"A-42-4210", "children": [
+          {"label":"酸浸出剂"},
+          {"label":"萃取剂 ← C-2661"},
+          {"label":"絮凝剂", "children": [
+            {"label":"湿法回收"}
+          ]}
+        ]},
+        {"label":"非金属废料-废塑料再生 [★★]","code":"A-42-4220-01", "children": [
+          {"label":"再生溶剂"},
+          {"label":"再生助剂 ← C-2661"},
+          {"label":"化学解聚催化剂"}
+        ]},
+        {"label":"非金属废料-废橡胶再生 [★]","code":"A-42-4220-02", "children": [
+          {"label":"再生软化剂"},
+          {"label":"活化剂"},
+          {"label":"脱硫剂"}
+        ]},
+        {"label":"非金属废料-废电池回收 [★★]","code":"A-42-4220-03", "children": [
+          {"label":"湿法浸出剂", "children": [
+            {"label":"酸 ← C-2611"},
+            {"label":"碱"}
+          ]},
+          {"label":"萃取剂"},
+          {"label":"沉淀剂"}
+        ]},
+        {"label":"非金属废料-废催化剂回收 [★]","code":"A-42-4220-04", "children": [
+          {"label":"浸出剂"},
+          {"label":"萃取剂"},
+          {"label":"还原剂", "children": [
+            {"label":"回收贵金属"},
+            {"label":"稀土"}
+          ]}
+        ]}
+      ]},
+      {"label":"金属制品、机械和设备修理业","code":"C-43", "children": [
+        {"label":"金属制品修理 [★]","code":"A-43-4310", "children": [
+          {"label":"清洗剂"},
+          {"label":"防锈剂"}
+        ]},
+        {"label":"通用设备修理 [★]","code":"A-43-4320", "children": [
+          {"label":"清洗剂"},
+          {"label":"防锈剂"},
+          {"label":"润滑油"}
+        ]},
+        {"label":"专用设备修理 [★]","code":"A-43-4330", "children": [
+          {"label":"清洗剂"},
+          {"label":"防锈剂"}
+        ]},
+        {"label":"铁路船舶航空航天等运输设备修理 [★]","code":"A-43-434", "children": [
+          {"label":"涂料"},
+          {"label":"清洗剂"},
+          {"label":"防锈剂"}
+        ]},
+        {"label":"电气设备修理 [★]","code":"A-43-4350", "children": [
+          {"label":"清洗剂"},
+          {"label":"绝缘材料"}
+        ]},
+        {"label":"仪器仪表修理 [★]","code":"A-43-4360", "children": [
+          {"label":"清洗剂"}
+        ]},
+        {"label":"其他机械和设备修理业 [★]","code":"A-43-4390", "children": [
+          {"label":"清洗剂"}
+        ]}
+      ]}
+    ]},
+    {"label":"电力热力燃气水","code":"D", "children": [
+      {"label":"电力、热力生产和供应业","code":"D-44", "children": [
+        {"label":"火力发电 [★★]","code":"A-44-4411", "children": [
+          {"label":"锅炉水处理剂", "children": [
+            {"label":"阻垢剂 ← C-2662"},
+            {"label":"缓蚀剂"},
+            {"label":"除氧剂"},
+            {"label":"pH调节剂"}
+          ]},
+          {"label":"循环冷却水处理剂", "children": [
+            {"label":"杀菌灭藻剂"},
+            {"label":"阻垢剂 ← C-2662"}
+          ]},
+          {"label":"烟气脱硫剂", "children": [
+            {"label":"石灰石 ← B-1011"},
+            {"label":"氨水"}
+          ]},
+          {"label":"烟气脱硝剂", "children": [
+            {"label":"液氨 ← C-2621"},
+            {"label":"尿素"}
+          ]},
+          {"label":"脱汞剂"}
+        ]},
+        {"label":"热电联产 [★★]","code":"A-44-4412", "children": [
+          {"label":"锅炉水处理剂", "children": [
+            {"label":"阻垢剂 ← C-2662"},
+            {"label":"缓蚀剂"},
+            {"label":"除氧剂"},
+            {"label":"pH调节剂"}
+          ]},
+          {"label":"循环冷却水处理剂", "children": [
+            {"label":"杀菌灭藻剂"},
+            {"label":"阻垢剂 ← C-2662"}
+          ]},
+          {"label":"烟气脱硫剂", "children": [
+            {"label":"石灰石 ← B-1011"},
+            {"label":"氨水"}
+          ]},
+          {"label":"烟气脱硝剂", "children": [
+            {"label":"液氨 ← C-2621"},
+            {"label":"尿素"}
+          ]},
+          {"label":"脱汞剂"}
+        ]},
+        {"label":"水力发电 [★]","code":"A-44-4413", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"核力发电 [★]","code":"A-44-4414", "children": [
+          {"label":"硼酸 ← C-2613", "children": [
+            {"label":"反应堆控制"}
+          ]},
+          {"label":"氢氧化锂", "children": [
+            {"label":"pH调节"}
+          ]},
+          {"label":"水处理剂"}
+        ]},
+        {"label":"风力发电 [★]","code":"A-44-4415", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"太阳能发电 [★]","code":"A-44-4416", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"生物质能发电 [★]","code":"A-44-4417", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他电力生产 [★]","code":"A-44-4419", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"电力供应 [★]","code":"A-44-4420", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"热力生产和供应 [★]","code":"A-44-4430", "children": [
+          {"label":"水处理剂"},
+          {"label":"管道防腐剂"}
+        ]}
+      ]},
+      {"label":"燃气生产和供应业","code":"D-45", "children": [
+        {"label":"天然气生产和供应业 [★]","code":"A-45-4511", "children": [
+          {"label":"脱硫剂 ← C-2614", "children": [
+            {"label":"胺液"}
+          ]},
+          {"label":"脱水剂", "children": [
+            {"label":"三甘醇"}
+          ]},
+          {"label":"加臭剂 ← C-2614", "children": [
+            {"label":"硫醇"},
+            {"label":"四氢噻吩"}
+          ]}
+        ]},
+        {"label":"液化石油气生产和供应业 [★]","code":"A-45-4512", "children": [
+          {"label":"加臭剂 ← C-2614"},
+          {"label":"脱水剂"}
+        ]},
+        {"label":"煤气生产和供应业 [★]","code":"A-45-4513", "children": [
+          {"label":"脱硫剂"},
+          {"label":"脱焦油剂"}
+        ]},
+        {"label":"生物质燃气生产和供应业 [★]","code":"A-45-4520", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"水的生产和供应业","code":"D-46", "children": [
+        {"label":"自来水生产和供应 [★★]","code":"A-46-4610", "children": [
+          {"label":"混凝剂", "children": [
+            {"label":"聚合氯化铝"},
+            {"label":"硫酸铝"}
+          ]},
+          {"label":"消毒剂", "children": [
+            {"label":"液氯 ← C-2612"},
+            {"label":"次氯酸钠"},
+            {"label":"二氧化氯"},
+            {"label":"臭氧"}
+          ]},
+          {"label":"pH调节剂", "children": [
+            {"label":"石灰"}
+          ]},
+          {"label":"助凝剂", "children": [
+            {"label":"聚丙烯酰胺"}
+          ]}
+        ]},
+        {"label":"污水处理及其再生利用 [★★]","code":"A-46-4620", "children": [
+          {"label":"絮凝剂"},
+          {"label":"碳源", "children": [
+            {"label":"甲醇 ← C-2614"},
+            {"label":"乙酸钠"}
+          ]},
+          {"label":"除磷药剂", "children": [
+            {"label":"PAC ← C-2613"},
+            {"label":"铁盐"}
+          ]},
+          {"label":"脱氮药剂"},
+          {"label":"消毒剂"},
+          {"label":"污泥调理剂"}
+        ]},
+        {"label":"海水淡化处理 [★]","code":"A-46-4630", "children": [
+          {"label":"阻垢剂 ← C-2662"},
+          {"label":"缓蚀剂"},
+          {"label":"清洗剂"},
+          {"label":"杀菌剂"},
+          {"label":"还原剂"},
+          {"label":"脱硼树脂"}
+        ]},
+        {"label":"其他水的处理、利用与分配 [★]","code":"A-46-4690", "children": [
+          {"label":"水处理剂"}
+        ]}
+      ]}
+    ]},
+    {"label":"建筑业","code":"E", "children": [
+      {"label":"房屋建筑业","code":"E-47", "children": [
+        {"label":"住宅房屋建筑 [★★]","code":"A-47-4710", "children": [
+          {"label":"混凝土外加剂", "children": [
+            {"label":"减水剂 ← C-2662"},
+            {"label":"引气剂"},
+            {"label":"缓凝剂"},
+            {"label":"速凝剂"},
+            {"label":"防冻剂"}
+          ]},
+          {"label":"防水材料"},
+          {"label":"保温材料"}
+        ]},
+        {"label":"体育场馆建筑 [★]","code":"A-47-4720", "children": [
+          {"label":"混凝土外加剂"},
+          {"label":"防水材料"},
+          {"label":"涂料 ← C-2641"}
+        ]},
+        {"label":"其他房屋建筑业 [★]","code":"A-47-4790", "children": [
+          {"label":"混凝土外加剂"},
+          {"label":"防水材料"},
+          {"label":"涂料 ← C-2641"}
+        ]}
+      ]},
+      {"label":"土木工程建筑业","code":"E-48", "children": [
+        {"label":"铁路道路隧道和桥梁工程建筑 [★]","code":"A-48-481", "children": [
+          {"label":"混凝土外加剂"},
+          {"label":"沥青改性剂", "children": [
+            {"label":"SBS ← C-2652"}
+          ]},
+          {"label":"乳化剂"},
+          {"label":"防水材料"}
+        ]},
+        {"label":"水利和水运工程建筑 [★]","code":"A-48-482", "children": [
+          {"label":"混凝土外加剂"},
+          {"label":"防水材料"},
+          {"label":"止水材料"}
+        ]},
+        {"label":"海洋工程建筑 [★]","code":"A-48-483", "children": [
+          {"label":"防腐涂料 ← C-2641"},
+          {"label":"混凝土外加剂"}
+        ]},
+        {"label":"工矿工程建筑 [★]","code":"A-48-4840", "children": [
+          {"label":"混凝土外加剂"}
+        ]},
+        {"label":"架线和管道工程建筑 [★]","code":"A-48-485", "children": [
+          {"label":"防腐涂料 ← C-2641"},
+          {"label":"管道防腐涂层"}
+        ]},
+        {"label":"节能环保工程施工 [★]","code":"A-48-486", "children": [
+          {"label":"防水材料"},
+          {"label":"防腐涂料"},
+          {"label":"保温材料"}
+        ]},
+        {"label":"其他土木工程建筑 [★]","code":"A-48-489", "children": [
+          {"label":"混凝土外加剂"}
+        ]}
+      ]},
+      {"label":"建筑安装业","code":"E-49", "children": [
+        {"label":"电气安装 [★]","code":"A-49-4910", "children": [
+          {"label":"电缆防腐涂料"},
+          {"label":"密封材料"}
+        ]},
+        {"label":"管道和设备安装 [★]","code":"A-49-4920", "children": [
+          {"label":"密封材料"},
+          {"label":"防腐涂料"},
+          {"label":"保温材料"}
+        ]},
+        {"label":"其他建筑安装业 [★]","code":"A-49-499", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]},
+      {"label":"建筑装饰、装修和其他建筑业","code":"E-50", "children": [
+        {"label":"公共建筑装饰和装修 [★★]","code":"A-50-5011", "children": [
+          {"label":"建筑涂料 ← C-2641", "children": [
+            {"label":"乳胶漆"},
+            {"label":"真石漆"}
+          ]},
+          {"label":"胶粘剂", "children": [
+            {"label":"瓷砖胶"},
+            {"label":"美缝剂"}
+          ]},
+          {"label":"密封胶 ← C-2646", "children": [
+            {"label":"硅酮"},
+            {"label":"聚氨酯"}
+          ]},
+          {"label":"防水涂料 ← C-2641"},
+          {"label":"地坪材料", "children": [
+            {"label":"环氧"},
+            {"label":"聚氨酯"}
+          ]}
+        ]},
+        {"label":"住宅装饰和装修 [★★]","code":"A-50-5012", "children": [
+          {"label":"建筑涂料 ← C-2641"},
+          {"label":"胶粘剂"},
+          {"label":"防水材料"},
+          {"label":"木器漆"}
+        ]},
+        {"label":"建筑幕墙装饰和装修 [★]","code":"A-50-5013", "children": [
+          {"label":"硅酮结构胶"},
+          {"label":"耐候胶"},
+          {"label":"涂料"}
+        ]},
+        {"label":"建筑物拆除活动 [★]","code":"A-50-5021", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"场地准备活动 [★]","code":"A-50-5022", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"提供施工设备服务 [★]","code":"A-50-5030", "children": [
+          {"label":"（不涉及化学品）"}
+        ]},
+        {"label":"其他未列明建筑业 [★]","code":"A-50-5090", "children": [
+          {"label":"（不涉及化学品）"}
+        ]}
+      ]}
+    ]},
+    {"label":"环境治理业","code":"N-772", "children": [
+      {"label":"生态保护和环境治理业（环境治理部分）","code":"N-772", "children": [
+        {"label":"水污染治理 [★★★]","code":"A-77-7721", "children": [
+          {"label":"絮凝剂", "children": [
+            {"label":"PAC ← C-2613"},
+            {"label":"PAM ← C-2666"}
+          ]},
+          {"label":"氧化剂", "children": [
+            {"label":"双氧水 ← C-2619"},
+            {"label":"臭氧"},
+            {"label":"高锰酸钾"}
+          ]},
+          {"label":"还原剂", "children": [
+            {"label":"亚硫酸钠"},
+            {"label":"硫酸亚铁"}
+          ]},
+          {"label":"吸附剂", "children": [
+            {"label":"活性炭 ← C-2669"},
+            {"label":"沸石"}
+          ]},
+          {"label":"消毒剂", "children": [
+            {"label":"次氯酸钠"},
+            {"label":"紫外线"}
+          ]},
+          {"label":"pH调节剂", "children": [
+            {"label":"NaOH"},
+            {"label":"石灰"}
+          ]},
+          {"label":"重金属捕集剂"},
+          {"label":"破乳剂"},
+          {"label":"碳源", "children": [
+            {"label":"甲醇"},
+            {"label":"乙酸钠"}
+          ]}
+        ]},
+        {"label":"大气污染治理 [★★★]","code":"A-77-7722", "children": [
+          {"label":"脱硫剂", "children": [
+            {"label":"石灰石 ← B-1011"},
+            {"label":"石灰 ← B-1011"},
+            {"label":"氨水"},
+            {"label":"双碱法-NaOH"},
+            {"label":"Na₂CO₃"}
+          ]},
+          {"label":"脱硝催化剂", "children": [
+            {"label":"SCR-Fe₂O₃"},
+            {"label":"V₂O₅"},
+            {"label":"TiO₂"}
+          ]},
+          {"label":"脱硝还原剂", "children": [
+            {"label":"液氨 ← C-2621"},
+            {"label":"尿素"},
+            {"label":"氨水"}
+          ]},
+          {"label":"VOCs处理剂", "children": [
+            {"label":"活性炭 ← C-2669"},
+            {"label":"吸收剂"},
+            {"label":"催化剂-RTO"},
+            {"label":"RCO"}
+          ]},
+          {"label":"除尘用化学品"}
+        ]},
+        {"label":"固体废物治理 [★★]","code":"A-77-7723", "children": [
+          {"label":"固废稳定化/固化剂", "children": [
+            {"label":"水泥"},
+            {"label":"石灰"},
+            {"label":"螯合剂 ← C-2661"}
+          ]},
+          {"label":"垃圾焚烧用脱酸剂", "children": [
+            {"label":"石灰"},
+            {"label":"活性炭"}
+          ]},
+          {"label":"飞灰处理药剂"}
+        ]},
+        {"label":"危险废物治理 [★★]","code":"A-77-7724", "children": [
+          {"label":"氧化剂"},
+          {"label":"还原剂"},
+          {"label":"中和剂"},
+          {"label":"螯合剂"},
+          {"label":"固化剂"},
+          {"label":"焚烧用化学品"}
+        ]},
+        {"label":"土壤污染治理 [★★]","code":"A-77-7726", "children": [
+          {"label":"土壤修复剂", "children": [
+            {"label":"氧化剂-过硫酸盐 ← C-2613"},
+            {"label":"高锰酸钾"},
+            {"label":"还原剂-零价铁"},
+            {"label":"螯合剂-EDTA ← C-2614"},
+            {"label":"生物修复菌剂"},
+            {"label":"营养盐"}
+          ]}
+        ]}
+      ]}
+    ]}
+  ]
+}

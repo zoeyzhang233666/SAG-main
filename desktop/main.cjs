@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, protocol, session, shell } = require('electr
 const fs = require('node:fs');
 const path = require('node:path');
 const { startRuntime } = require('./runtime.cjs');
+const { productName } = require('./package.json');
 
 const scheme = 'sag-v1';
 const home = `${scheme}://app/`;
@@ -11,7 +12,7 @@ protocol.registerSchemesAsPrivileged([
 
 const smokeMode = process.env.SAG_V1_SMOKE_DATA &&
   process.argv.find(arg => /^--desktop-smoke=(write|read|upgrade)$/.test(arg))?.split('=')[1];
-app.setName('SAG V1');
+app.setName(productName);
 const profile = smokeMode
   ? path.resolve(process.env.SAG_V1_SMOKE_DATA)
   : path.join(app.getPath('appData'), app.isPackaged ? 'SAG-V1' : 'SAG-V1-Development');
@@ -49,7 +50,7 @@ function rendererSession() {
       return await fetch(runtime.origin + url.pathname + url.search, options);
     } catch (error) {
       if (!request.signal.aborted) log(error);
-      return new Response('SAG V1 local server unavailable', { status: 502 });
+      return new Response(`${productName} 本地服务暂不可用`, { status: 502 });
     }
   });
   return isolatedSession;
@@ -59,6 +60,8 @@ async function openWindow() {
   window = new BrowserWindow({
     width: 1440,
     height: 900,
+    title: productName,
+    icon: path.join(resources, 'backend', 'web', 'dist', 'app-icon.png'),
     minWidth: 800,
     minHeight: 600,
     show: !smokeMode,
@@ -131,7 +134,7 @@ if (!app.requestSingleInstanceLock()) {
     () => { if (smokeMode) void exit(0); },
     error => {
       log(error);
-      if (!smokeMode && !shutdown) dialog.showErrorBox('SAG V1 启动失败', `${error.message}\n日志：${logs}`);
+      if (!smokeMode && !shutdown) dialog.showErrorBox(`${productName}启动失败`, `${error.message}\n日志：${logs}`);
       void exit(1);
     }
   );

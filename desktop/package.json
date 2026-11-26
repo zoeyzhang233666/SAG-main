@@ -1,9 +1,9 @@
 {
   "name": "sag-v1-desktop",
-  "productName": "SAG V1",
+  "productName": "化工产业链图谱",
   "version": "0.1.2",
   "private": true,
-  "description": "SAG V1 standalone desktop preview",
+  "description": "Chemical Supply Chain Atlas for SAG V1",
   "author": "ChemCloud",
   "license": "UNLICENSED",
   "homepage": "https://github.com/zoeyzhang233666/SAG-main",

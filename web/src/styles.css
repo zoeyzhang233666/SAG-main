@@ -158,10 +158,6 @@ code {
 }
 
 .chem-sidebar-collapse-button {
-  position: absolute;
-  top: 20px;
-  right: 52px;
-  z-index: 35;
   display: grid;
   width: 26px;
   height: 26px;

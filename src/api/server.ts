@@ -108,6 +108,11 @@ const graphQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(300).optional()
 });
 
+const chainAtlasMatchSchema = z.object({
+  names: z.array(z.string().trim().min(1).max(120)).min(1).max(100),
+  projectId: z.guid().optional()
+});
+
 const graphSuggestionsQuerySchema = z.object({
   q: z.string().trim().min(1).max(120),
   limit: z.coerce.number().int().positive().max(20).default(10)
@@ -429,6 +434,11 @@ export function buildHttpServer() {
     return {
       stats: await webuiService.getProjectStats(params.projectId)
     };
+  });
+
+  app.post("/api/chain-atlas/entity-matches", async request => {
+    const input = chainAtlasMatchSchema.parse(request.body);
+    return { matches: await webuiService.matchChainAtlasEntities(input) };
   });
 
   app.get("/api/projects/:projectId/graph", async (request) => {

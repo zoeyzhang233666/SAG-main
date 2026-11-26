@@ -1,10 +1,12 @@
-# SAG V1 independent desktop preview
+# 化工产业链图谱 · SAG V1 desktop
 
 The installers run this repository's original React UI and Fastify backend. Electron provides the Node.js runtime. PostgreSQL 16, pgvector, pg_trgm and unaccent ship with each installer. Normal startup needs no Docker or system Node.js/PostgreSQL. AI provider settings work through the existing V1 UI.
 
-SAG V1 uses the bundle ID `com.chemclaw.sag.v1` and application data directory `SAG-V1` under `~/Library/Application Support` on macOS or `%APPDATA%` on Windows. Running the development launcher uses `SAG-V1-Development`. V2 uses `com.chemclaw.knowledgegraph` and its own `ChemClaw Knowledge Graph` data directory.
+化工产业链图谱 uses the SAG V1 bundle ID `com.chemclaw.sag.v1` and application data directory `SAG-V1` under `~/Library/Application Support` on macOS or `%APPDATA%` on Windows. Running the development launcher uses `SAG-V1-Development`. V2 uses `com.chemclaw.knowledgegraph` and its own `ChemClaw Knowledge Graph` data directory.
 
 First launch creates a password-protected, loopback-only database and seeds the default entity types. Every launch checks the data directory version and applies pending V1 migrations before starting the local API. The renderer uses a stable app origin and the main process forwards requests through an authenticated loopback connection. Closing the app stops the backend and database. Installer upgrades and Windows uninstall preserve the V1 data directory. To back up a closed app, keep the whole `SAG-V1` directory together. Use V1 structured import/export to move existing V1 server data into a desktop project.
+
+The atlas includes the source pathways v2.1 and industry applications v3.0 as separate trees. Search matches the atlas labels and codes, and the entity lookup links exact names to the existing knowledge library. To update the tree data from revised Markdown attachments, run `node scripts/build-chain-atlas.mjs <source-tree.md> <applications-tree.md>` from the repository root.
 
 ## Build and verify
 
@@ -22,6 +24,6 @@ npm ci --omit=dev --prefix desktop/build/resources/backend
 node desktop/scripts/smoke-app.mjs --source
 ```
 
-From the `desktop` directory, run `npm run package -- --mac --arm64` on Apple Silicon or `npm run package -- --win --x64` on Windows x64. Install the resulting package and run `node desktop/scripts/smoke-app.mjs "/path/to/installed/executable"` from the repository root. The smoke test submits three concurrent V1 structured imports with shared entities, verifies stored documents and graph relationships, opens the Hypergraph tab, then checks the same records and browser preferences after restart. Each run checks that PostgreSQL and the backend exit. GitHub Actions uploads the tested installers and SHA256 files.
+From the `desktop` directory, run `npm run package -- --mac --arm64` on Apple Silicon or `npm run package -- --win --x64` on Windows x64. Install the resulting package and run `node desktop/scripts/smoke-app.mjs "/path/to/installed/executable"` from the repository root. The smoke test submits three concurrent V1 structured imports with shared entities, verifies stored documents and graph relationships, opens the Hypergraph tab, switches between atlas tracks, locates an entity in the tree and opens its details, then checks the same records and browser preferences after restart. Each run checks that PostgreSQL and the backend exit. GitHub Actions uploads the tested installers and SHA256 files.
 
 The preview uses ad-hoc signing on macOS and an unsigned Windows installer. Production code signing and macOS notarization require release credentials. The original V1 license is included.

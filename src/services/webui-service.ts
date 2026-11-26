@@ -23,6 +23,7 @@ import {
   listEventsByDocument,
   listEventsByProject,
   listSources,
+  matchChainAtlasEntities,
   restoreDocument,
   restoreSource,
   searchProjectGraphSuggestions,
@@ -656,6 +657,10 @@ export class WebuiService {
 
   async getEvent(eventId: string, tenantId = config.DEFAULT_TENANT_ID) {
     return getEventDetail({ eventId, tenantId });
+  }
+
+  async matchChainAtlasEntities(input: { names: string[]; projectId?: string }, tenantId = config.DEFAULT_TENANT_ID) {
+    return matchChainAtlasEntities({ ...input, tenantId });
   }
 
   async getEntity(entityId: string, tenantId = config.DEFAULT_TENANT_ID) {

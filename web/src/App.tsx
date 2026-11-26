@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -24,6 +26,7 @@ import {
   Folder,
   FolderOpen,
   Layers3,
+  ListTree,
   Loader2,
   MoreHorizontal,
   Network,
@@ -91,7 +94,9 @@ import {
   type SupportedLanguage,
 } from "./i18n";
 
-type WorkspaceView = "chat" | "documents" | "graph" | "mcp" | "settings";
+const ChainAtlasWorkspace = lazy(() => import("./components/ChainAtlasWorkspace"));
+
+type WorkspaceView = "chat" | "documents" | "graph" | "atlas" | "mcp" | "settings";
 type ResultView = "overview" | "chunks" | "events" | "entities" | "search";
 type ProjectAssetDataKind = "chunks" | "events" | "entities";
 type ProjectAssetDataLoadStatus = "idle" | "loading" | "loaded";
@@ -1999,13 +2004,14 @@ function AppShell() {
 
   async function openEntityDetail(
     entityId: string,
-    options?: { pushHistory?: boolean },
+    options?: { pushHistory?: boolean; matchCurrentProject?: boolean },
   ) {
     const previousDrawer = drawer;
     try {
       const detail = await api.getEntity(entityId);
-      const sameNameEntitySource =
-        projectEntities.length > 0 ? projectEntities : entities;
+      const sameNameEntitySource = options?.matchCurrentProject === false
+        ? []
+        : projectEntities.length > 0 ? projectEntities : entities;
       const sameNameEntityIds = collectSameNameKnowledgeAssetEntityIds(
         sameNameEntitySource,
         detail.entity,
@@ -2509,6 +2515,13 @@ function AppShell() {
                 onOpenEvent={(eventId) => void openEventDetail(eventId)}
                 onOpenEntity={(entityId) => void openEntityDetail(entityId)}
               />
+            ) : workspaceView === "atlas" ? (
+              <Suspense fallback={<p className="p-5 text-sm text-muted-foreground" role="status">{t("正在加载产业链图谱", "Loading the supply chain atlas")}</p>}>
+                <ChainAtlasWorkspace
+                  project={selectedProject}
+                  onOpenEntity={(entityId) => void openEntityDetail(entityId, { matchCurrentProject: false })}
+                />
+              </Suspense>
             ) : workspaceView === "mcp" ? (
               <ProjectMcpWorkspace
                 project={selectedProject}
@@ -2693,7 +2706,7 @@ function ProjectRail(props: {
       >
         {props.isCollapsed ? (
           <div className="chem-sidebar-compact-content flex min-h-0 flex-1 flex-col items-center gap-2 px-2 py-4">
-            <ChemCloudMark className="h-10 w-10 shrink-0" />
+            <img src="/app-icon-thumb.png" alt="" className="h-11 w-11 shrink-0" />
             <Button
               type="button"
               variant="ghost"
@@ -2755,32 +2768,40 @@ function ProjectRail(props: {
           </div>
         ) : null}
         <div className="chem-sidebar-full-content flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="border-b border-border px-4 py-5">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-3">
-                <ChemCloudMark className="h-10 w-10" />
+          <div className="border-b border-border px-3 py-5">
+            <div className="flex items-start justify-between gap-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <img src="/app-icon-thumb.png" alt="" className="h-9 w-9 shrink-0" />
                 <div className="min-w-0">
-                  <div className="whitespace-nowrap text-base font-bold tracking-tight">
-                    ChemClaw
+                  <div className="text-[13px] font-bold tracking-tight">
+                    {t("化工产业链图谱", "Chemical Supply Chain Atlas")}
                   </div>
                   <div className="truncate text-[11px] text-muted-foreground">
-                    {t(
-                      "芯化和云 · 化工产业链智能体",
-                      "ChemCloud · Chemical industry agent",
-                    )}
+                    {t("芯化和云", "ChemCloud")}
                   </div>
                 </div>
               </div>
-              <Button
-                variant={props.isSettingsOpen ? "secondary" : "ghost"}
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                title={t("全局设置", "Global settings")}
-                aria-label={t("全局设置", "Global settings")}
-                onClick={props.onOpenSettings}
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  className="chem-sidebar-collapse-button"
+                  title={t("收起左侧栏", "Collapse sidebar")}
+                  aria-label={t("收起左侧栏", "Collapse sidebar")}
+                  onClick={props.onToggleCollapsed}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <Button
+                  variant={props.isSettingsOpen ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-7 w-7"
+                  title={t("全局设置", "Global settings")}
+                  aria-label={t("全局设置", "Global settings")}
+                  onClick={props.onOpenSettings}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -3017,24 +3038,13 @@ function ProjectRail(props: {
           </div>
         </div>
         {!props.isCollapsed ? (
-          <>
-            <button
-              type="button"
-              className="chem-sidebar-collapse-button"
-              title={t("收起左侧栏", "Collapse sidebar")}
-              aria-label={t("收起左侧栏", "Collapse sidebar")}
-              onClick={props.onToggleCollapsed}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div
-              className="chem-sidebar-resize-handle"
-              role="separator"
-              aria-orientation="vertical"
-              title={t("拖拽调整左侧栏宽度", "Drag to resize sidebar")}
-              onPointerDown={props.onResizeStart}
-            />
-          </>
+          <div
+            className="chem-sidebar-resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            title={t("拖拽调整左侧栏宽度", "Drag to resize sidebar")}
+            onPointerDown={props.onResizeStart}
+          />
         ) : null}
       </aside>
 
@@ -3199,10 +3209,11 @@ function MainWorkspaceTabs(props: {
     { value: "chat", label: t("智能问答", "Q&A"), icon: Sparkles },
     { value: "documents", label: t("知识资产", "Assets"), icon: Database },
     { value: "graph", label: t("知识超图", "Hypergraph"), icon: Network },
+    { value: "atlas", label: t("产业链图谱", "Chain atlas"), icon: ListTree },
     { value: "mcp", label: t("ChemClaw 接入", "ChemClaw"), icon: Plug },
   ];
   return (
-    <div className="chem-workspace-tabs grid w-full min-w-0 max-w-[560px] grid-cols-4 rounded-xl border border-border p-1 sm:w-auto sm:min-w-[440px]">
+    <div className="chem-workspace-tabs flex w-full min-w-0 max-w-[620px] overflow-x-auto rounded-xl border border-border p-1 sm:w-auto">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         return (
@@ -3210,9 +3221,10 @@ function MainWorkspaceTabs(props: {
             key={tab.value}
             type="button"
             className={cn(
-              "flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
+              "flex flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground sm:px-3",
               props.view === tab.value && "chem-tab-active text-foreground",
             )}
+            aria-current={props.view === tab.value ? "page" : undefined}
             onClick={() => props.onChange(tab.value)}
           >
             <Icon className="hidden h-3.5 w-3.5 sm:block" />

@@ -1,4 +1,5 @@
 import type {
+  ChainAtlasEntityMatch,
   ChunkRecord,
   DocumentRecord,
   EntityRecord,
@@ -120,6 +121,14 @@ export const api = {
     return request<{ graph: ProjectGraphRecord }>(
       `/api/projects/${projectId}/graph${query ? `?${query}` : ""}`,
     );
+  },
+
+  async matchChainAtlasEntities(names: string[], projectId?: string, signal?: AbortSignal) {
+    return request<{ matches: ChainAtlasEntityMatch[] }>("/api/chain-atlas/entity-matches", {
+      method: "POST",
+      body: JSON.stringify({ names, projectId }),
+      signal
+    });
   },
 
   async getProjectGraphSuggestions(

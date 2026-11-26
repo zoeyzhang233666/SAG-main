@@ -1,0 +1,1054 @@
+{
+  "version": "v2.1",
+  "roots": [
+    {"label":"原油及石油产品","code":"S-01", "children": [
+      {"label":"常减压蒸馏及直接产品","code":"S-01-01", "children": [
+        {"label":"原油 Crude Oil", "children": [
+          {"label":"石脑油 Naphtha [64742-95-6] → 裂解/重整原料"},
+          {"label":"汽油系列", "children": [
+            {"label":"直馏汽油"},
+            {"label":"催化裂化汽油"},
+            {"label":"焦化汽油"},
+            {"label":"调和汽油"}
+          ]},
+          {"label":"柴油系列", "children": [
+            {"label":"直馏柴油"},
+            {"label":"催化裂化柴油"},
+            {"label":"焦化柴油"}
+          ]},
+          {"label":"煤油/航空煤油 Kerosene/Jet Fuel"},
+          {"label":"燃料油 Fuel Oil"},
+          {"label":"溶剂油系列★", "children": [
+            {"label":"200号溶剂汽油"},
+            {"label":"6号抽提溶剂油"},
+            {"label":"其他溶剂油"}
+          ]},
+          {"label":"润滑油基础油 Lube Base Oil", "children": [
+            {"label":"机械油 (10号/20号等)"}
+          ]},
+          {"label":"石蜡系列★", "children": [
+            {"label":"半精炼石蜡 Semi-refined Wax"},
+            {"label":"全精炼石蜡 Fully-refined Wax"},
+            {"label":"液体石蜡 Liquid Paraffin"}
+          ]},
+          {"label":"凡士林 Vaseline/Petroleum Jelly"},
+          {"label":"白油系列★", "children": [
+            {"label":"工业白油"},
+            {"label":"化妆级白油"}
+          ]},
+          {"label":"石油焦系列★", "children": [
+            {"label":"生焦 Green Coke"},
+            {"label":"煅烧石油焦 Calcined Coke"}
+          ]},
+          {"label":"沥青 Asphalt/Bitumen"},
+          {"label":"催化油浆/减压渣油"}
+        ]}
+      ]},
+      {"label":"蒸汽裂解（石脑油/乙烷/丙烷 → 烯烃）","code":"S-01-02", "children": [
+        {"label":"裂解原料", "children": [
+          {"label":"乙烯 Ethylene [74-85-1] C₂H₄", "children": [
+            {"label":"聚乙烯 PE [9002-88-4]", "children": [
+              {"label":"HDPE"},
+              {"label":"LDPE"},
+              {"label":"LLDPE"}
+            ]},
+            {"label":"环氧乙烷 EO [75-21-8] C₂H₄O", "children": [
+              {"label":"乙二醇 MEG [107-21-1]", "children": [
+                {"label":"聚酯切片 PET [25038-59-9]"}
+              ]}
+            ]},
+            {"label":"苯乙烯 Styrene [100-42-5] C₈H₈", "children": [
+              {"label":"聚苯乙烯 PS [9003-53-6]", "children": [
+                {"label":"GPPS"},
+                {"label":"HIPS"}
+              ]}
+            ]},
+            {"label":"氯乙烯 VCM [75-01-4]（经EDC）→ 聚氯乙烯 PVC [9002-86-2]"},
+            {"label":"乙醛 Acetaldehyde [75-07-0] → 乙酸/乙酸乙烯酯"},
+            {"label":"乙醇（合成法）Ethanol [64-17-5]"}
+          ]},
+          {"label":"丙烯 Propylene [115-07-1] C₃H₆", "children": [
+            {"label":"聚丙烯 PP [9003-07-0]", "children": [
+              {"label":"均聚PP"},
+              {"label":"共聚PP"}
+            ]},
+            {"label":"丙烯酸 Acrylic Acid [79-10-7]", "children": [
+              {"label":"丙烯酸酯（BA/EA/MA/2-EHA）", "children": [
+                {"label":"丙烯酸乳液"}
+              ]},
+              {"label":"高吸水性树脂 SAP（聚丙烯酸盐类）★"}
+            ]},
+            {"label":"环氧丙烷 PO [75-56-9]", "children": [
+              {"label":"聚醚多元醇 Polyether Polyol"}
+            ]},
+            {"label":"丙烯腈 AN [107-13-1]", "children": [
+              {"label":"聚丙烯腈 PAN"},
+              {"label":"ABS树脂（与丁二烯/苯乙烯共聚）"}
+            ]},
+            {"label":"异丙苯 Cumene [98-82-8]", "children": [
+              {"label":"苯酚 Phenol [108-95-2]", "children": [
+                {"label":"双酚A BPA [80-05-7]", "children": [
+                  {"label":"环氧树脂 Epoxy Resin [25068-38-6]"},
+                  {"label":"聚碳酸酯 PC"}
+                ]}
+              ]},
+              {"label":"丙酮 Acetone [67-64-1]", "children": [
+                {"label":"MMA [80-62-6] → PMMA [9011-14-7]"}
+              ]}
+            ]},
+            {"label":"异丙醇 IPA [67-63-0]"},
+            {"label":"丙烯酰胺 AM [79-06-1] → PAM"}
+          ]},
+          {"label":"丁二烯 1,3-Butadiene [106-99-0] C₄H₆", "children": [
+            {"label":"顺丁橡胶 BR [9003-17-2]"},
+            {"label":"丁苯橡胶 SBR [9003-69-4]"},
+            {"label":"丁腈橡胶 NBR"},
+            {"label":"ABS树脂 [9003-56-9]"},
+            {"label":"己二腈 Adiponitrile [111-69-3] → 己二胺 → 尼龙66"},
+            {"label":"氯丁橡胶 CR（经氯丁二烯）"},
+            {"label":"三元乙丙橡胶 EPDM（乙烯-丙烯共聚）★"}
+          ]},
+          {"label":"混合C4", "children": [
+            {"label":"MTBE"},
+            {"label":"丁烯-1"},
+            {"label":"异丁烯 → 丁基橡胶/甲基丙烯酸"}
+          ]},
+          {"label":"混合C5", "children": [
+            {"label":"异戊二烯 → 异戊橡胶/SIS"},
+            {"label":"环戊二烯 → 不饱和聚酯/DCPD树脂"}
+          ]}
+        ]}
+      ]},
+      {"label":"催化重整（石脑油 → BTX芳烃）","code":"S-01-03", "children": [
+        {"label":"重整原料", "children": [
+          {"label":"苯 Benzene [71-43-2] C₆H₆", "children": [
+            {"label":"环己烷 [110-82-7] → 环己酮/己内酰胺 → 尼龙6"},
+            {"label":"苯酚（异丙苯法，见S-01-02）"},
+            {"label":"苯胺 Aniline [62-53-3]", "children": [
+              {"label":"MDI（→ 聚氨酯）"},
+              {"label":"橡胶防老剂"},
+              {"label":"染料中间体"}
+            ]},
+            {"label":"烷基苯 → 表面活性剂（LAS）"},
+            {"label":"顺丁烯二酸酐 MA [108-31-6]（苯法）"}
+          ]},
+          {"label":"甲苯 Toluene [108-88-3]", "children": [
+            {"label":"TDI（→ 聚氨酯）"},
+            {"label":"苯甲酸 [65-85-0]"},
+            {"label":"甲苯二胺 → TDI"}
+          ]},
+          {"label":"二甲苯 Xylenes [1330-20-7]", "children": [
+            {"label":"对二甲苯 PX [106-42-3]", "children": [
+              {"label":"PTA [100-21-0] → PET聚酯"}
+            ]},
+            {"label":"邻二甲苯", "children": [
+              {"label":"邻苯二甲酸酐 PA [85-44-9]", "children": [
+                {"label":"邻苯二甲酸酯增塑剂（DOP/DBP/DINP）"}
+              ]}
+            ]},
+            {"label":"间二甲苯 → 间苯二甲酸 IPA"}
+          ]}
+        ]}
+      ]},
+      {"label":"烯烃下游树脂与塑料","code":"S-01-04", "children": [
+        {"label":"聚乙烯 PE（HDPE/LDPE/LLDPE）"},
+        {"label":"聚丙烯 PP（均聚/共聚）"},
+        {"label":"聚氯乙烯 PVC（SG-1~SG-8各型号）"},
+        {"label":"聚苯乙烯 PS（GPPS/HIPS）"},
+        {"label":"ABS树脂"},
+        {"label":"聚酯 PET（纤维级/瓶级/薄膜级）"},
+        {"label":"聚碳酸酯 PC"},
+        {"label":"聚酰胺（尼龙6/尼龙66）"},
+        {"label":"聚甲基丙烯酸甲酯 PMMA"},
+        {"label":"聚甲醛 POM"},
+        {"label":"聚对苯二甲酸丁二醇酯 PBT"},
+        {"label":"苯乙烯类热塑性弹性体（SBS/SIS/SEBS）"},
+        {"label":"热塑性弹性体（TPV/TPO）★ 注：此处TPO指热塑性聚烯烃弹性体(thermoplastic polyolefin)，非光引发剂TPO"},
+        {"label":"可降解塑料（PLA/PBAT/PGA）"},
+        {"label":"芳纶 Aramid（对位芳纶/间位芳纶）★"},
+        {"label":"高端聚烯烃 ★", "children": [
+          {"label":"POE（聚烯烃弹性体）"},
+          {"label":"POP（聚烯烃塑性体, polyolefin plastomer）注：非聚合物多元醇POP(polymeric polyol)"},
+          {"label":"COC/COP（环烯烃共聚物/环烯烃聚合物）注：COC(环烯烃共聚物, cyclic olefin copolymer)，非光气COCl₂(碳酰氯)"},
+          {"label":"EVOH（乙烯-乙烯醇共聚物）"}
+        ]},
+        {"label":"特种工程塑料 ★", "children": [
+          {"label":"PEEK（聚醚醚酮）"},
+          {"label":"PPO/MPPO（聚苯醚/改性聚苯醚）"},
+          {"label":"LCP（液晶聚合物）"},
+          {"label":"PSF（聚砜）"},
+          {"label":"PPS（聚苯硫醚）"}
+        ]}
+      ]},
+      {"label":"芳烃下游精细链","code":"S-01-05", "children": [
+        {"label":"苯酚/丙酮 → 双酚A → 环氧树脂/聚碳酸酯"},
+        {"label":"PTA → PET聚酯纤维/薄膜/瓶片"},
+        {"label":"邻苯二甲酸酐 → 增塑剂/不饱和聚酯"},
+        {"label":"顺丁烯二酸酐 → 不饱和聚酯/富马酸"},
+        {"label":"苯胺 → MDI/橡胶助剂/染料中间体"},
+        {"label":"对苯二甲酸酯系列 → 增塑剂"},
+        {"label":"间苯二甲酸 → 不饱和聚酯/醇酸树脂"},
+        {"label":"偏苯三酸酐 → 增塑剂/固化剂"},
+        {"label":"均苯四甲酸二酐 → 聚酰亚胺"},
+        {"label":"萘系中间体（2-萘酚/H酸/J酸）→ 染料/鞣剂"}
+      ]},
+      {"label":"精细有机中间体（捏合汇总节点）","code":"S-01-06", "children": [
+        {"label":"精细有机中间体汇总（不逐个展开，按类别捏合）", "children": [
+          {"label":"醇类", "children": [
+            {"label":"C1-C4低碳醇（甲醇/乙醇/丙醇/丁醇/异丁醇）"},
+            {"label":"C5-C8高碳醇（正辛醇/异辛醇/2-乙基己醇）"},
+            {"label":"多元醇（乙二醇/丙二醇/丁二醇/甘油/季戊四醇）"},
+            {"label":"脂环醇（环己醇）"}
+          ]},
+          {"label":"酚类", "children": [
+            {"label":"苯酚/甲酚（邻/间/对）"},
+            {"label":"双酚系列（双酚A/双酚F/双酚S/双酚芴）"},
+            {"label":"烷基酚（壬基酚/辛基酚/叔丁基酚）"},
+            {"label":"间苯二酚/对苯二酚/邻苯二酚"}
+          ]},
+          {"label":"醛酮类", "children": [
+            {"label":"甲醛/乙醛/丁醛/异丁醛"},
+            {"label":"丙酮/丁酮/环己酮/MIBK"},
+            {"label":"苯甲醛/糠醛"}
+          ]},
+          {"label":"有机酸及酸酐", "children": [
+            {"label":"一元酸（甲酸/乙酸/丙酸/丁酸/辛酸/月桂酸/硬脂酸）"},
+            {"label":"二元酸（草酸/丙二酸/丁二酸/己二酸/癸二酸/壬二酸）"},
+            {"label":"不饱和酸（丙烯酸/甲基丙烯酸/马来酸/富马酸）"},
+            {"label":"酸酐（乙酸酐/顺丁烯二酸酐/邻苯二甲酸酐）"}
+          ]},
+          {"label":"酯类（捏合）", "children": [
+            {"label":"丙烯酸酯类（BA/EA/MA/2-EHA/HDDA/TMPTA/IBOA）"},
+            {"label":"邻苯二甲酸酯类（DOP/DBP/DINP/DIDP）"},
+            {"label":"磷酸酯类（TCEP/TCPP/TEP）"},
+            {"label":"乙酸酯类（乙酸乙酯/乙酸丁酯/乙酸甲酯）"},
+            {"label":"碳酸酯类（碳酸二甲酯DMC/碳酸乙烯酯EC/碳酸丙烯酯PC/碳酸甲乙酯EMC/碳酸二乙酯DEC）★","notes":["注：此处DMC指碳酸二甲酯(dimethyl carbonate)，非有机硅DMC(二甲基环体硅氧烷, dimethylcyclosiloxane)"]},
+            {"label":"其他酯类"}
+          ]},
+          {"label":"胺类", "children": [
+            {"label":"脂肪胺（甲胺/二甲胺/三甲胺/乙胺/二乙胺/三乙胺）"},
+            {"label":"多元胺（乙二胺/二乙烯三胺/三乙烯四胺/己二胺）"},
+            {"label":"环烷胺（环己胺/二环己胺）"},
+            {"label":"醇胺（乙醇胺/二乙醇胺/三乙醇胺/N,N-二甲基乙醇胺）"},
+            {"label":"芳香胺（苯胺/二苯胺/对甲苯胺/邻甲苯胺）"}
+          ]},
+          {"label":"酰胺/酰亚胺类", "children": [
+            {"label":"丙烯酰胺/甲基丙烯酰胺"},
+            {"label":"N,N-二甲基甲酰胺 DMF"},
+            {"label":"N-甲基吡咯烷酮 NMP"},
+            {"label":"丁内酯/己内酰胺"}
+          ]},
+          {"label":"腈类", "children": [
+            {"label":"丙烯腈/乙腈"},
+            {"label":"己二腈"}
+          ]},
+          {"label":"醚类", "children": [
+            {"label":"乙二醇醚类（乙二醇甲醚/乙二醇丁醚）"},
+            {"label":"丙二醇醚类"},
+            {"label":"醚醇类"},
+            {"label":"环状醚（环氧乙烷/环氧丙烷/四氢呋喃/1,4-二氧六环）"}
+          ]},
+          {"label":"卤代烃", "children": [
+            {"label":"氯代烃（氯甲烷/氯乙烷/氯仿/四氯化碳/氯苯）"},
+            {"label":"氟代烃（见S-01-09含氟化学品）"},
+            {"label":"溴代烃/碘代烃（捏合）"}
+          ]},
+          {"label":"杂环化合物（汇总节点，不展开）", "children": [
+            {"label":"含氮杂环（吡啶/哌啶/吗啉/咪唑/吡咯/喹吡咯/喹啉/嘧啶/三嗪）"},
+            {"label":"含氧杂环（呋喃/四氢呋喃/1,3-二氧五环）"},
+            {"label":"含硫杂环（噻吩）"}
+          ]}
+        ]}
+      ]},
+      {"label":"合成树脂与涂料用树脂","code":"S-01-07", "children": [
+        {"label":"醇酸树脂 Alkyd Resin"},
+        {"label":"丙烯酸树脂 Acrylic Resin（含乳液：纯丙/苯丙/醋丙/硅丙）"},
+        {"label":"环氧树脂 Epoxy Resin"},
+        {"label":"聚氨酯树脂 PU Resin"},
+        {"label":"酚醛树脂 Phenolic Resin"},
+        {"label":"氨基树脂（脲醛/三聚氰胺甲醛）"},
+        {"label":"不饱和聚酯树脂 UPR"},
+        {"label":"醇酸/聚酯树脂"},
+        {"label":"乙烯基树脂（EVA/VAE）"},
+        {"label":"特种树脂（氟碳树脂/有机硅树脂/聚酰亚胺树脂）"}
+      ]},
+      {"label":"有机硅化学品","code":"S-01-08", "children": [
+        {"label":"硅矿(石英) → 工业硅(硅粉)", "children": [
+          {"label":"有机硅单体", "children": [
+            {"label":"二甲基二氯硅烷 → DMC(有机硅二甲基环体硅氧烷, dimethylcyclosiloxane)/D4"},
+            {"label":"甲基三氯硅烷"},
+            {"label":"苯基硅烷"},
+            {"label":"乙烯基硅烷"}
+          ]},
+          {"label":"硅油 Silicone Oil", "children": [
+            {"label":"二甲基硅油"},
+            {"label":"氨基硅油"},
+            {"label":"羟基硅油"},
+            {"label":"苯基硅油"}
+          ]},
+          {"label":"硅橡胶 Silicone Rubber", "children": [
+            {"label":"HTV高温胶"},
+            {"label":"LSR液体硅橡胶"},
+            {"label":"RTV室温硫化硅橡胶"}
+          ]},
+          {"label":"硅树脂 Silicone Resin"},
+          {"label":"硅烷偶联剂 Silane Coupling Agent", "children": [
+            {"label":"氨基硅烷（KH-550/KH-792）"},
+            {"label":"环氧基硅烷（KH-560）"},
+            {"label":"甲基丙烯酰氧基硅烷（KH-570）"},
+            {"label":"巯基硅烷"},
+            {"label":"乙烯基硅烷"}
+          ]}
+        ]}
+      ]},
+      {"label":"含氟化学品","code":"S-01-09", "children": [
+        {"label":"萤石(CaF₂) → 氢氟酸 HF [7664-39-3]", "children": [
+          {"label":"含氟制冷剂", "children": [
+            {"label":"CFCs/HCFCs（淘汰中）"},
+            {"label":"HFCs（R134a/R410A/R32）"},
+            {"label":"HFOs（R1234yf/R1234ze）"}
+          ]},
+          {"label":"含氟聚合物", "children": [
+            {"label":"聚四氟乙烯 PTFE [9002-84-0]"},
+            {"label":"聚偏氟乙烯 PVDF [24937-79-9]"},
+            {"label":"聚全氟乙丙烯 FEP"},
+            {"label":"可熔性聚四氟乙烯 PFA"},
+            {"label":"氟橡胶 FKM"}
+          ]},
+          {"label":"含氟精细品（捏合）", "children": [
+            {"label":"含氟医药中间体"},
+            {"label":"含氟农药中间体"},
+            {"label":"含氟表面活性剂"},
+            {"label":"六氟磷酸锂（锂电池电解质）"}
+          ]},
+          {"label":"氟化盐（氟化钠/氟化钾/氟化铝等）"}
+        ]}
+      ]},
+      {"label":"聚氨酯原料体系","code":"S-01-10", "children": [
+        {"label":"异氰酸酯系列", "children": [
+          {"label":"MDI（纯MDI/聚合MDI）"},
+          {"label":"TDI（T-80/T-65）"},
+          {"label":"HDI/HDI三聚体"},
+          {"label":"IPDI"}
+        ]},
+        {"label":"多元醇系列", "children": [
+          {"label":"聚醚多元醇（PPG/POP(聚合物多元醇, polymeric polyol)）"},
+          {"label":"聚酯多元醇"}
+        ]},
+        {"label":"扩链剂/交联剂", "children": [
+          {"label":"1,4-丁二醇 BDO", "children": [
+            {"label":"聚四氢呋喃二醇 PTMEG（→ 氨纶原料）★"}
+          ]},
+          {"label":"乙二醇 EG"},
+          {"label":"1,4-环己烷二甲醇 CHDM"},
+          {"label":"HQEE"},
+          {"label":"二乙基甲苯二胺 DETDA"}
+        ]},
+        {"label":"聚氨酯制品", "children": [
+          {"label":"硬泡/软泡"},
+          {"label":"TPU（热塑性聚氨酯弹性体）★"},
+          {"label":"胶黏剂/涂料"},
+          {"label":"氨纶（PTMEG+MDI纺丝）★"}
+        ]}
+      ]},
+      {"label":"表面活性剂","code":"S-01-11", "children": [
+        {"label":"阴离子表面活性剂", "children": [
+          {"label":"LAS（直链烷基苯磺酸盐）"},
+          {"label":"AES（脂肪醇聚氧乙烯醚硫酸盐）"},
+          {"label":"SAS（仲烷基磺酸盐）"},
+          {"label":"肥皂/脂肪酸皂"},
+          {"label":"石油磺酸盐"}
+        ]},
+        {"label":"非离子表面活性剂", "children": [
+          {"label":"AEO系列（脂肪醇聚氧乙烯醚）"},
+          {"label":"OP/NP系列（烷基酚聚氧乙烯醚）"},
+          {"label":"吐温 Tween（聚山梨醇酯）"},
+          {"label":"司盘 Span（山梨醇酐脂肪酸酯）"},
+          {"label":"椰子油脂肪酸二乙醇酰胺"}
+        ]},
+        {"label":"阳离子表面活性剂", "children": [
+          {"label":"季铵盐（CTAB/1227/1631）"},
+          {"label":"咪唑啉型"}
+        ]},
+        {"label":"两性表面活性剂", "children": [
+          {"label":"甜菜碱型（CAB/LAB）"},
+          {"label":"咪唑啉型"}
+        ]},
+        {"label":"特种表面活性剂", "children": [
+          {"label":"有机硅表面活性剂"},
+          {"label":"含氟表面活性剂"},
+          {"label":"生物表面活性剂"}
+        ]}
+      ]},
+      {"label":"助剂体系框架","code":"S-01-12", "children": [
+        {"label":"增塑剂", "children": [
+          {"label":"邻苯二甲酸酯类（DOP/DBP/DINP/DIDP/DOTP）"},
+          {"label":"磷酸酯类（TCP/TEP/TCPP）"},
+          {"label":"脂肪酸酯类（DOA/ESO）"},
+          {"label":"柠檬酸酯类"}
+        ]},
+        {"label":"抗氧剂", "children": [
+          {"label":"酚类抗氧剂（BHT/1010/1076/1098）"},
+          {"label":"亚磷酸酯类（168/618/626）"},
+          {"label":"硫醚类（DLTDP/DSTDP）"}
+        ]},
+        {"label":"光稳定剂", "children": [
+          {"label":"HALS类（770/944/622）"},
+          {"label":"UV吸收剂（UV-531/UV-327/UV-326）"}
+        ]},
+        {"label":"热稳定剂", "children": [
+          {"label":"铅盐类（三碱式硫酸铅等）"},
+          {"label":"有机锡类"},
+          {"label":"钙锌复合稳定剂"},
+          {"label":"稀土稳定剂"}
+        ]},
+        {"label":"阻燃剂", "children": [
+          {"label":"卤系阻燃剂（十溴二苯醚/TBC）"},
+          {"label":"磷系阻燃剂（TCPP/TEP/APP/红磷）"},
+          {"label":"氮系阻燃剂（三聚氰胺/MCA）"},
+          {"label":"无机阻燃剂（氢氧化铝/氢氧化镁）"},
+          {"label":"膨胀型阻燃剂"}
+        ]},
+        {"label":"引发剂/交联剂", "children": [
+          {"label":"过氧化物（DCP/BPO/DTBP/TBPB）"},
+          {"label":"偶氮类（AIBN/ACPA）"},
+          {"label":"有机过氧化物硫化剂"},
+          {"label":"光引发剂（1173/184/TPO(光引发剂)/907）"}
+        ]},
+        {"label":"偶联剂", "children": [
+          {"label":"硅烷偶联剂（见S-01-08）"},
+          {"label":"钛酸酯偶联剂"},
+          {"label":"铝酸酯偶联剂"}
+        ]},
+        {"label":"发泡剂", "children": [
+          {"label":"物理发泡剂（正戊烷/环戊烷/二氧化碳）"},
+          {"label":"化学发泡剂（AC/ADC/OBSH）"},
+          {"label":"发泡助剂"}
+        ]},
+        {"label":"抗静电剂"},
+        {"label":"润滑剂/脱模剂"},
+        {"label":"成核剂/透明剂"},
+        {"label":"其他助剂（防雾滴剂/着色剂/抗菌剂）"}
+      ]}
+    ]},
+    {"label":"天然气","code":"S-02", "children": [
+      {"label":"甲烷直接转化","code":"S-02-01", "children": [
+        {"label":"天然气（CH₄）", "children": [
+          {"label":"合成气 Syngas（CO+H₂）← 蒸汽重整/部分氧化", "children": [
+            {"label":"见S-02-02"}
+          ]},
+          {"label":"甲醇 Methanol [67-56-1]（经合成气）★", "children": [
+            {"label":"甲醛 Formaldehyde [50-00-0]", "children": [
+              {"label":"脲醛树脂 UF"},
+              {"label":"酚醛树脂 PF"},
+              {"label":"聚甲醛 POM"},
+              {"label":"季戊四醇"},
+              {"label":"三聚氰胺树脂（+尿素）"}
+            ]},
+            {"label":"MTBE/MTA（+异丁烯）"},
+            {"label":"乙酸 Acetic Acid [64-19-7]（羰基化法）", "children": [
+              {"label":"乙酸乙烯酯 VAM", "children": [
+                {"label":"聚乙烯醇 PVA [9002-89-5]（→ 维纶纤维/胶黏剂/分散剂）★"}
+              ]},
+              {"label":"乙酸酯类（乙酸乙酯/乙酸丁酯）"},
+              {"label":"醋酐"}
+            ]},
+            {"label":"二甲基醚 DME"},
+            {"label":"甲醇制烯烃 MTO（→乙烯/丙烯）"},
+            {"label":"甲基丙烯酸甲酯 MMA（经丙酮氰醇或直接法）"}
+          ]},
+          {"label":"氢气 H₂（蒸汽重整/PSA）"},
+          {"label":"氯甲烷/二氯甲烷/氯仿（甲烷氯化）"}
+        ]}
+      ]},
+      {"label":"合成气化工","code":"S-02-02", "children": [
+        {"label":"合成气（CO+H₂）","notes":["来源：天然气蒸汽重整 / 煤气化 / 焦炉气"], "children": [
+          {"label":"甲醇（见S-02-01）"},
+          {"label":"合成氨 Ammonia [7664-41-7]（Haber-Bosch法）★", "children": [
+            {"label":"尿素 Urea [57-13-6]", "children": [
+              {"label":"尿醛树脂"},
+              {"label":"三聚氰胺（经尿素热解）"}
+            ]},
+            {"label":"硝酸 Nitric Acid [7697-37-2]", "children": [
+              {"label":"硝酸铵"},
+              {"label":"硝基复合肥"},
+              {"label":"己二酸（环己烷硝酸氧化）"}
+            ]},
+            {"label":"铵盐（硫酸铵/氯化铵/碳酸氢铵）"},
+            {"label":"氢氰酸 HCN → 氰化钠/丙烯腈/蛋氨酸"},
+            {"label":"水合肼/氨水"}
+          ]},
+          {"label":"羰基化反应产品", "children": [
+            {"label":"乙二醇（合成气直接法/经草酸二甲酯）"},
+            {"label":"DMF（经甲胺+CO）"}
+          ]},
+          {"label":"费托合成（煤/天然气制油 → α-烯烃/石蜡）"}
+        ]}
+      ]},
+      {"label":"天然气凝液（NGL）","code":"S-02-03", "children": [
+        {"label":"乙烷 Ethane [74-84-0] → 乙烯（乙烷裂解）"},
+        {"label":"丙烷 Propane [74-98-6] → 丙烯（PDH脱氢）"},
+        {"label":"丁烷 Butane → 丁二烯/MTBE"}
+      ]}
+    ]},
+    {"label":"煤炭","code":"S-03", "children": [
+      {"label":"煤气化","code":"S-03-01", "children": [
+        {"label":"煤炭 → 煤气化 → 合成气（CO+H₂）", "children": [
+          {"label":"→ 甲醇（见S-02-01）"},
+          {"label":"→ 合成氨（见S-02-02）"},
+          {"label":"→ 煤制油（直接液化/间接液化费托）", "children": [
+            {"label":"柴油/石脑油"},
+            {"label":"α-烯烃/石蜡"}
+          ]},
+          {"label":"→ 煤制乙二醇"},
+          {"label":"→ 煤制天然气（SNG）"},
+          {"label":"→ 煤制烯烃（MTO/MTP → 乙烯/丙烯）"}
+        ]}
+      ]},
+      {"label":"煤焦化","code":"S-03-02", "children": [
+        {"label":"煤炭 → 炼焦", "children": [
+          {"label":"焦炭 Coke", "children": [
+            {"label":"电石 Calcium Carbide [75-20-7]（石灰+焦炭电炉法）★", "children": [
+              {"label":"乙炔 Acetylene [74-86-2]", "children": [
+                {"label":"聚氯乙烯（乙炔法VCM → PVC）"},
+                {"label":"1,4-丁二醇 BDO（炔醛法）"},
+                {"label":"乙酸乙烯酯 VAM（乙炔法）"},
+                {"label":"丙烯酸（Reppe法）"}
+              ]}
+            ]},
+            {"label":"金属硅（石英+焦炭电炉法）→ 有机硅（见S-01-08）"}
+          ]},
+          {"label":"煤焦油 Coal Tar", "children": [
+            {"label":"萘 Naphthalene [91-20-3]", "children": [
+              {"label":"邻苯二甲酸酐（萘法）"},
+              {"label":"2-萘酚/H酸/J酸（染料中间体）"},
+              {"label":"扩散剂/减水剂"}
+            ]},
+            {"label":"蒽 Anthracene → 蒽醌（染料/造纸催化剂）"},
+            {"label":"菲 Phenanthrene"},
+            {"label":"咔唑 Carbazole"},
+            {"label":"酚/甲酚/二甲酚（煤焦油提取）"},
+            {"label":"沥青 Pitch → 针状焦/碳纤维/活性炭"}
+          ]},
+          {"label":"焦炉煤气", "children": [
+            {"label":"氢气（PSA提纯）"},
+            {"label":"甲醇（焦炉气制甲醇）"},
+            {"label":"城市燃气"}
+          ]}
+        ]}
+      ]},
+      {"label":"煤化工其他","code":"S-03-03", "children": [
+        {"label":"褐煤 → 腐殖酸 → 腐殖酸钠/腐殖酸钾"},
+        {"label":"煤基活性炭"},
+        {"label":"煤基碳材料（碳纤维/石墨电极/碳纳米管）"},
+        {"label":"煤提油（油页岩/油砂）"}
+      ]}
+    ]},
+    {"label":"矿石","code":"S-04", "children": [
+      {"label":"金属矿→无机金属化合物","code":"S-04-01", "children": [
+        {"label":"钛矿（钛铁矿/金红石）", "children": [
+          {"label":"二氧化钛 TiO₂ [13463-67-7]", "children": [
+            {"label":"氯化法钛白"},
+            {"label":"硫酸法钛白"}
+          ]}
+        ]},
+        {"label":"锌矿（闪锌矿）", "children": [
+          {"label":"氧化锌 ZnO [1314-13-2]", "children": [
+            {"label":"直接法"},
+            {"label":"间接法"},
+            {"label":"活性氧化锌/纳米氧化锌"}
+          ]},
+          {"label":"硫酸锌"}
+        ]},
+        {"label":"铝矿（铝土矿）", "children": [
+          {"label":"氧化铝 Al₂O₃ [1344-28-1]", "children": [
+            {"label":"冶金级氧化铝"},
+            {"label":"活性氧化铝/氢氧化铝"}
+          ]},
+          {"label":"硫酸铝 [10043-01-3]（水处理剂）"},
+          {"label":"聚合氯化铝 PAC（水处理剂）"}
+        ]},
+        {"label":"铜矿", "children": [
+          {"label":"硫酸铜 [7758-98-7]"},
+          {"label":"氧化铜/氯化铜"},
+          {"label":"电解铜/铜箔"}
+        ]},
+        {"label":"锰矿", "children": [
+          {"label":"二氧化锰 MnO₂"},
+          {"label":"硫酸锰/氯化锰"},
+          {"label":"高锰酸钾 KMnO₄"}
+        ]},
+        {"label":"铬矿", "children": [
+          {"label":"重铬酸钠/重铬酸钾"},
+          {"label":"铬酸/铬酸酐"},
+          {"label":"三氧化二铬"}
+        ]},
+        {"label":"钡矿（重晶石）", "children": [
+          {"label":"硫酸钡 BaSO₄"},
+          {"label":"碳酸钡"}
+        ]},
+        {"label":"锶矿（天青石）", "children": [
+          {"label":"碳酸锶"},
+          {"label":"硝酸锶"}
+        ]},
+        {"label":"钴矿", "children": [
+          {"label":"硫酸钴/氯化钴"},
+          {"label":"氢氧化钴/氧化钴"}
+        ]},
+        {"label":"镍矿", "children": [
+          {"label":"硫酸镍"},
+          {"label":"电解镍/镍粉"}
+        ]},
+        {"label":"锂矿（锂辉石/锂云母）★ 修订：仅保留硬岩矿路线","notes":["注：盐湖卤水提锂路线见S-08-03"], "children": [
+          {"label":"碳酸锂 Li₂CO₃（硬岩矿路线）"},
+          {"label":"氢氧化锂 LiOH（硬岩矿路线）"},
+          {"label":"六氟磷酸锂 LiPF₆（→ 见S-01-09）"}
+        ]},
+        {"label":"稀土矿", "children": [
+          {"label":"稀土氧化物（氧化铈/氧化镧/氧化钕等）"},
+          {"label":"稀土盐类（氯化稀土/硝酸稀土）"}
+        ]}
+      ]},
+      {"label":"非金属矿→无机非金属化学品","code":"S-04-02", "children": [
+        {"label":"石英/硅砂", "children": [
+          {"label":"二氧化硅 SiO₂（白炭黑/沉淀法/气相法）"},
+          {"label":"硅酸钠（水玻璃）"},
+          {"label":"硅胶"},
+          {"label":"金属硅（→ 有机硅，见S-01-08）", "children": [
+            {"label":"多晶硅 Polysilicon（西门子法/流化床法）★", "children": [
+              {"label":"多晶硅块/多晶硅片"},
+              {"label":"单晶硅棒/单晶硅片"}
+            ]}
+          ]}
+        ]},
+        {"label":"石墨", "children": [
+          {"label":"石墨粉/导电石墨"},
+          {"label":"可膨胀石墨"},
+          {"label":"石墨电极"},
+          {"label":"碳材料（碳纤维/石墨烯/碳纳米管）"}
+        ]},
+        {"label":"炭黑 Carbon Black [1333-86-4]", "children": [
+          {"label":"N100-N900系列（橡胶用）"},
+          {"label":"色素炭黑"},
+          {"label":"导电炭黑"},
+          {"label":"白炭黑（沉淀二氧化硅）"}
+        ]},
+        {"label":"黏土类矿物", "children": [
+          {"label":"高岭土 Kaolin"},
+          {"label":"膨润土 Bentonite", "children": [
+            {"label":"活性白土/有机膨润土"}
+          ]},
+          {"label":"蒙脱石"},
+          {"label":"滑石 Talc [14807-96-6]"}
+        ]},
+        {"label":"硅藻土 → 硅藻土助滤剂"},
+        {"label":"石棉 → 已限制使用"},
+        {"label":"云母 Mica"},
+        {"label":"长石/霞石 → 玻璃原料/陶瓷原料"},
+        {"label":"石膏 → 硫酸钙/建筑石膏"},
+        {"label":"瓷土/瓷粉 → 陶瓷原料"},
+        {"label":"玻璃原料/玻璃纤维/玻璃微珠"}
+      ]},
+      {"label":"硫资源→硫化工","code":"S-04-03", "children": [
+        {"label":"硫资源（主要来源：天然气/石油脱硫回收硫磺；辅助来源：硫铁矿/自然硫）", "children": [
+          {"label":"硫酸 H₂SO₄ [7664-93-9]（接触法制酸）", "children": [
+            {"label":"磷肥（见S-04-04）"},
+            {"label":"钛白粉（硫酸法，见S-04-01）"},
+            {"label":"钢铁酸洗"},
+            {"label":"硫酸铝/聚合硫酸铁（水处理）"},
+            {"label":"硫酸盐系列", "children": [
+              {"label":"硫酸钠（元明粉/芒硝）"},
+              {"label":"硫酸镁/硫酸锌/硫酸铜/硫酸亚铁"},
+              {"label":"硫酸钡（重晶石法）"},
+              {"label":"硫酸铵/硫酸钾"}
+            ]},
+            {"label":"磺化反应（→ 表面活性剂/染料）"}
+          ]},
+          {"label":"二硫化碳 CS₂ [75-15-0]", "children": [
+            {"label":"粘胶纤维（纤维素黄酸酯法）"}
+          ]},
+          {"label":"硫化钠/硫化铵（皮革/造纸）"},
+          {"label":"亚硫酸盐系列", "children": [
+            {"label":"亚硫酸钠/亚硫酸氢钠/焦亚硫酸钠"},
+            {"label":"硫代硫酸钠（大苏打）"}
+          ]},
+          {"label":"不溶性硫磺（橡胶硫化剂）"},
+          {"label":"硫醇/硫醚系列（有机硫化学品，捏合）"}
+        ]}
+      ]},
+      {"label":"磷矿→磷化工","code":"S-04-04", "children": [
+        {"label":"磷矿石（磷酸钙）", "children": [
+          {"label":"湿法磷酸 H₃PO₄ [7664-38-2]", "children": [
+            {"label":"磷肥", "children": [
+              {"label":"磷酸一铵 MAP"},
+              {"label":"磷酸二铵 DAP"},
+              {"label":"重过磷酸钙 TSP"},
+              {"label":"复合肥（NPK）"}
+            ]},
+            {"label":"饲料磷酸氢钙"},
+            {"label":"食品级磷酸/磷酸盐", "children": [
+              {"label":"磷酸三钠/磷酸二氢钠/磷酸氢二钠"},
+              {"label":"磷酸三钙"},
+              {"label":"六偏磷酸钠/三聚磷酸钠"}
+            ]},
+            {"label":"工业磷酸盐", "children": [
+              {"label":"磷酸锌（防锈颜料）"},
+              {"label":"磷酸铁（催化剂/电池材料前驱体）★"},
+              {"label":"聚磷酸铵 APP（阻燃剂）"}
+            ]}
+          ]},
+          {"label":"热法磷酸（黄磷→磷酸）", "children": [
+            {"label":"黄磷 P₄ [7723-14-0]", "children": [
+              {"label":"热法磷酸（高纯）"},
+              {"label":"三氯化磷 PCl₃", "children": [
+                {"label":"三氯氧磷 POCl₃"}
+              ]},
+              {"label":"五硫化二磷 P₂S₅"},
+              {"label":"次磷酸/次磷酸盐"}
+            ]},
+            {"label":"赤磷（火柴/阻燃剂）"}
+          ]},
+          {"label":"磷系阻燃剂（捏合）", "children": [
+            {"label":"磷酸酯类（TCPP/TEP/TCEP）"},
+            {"label":"聚磷酸铵 APP"},
+            {"label":"红磷阻燃剂"}
+          ]}
+        ]}
+      ]},
+      {"label":"石灰石/菱镁矿→钙镁化工","code":"S-04-05", "children": [
+        {"label":"石灰石（CaCO₃）/ 菱镁矿（MgCO₃）/ 白云石 CaMg(CO₃)₂", "children": [
+          {"label":"碳酸钙系列", "children": [
+            {"label":"重质碳酸钙 GCC"},
+            {"label":"轻质碳酸钙 PCC（石灰乳碳化法）"},
+            {"label":"纳米碳酸钙"},
+            {"label":"活性碳酸钙（表面改性）"}
+          ]},
+          {"label":"氧化钙 CaO（生石灰）", "children": [
+            {"label":"电石（→ 见S-03-02）"},
+            {"label":"钙基脱硫剂"},
+            {"label":"建筑石灰"}
+          ]},
+          {"label":"氢氧化钙 Ca(OH)₂（消石灰）"},
+          {"label":"菱镁矿 → 氧化镁/镁砂", "children": [
+            {"label":"轻质氧化镁"},
+            {"label":"重质氧化镁"},
+            {"label":"氢氧化镁（阻燃剂）"}
+          ]},
+          {"label":"白云石 → 氧化镁/硫酸镁/氯化镁"},
+          {"label":"注：海水提镁路线见S-08-04"}
+        ]}
+      ]},
+      {"label":"其他非金属矿化工","code":"S-04-06", "children": [
+        {"label":"萤石 CaF₂ → 氢氟酸 HF（→ 见S-01-09含氟化学品）"},
+        {"label":"硼矿（硼镁矿）→ 硼酸/硼砂", "children": [
+          {"label":"硼酸 H₃BO₃"},
+          {"label":"硼砂 Na₂B₄O₇·10H₂O"},
+          {"label":"氧化硼/三氟化硼"}
+        ]},
+        {"label":"砷矿 → 三氧化二砷（白砒）"},
+        {"label":"硅藻土 → 助滤剂/吸附剂"},
+        {"label":"珍珠岩/蛭石 → 轻质骨料/隔热材料"}
+      ]}
+    ]},
+    {"label":"空气","code":"S-05", "children": [
+      {"label":"空气分离","code":"S-05-01", "children": [
+        {"label":"空气 → 深冷分离/PSA", "children": [
+          {"label":"氮气 N₂ [7727-37-9]", "children": [
+            {"label":"工业氮气（保护气/吹扫）"},
+            {"label":"液氮（冷冻剂）"},
+            {"label":"高纯氮"}
+          ]},
+          {"label":"氧气 O₂ [7782-44-7]", "children": [
+            {"label":"工业氧气（冶炼/医疗）"},
+            {"label":"液氧（火箭推进剂）"},
+            {"label":"臭氧 O₃ [10028-15-6]（氧化/消毒）"}
+          ]},
+          {"label":"氩气 Ar [7440-37-1]（保护气）"},
+          {"label":"氦气 He [7440-59-7]"},
+          {"label":"稀有气体（氖/氪/氙）"}
+        ]}
+      ]},
+      {"label":"空气分离→氮气化工","code":"S-05-02", "children": [
+        {"label":"氮气 N₂", "children": [
+          {"label":"合成氨 NH₃（N₂+H₂，H₂来自天然气/煤）→ 见S-02-02"},
+          {"label":"硝酸 HNO₃（氨氧化法）→ 见S-02-02"},
+          {"label":"氰化物系列", "children": [
+            {"label":"氢氰酸 HCN → 氰化钠/氰化钾"},
+            {"label":"氰尿酸/三聚氯氰（→ 农药/染料）"}
+          ]},
+          {"label":"氮气保护（工业防氧化）"},
+          {"label":"二氧化碳 CO₂ [124-38-9]（回收/捕集）", "children": [
+            {"label":"工业CO₂（焊接保护/碳酸饮料）"},
+            {"label":"干冰"},
+            {"label":"超临界CO₂（萃取/清洗）"},
+            {"label":"尿素合成（CO₂+NH₃）"}
+          ]}
+        ]}
+      ]},
+      {"label":"电子特气","code":"S-05-03", "children": [
+        {"label":"电子特气 Electronic Specialty Gases", "children": [
+          {"label":"含氟特气", "children": [
+            {"label":"三氟化氮 NF₃"},
+            {"label":"六氟化钨 WF₆"},
+            {"label":"六氟化硫 SF₆"},
+            {"label":"三氟化硼 BF₃"},
+            {"label":"四氟化碳 CF₄"}
+          ]},
+          {"label":"含硅特气", "children": [
+            {"label":"硅烷 SiH₄"},
+            {"label":"二氯二氢硅 DCS"},
+            {"label":"三氯氢硅 TCS"}
+          ]},
+          {"label":"含氮/磷特气", "children": [
+            {"label":"超纯氨 NH₃"},
+            {"label":"一氧化二氮 N₂O"},
+            {"label":"磷烷 PH₃"},
+            {"label":"砷烷 AsH₃"}
+          ]},
+          {"label":"其他电子特气", "children": [
+            {"label":"一氧化碳 CO"},
+            {"label":"氯化氢 HCl（高纯）"},
+            {"label":"笑气/其他"}
+          ]}
+        ]}
+      ]}
+    ]},
+    {"label":"水","code":"S-06", "children": [
+      {"label":"水电解与水解","code":"S-06-01", "children": [
+        {"label":"水 H₂O", "children": [
+          {"label":"电解水", "children": [
+            {"label":"氢气 H₂（绿氢）"},
+            {"label":"氧气 O₂"}
+          ]},
+          {"label":"过氧化氢 H₂O₂ [7722-84-1]（蒽醌法/电解法）", "children": [
+            {"label":"工业双氧水（漂白/氧化/环保）"}
+          ]},
+          {"label":"水合反应", "children": [
+            {"label":"水合肼"},
+            {"label":"环氧乙烷水合→乙二醇"}
+          ]}
+        ]}
+      ]},
+      {"label":"工业用水处理化学品","code":"S-06-02", "children": [
+        {"label":"混凝/絮凝剂", "children": [
+          {"label":"聚合氯化铝 PAC"},
+          {"label":"聚合硫酸铁 PFS"},
+          {"label":"聚丙烯酰胺 PAM"},
+          {"label":"明矾/硫酸铝"}
+        ]},
+        {"label":"杀菌灭藻剂", "children": [
+          {"label":"次氯酸钠/次氯酸钙"},
+          {"label":"二氧化氯"},
+          {"label":"溴氯海因"},
+          {"label":"戊二醛"}
+        ]},
+        {"label":"缓蚀阻垢剂", "children": [
+          {"label":"有机膦酸（HEDP/ATMP/EDTMP）"},
+          {"label":"聚羧酸类（PAA/HPMA）"},
+          {"label":"钼酸盐/钨酸盐"}
+        ]},
+        {"label":"消泡剂", "children": [
+          {"label":"有机硅消泡剂"},
+          {"label":"聚醚消泡剂"},
+          {"label":"矿物油消泡剂"}
+        ]},
+        {"label":"pH调节剂（硫酸/氢氧化钠/石灰）"}
+      ]}
+    ]},
+    {"label":"生物质","code":"S-07", "children": [
+      {"label":"油脂化工","code":"S-07-01", "children": [
+        {"label":"植物油/动物脂（甘油三酯）", "children": [
+          {"label":"脂肪酸 Fatty Acids", "children": [
+            {"label":"硬脂酸 [57-11-4]"},
+            {"label":"油酸 [112-80-1]"},
+            {"label":"棕榈酸"},
+            {"label":"月桂酸"},
+            {"label":"混合脂肪酸"}
+          ]},
+          {"label":"甘油 Glycerin [56-81-5]", "children": [
+            {"label":"医药级甘油"},
+            {"label":"工业甘油"},
+            {"label":"甘油衍生物（聚甘油/环氧氯丙醇）"}
+          ]},
+          {"label":"脂肪醇", "children": [
+            {"label":"C8-C10醇"},
+            {"label":"C12-C14醇"},
+            {"label":"C16-C18醇"}
+          ]},
+          {"label":"脂肪胺", "children": [
+            {"label":"伯胺/仲胺/叔胺"},
+            {"label":"季铵盐（→ 阳离子表面活性剂）"}
+          ]},
+          {"label":"脂肪酸酯", "children": [
+            {"label":"脂肪酸甲酯（生物柴油/表面活性剂原料）"},
+            {"label":"单甘酯/双甘酯"},
+            {"label":"环氧大豆油 ESO（增塑剂）"}
+          ]},
+          {"label":"蓖麻油 → 癸二酸/十一碳烯酸"},
+          {"label":"松香 Rosin → 松香树脂/松香酯"},
+          {"label":"桐油 Tung Oil"},
+          {"label":"卵磷脂 Lecithin（大豆/蛋黄提取）"}
+        ]}
+      ]},
+      {"label":"天然树脂与天然蜡","code":"S-07-02", "children": [
+        {"label":"松香 Rosin [8050-09-7]", "children": [
+          {"label":"歧化松香"},
+          {"label":"氢化松香"},
+          {"label":"聚合松香"},
+          {"label":"松香酯类（甘油酯/季戊四醇酯）"}
+        ]},
+        {"label":"松节油 Turpentine Oil", "children": [
+          {"label":"α-蒎烯/β-蒎烯"},
+          {"label":"松油醇/樟脑"}
+        ]},
+        {"label":"天然橡胶 Natural Rubber [9006-04-6]", "children": [
+          {"label":"标胶 TSR"},
+          {"label":"烟胶片 RSS"},
+          {"label":"乳胶 Latex"}
+        ]},
+        {"label":"虫胶 Shellac [9000-59-3]"},
+        {"label":"大漆/生漆（漆酚）"},
+        {"label":"阿拉伯树胶 Gum Arabic"},
+        {"label":"瓜尔豆胶 Guar Gum"},
+        {"label":"黄原胶 Xanthan Gum"},
+        {"label":"琼脂/海藻酸钠/卡拉胶"},
+        {"label":"明胶 Gelatin"},
+        {"label":"巴西棕榈蜡 Carnauba Wax"},
+        {"label":"蜂蜡 Beeswax"},
+        {"label":"虫白蜡"},
+        {"label":"小烛树蜡"}
+      ]},
+      {"label":"糖类/淀粉/纤维素化工","code":"S-07-03", "children": [
+        {"label":"淀粉 Starch", "children": [
+          {"label":"变性淀粉（氧化淀粉/酯化淀粉/交联淀粉）"},
+          {"label":"糊精"},
+          {"label":"淀粉糖（葡萄糖/果葡糖浆）"}
+        ]},
+        {"label":"纤维素 Cellulose", "children": [
+          {"label":"粘胶纤维（经CS₂黄酸酯法）"},
+          {"label":"羧甲基纤维素 CMC"},
+          {"label":"羟乙基纤维素 HEC"},
+          {"label":"甲基纤维素 MC"},
+          {"label":"微晶纤维素"}
+        ]},
+        {"label":"发酵产品", "children": [
+          {"label":"乙醇（发酵法）→ 见S-01-02"},
+          {"label":"乳酸 → 聚乳酸 PLA"},
+          {"label":"柠檬酸"},
+          {"label":"谷氨酸/味精"},
+          {"label":"酶制剂"},
+          {"label":"黄原胶（见S-07-02）"}
+        ]},
+        {"label":"木质素 Lignin", "children": [
+          {"label":"木质素磺酸盐（减水剂/分散剂）"},
+          {"label":"碱木质素"}
+        ]},
+        {"label":"糠醛/糠醇（农林副产品水解→糠醛→糠醇→呋喃树脂）★"},
+        {"label":"大豆蛋白 → 改性蛋白胶"},
+        {"label":"壳聚糖/甲壳素 Chitosan"}
+      ]},
+      {"label":"天然提取物","code":"S-07-04", "children": [
+        {"label":"植物精油", "children": [
+          {"label":"桉叶油"},
+          {"label":"薄荷油/薄荷脑"},
+          {"label":"松节油（见S-07-02）"},
+          {"label":"其他精油"}
+        ]},
+        {"label":"茶皂素 Tea Saponin"},
+        {"label":"皂苷系列"},
+        {"label":"植物色素（天然色素）"},
+        {"label":"植物提取物（按需）"}
+      ]}
+    ]},
+    {"label":"海水/盐湖/卤水资源","code":"S-08", "children": [
+      {"label":"海盐/岩盐→氯碱化工","code":"S-08-01", "children": [
+        {"label":"海水/盐湖/岩盐 → 氯化钠 NaCl [7647-14-5]", "children": [
+          {"label":"氯碱工业（电解食盐水）", "children": [
+            {"label":"氯气 Cl₂ [7782-50-5]", "children": [
+              {"label":"氯乙烯 VCM → PVC（见S-01-02）"},
+              {"label":"环氧氯丙烷 ECH → 环氧树脂"},
+              {"label":"氯代溶剂（二氯甲烷/氯仿/四氯化碳）"},
+              {"label":"氯化石蜡"},
+              {"label":"次氯酸钠/次氯酸钙（漂白/消毒）"},
+              {"label":"氯化铁/氯化铝（水处理）"},
+              {"label":"光气 COCl₂(碳酰氯) → MDI/TDI（异氰酸酯）"},
+              {"label":"氯化苄/氯乙酰氯"},
+              {"label":"三氯化磷/三氯氧磷（磷氯化剂）"}
+            ]},
+            {"label":"氢氧化钠 NaOH [1310-73-2]（烧碱）", "children": [
+              {"label":"固碱/液碱"},
+              {"label":"片碱/粒碱"}
+            ]},
+            {"label":"氢气 H₂（副产品）"}
+          ]},
+          {"label":"纯碱（碳酸钠）Na₂CO₃ [497-19-8]（联碱法/氨碱法）"},
+          {"label":"小苏打（碳酸氢钠）NaHCO₃"},
+          {"label":"氯化铵 NH₄Cl（联碱法副产品）"},
+          {"label":"其他无机氯化物", "children": [
+            {"label":"氯化钾 KCl"},
+            {"label":"氯化钙 CaCl₂"},
+            {"label":"氯化镁 MgCl₂"},
+            {"label":"氯化钡 BaCl₂"}
+          ]}
+        ]}
+      ]},
+      {"label":"海水提溴/提碘","code":"S-08-02", "children": [
+        {"label":"海水/地下卤水/海藻", "children": [
+          {"label":"溴 Bromine Br₂ [7726-95-6]", "children": [
+            {"label":"溴化钠/溴化钾"},
+            {"label":"溴化铵"},
+            {"label":"氢溴酸"},
+            {"label":"十溴二苯醚（阻燃剂）"},
+            {"label":"溴氯海因（杀菌剂）"},
+            {"label":"其他溴化物（溴代烃/溴酸/溴酸盐）"}
+          ]},
+          {"label":"碘 Iodine I₂ [7553-56-2]", "children": [
+            {"label":"碘化钾/碘化钠"},
+            {"label":"碘酸钾"},
+            {"label":"氢碘酸"},
+            {"label":"其他碘化物（碘代烃/聚维酮碘）"}
+          ]}
+        ]}
+      ]},
+      {"label":"盐湖提锂/提钾","code":"S-08-03", "children": [
+        {"label":"盐湖卤水（含Li⁺/K⁺/Mg²⁺/B³⁺等）", "children": [
+          {"label":"盐湖提锂","notes":["注：硬岩矿（锂辉石/锂云母）提锂路线见S-04-01"], "children": [
+            {"label":"碳酸锂 Li₂CO₃（盐湖路线）"},
+            {"label":"氢氧化锂 LiOH（盐湖路线）"},
+            {"label":"金属锂"}
+          ]},
+          {"label":"盐湖提钾", "children": [
+            {"label":"氯化钾 KCl（钾肥原料）"},
+            {"label":"硫酸钾 K₂SO₄"},
+            {"label":"硝酸钾 KNO₃"}
+          ]},
+          {"label":"盐湖提硼","notes":["注：硼矿（硼镁矿）路线见S-04-06"], "children": [
+            {"label":"硼酸"},
+            {"label":"硼砂"}
+          ]},
+          {"label":"盐湖提镁","notes":["注：矿石提镁路线见S-04-05"], "children": [
+            {"label":"氯化镁 MgCl₂"},
+            {"label":"氢氧化镁"}
+          ]}
+        ]}
+      ]},
+      {"label":"海水提镁","code":"S-08-04", "children": [
+        {"label":"海水/卤水", "children": [
+          {"label":"氢氧化镁 Mg(OH)₂（海水石灰法）", "children": [
+            {"label":"阻燃级氢氧化镁"},
+            {"label":"工业级氢氧化镁"}
+          ]},
+          {"label":"氧化镁 MgO（由氢氧化镁煅烧）", "children": [
+            {"label":"轻质氧化镁"},
+            {"label":"高纯氧化镁"}
+          ]},
+          {"label":"氯化镁 MgCl₂（卤水蒸发）", "children": [
+            {"label":"六水氯化镁/无水氯化镁"}
+          ]},
+          {"label":"硫酸镁 MgSO₄"},
+          {"label":"金属镁（电解氯化镁）"}
+        ]}
+      ]}
+    ]}
+  ]
+}

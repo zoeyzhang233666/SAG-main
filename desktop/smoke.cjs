@@ -6,12 +6,13 @@ const { setTimeout: delay } = require('node:timers/promises');
 const name = 'SAG V1 desktop smoke';
 const title = '甲醇供应链测试';
 const event = '甲醇制烯烃测试事件';
-const entity = '测试乙烯';
+const entity = '乙烯';
 const preference = 'sag-desktop-smoke';
 const chunksPerFile = 30;
 const entities = [
   { type: '原料', name: '测试甲醇', description: 'MTO 工艺原料' },
-  { type: '产品', name: entity, description: 'MTO 工艺产品' }
+  { type: '产品', name: entity, description: 'MTO 工艺产品' },
+  { type: '产品', name: '硫酸', description: '无机酸节点匹配样例' }
 ];
 // More than one batch per document, with overlapping entities in different orders.
 const fixtures = Array.from({ length: 3 }, (_, fileIndex) => ({
@@ -116,6 +117,59 @@ async function smoke(contents, origin, profile, mode) {
     return Array.from(document.querySelectorAll('.react-flow__node'))
       .some(node => node.textContent.includes(event) && node.getBoundingClientRect().width > 0);
   }, event), 'V1 Hypergraph did not render the imported event');
+
+  await evaluate(() => {
+    const tab = Array.from(document.querySelectorAll('.chem-workspace-tabs button'))
+      .find(item => /^(产业链图谱|Chain atlas)$/.test(item.textContent.trim()));
+    if (!tab) throw new Error('Missing chain atlas tab');
+    tab.click();
+  });
+  await until(() => evaluate(() => document.querySelector('.chain-atlas-index-heading')?.textContent.includes('v2.1')),
+    'Source tree did not open');
+  await evaluate(() => {
+    document.querySelectorAll('.chain-atlas-tabs button')[1].click();
+  });
+  await until(() => evaluate(() => {
+    const index = document.querySelector('.chain-atlas-index');
+    return index?.textContent.includes('v3.0') && index.textContent.includes('制造业') &&
+      !index.textContent.includes('原油及石油产品');
+  }), 'Applications tree did not switch independently');
+  const enterAtlasSearch = query => evaluate(query => {
+    const input = document.querySelector('.chain-atlas-search input');
+    if (!input) return false;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, query);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }, query);
+  await until(() => enterAtlasSearch('A-26-2611-01'), 'Applications search was unavailable');
+  await until(() => evaluate(() => {
+    const match = document.querySelector('.chain-atlas-results .chain-atlas-match');
+    if (!match) return false;
+    match.click();
+    return true;
+  }), 'The sulfuric acid classification did not match its library entity');
+  await until(() => evaluate(() => document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === '硫酸'),
+    'Applications entity did not open the library detail drawer');
+  await evaluate(() => document.querySelector('[data-sag-detail-drawer] button')?.click());
+  await evaluate(() => document.querySelectorAll('.chain-atlas-tabs button')[0].click());
+  await until(() => evaluate(() => document.querySelector('.chain-atlas-index-heading')?.textContent.includes('v2.1')),
+    'Source tree did not reopen');
+  await until(() => enterAtlasSearch('乙烯 Ethylene'), 'Source search was unavailable');
+  await until(() => evaluate(() => {
+    const locate = document.querySelector('.chain-atlas-results .chain-atlas-disclosure');
+    if (!locate) return false;
+    locate.click();
+    return true;
+  }), 'Atlas search result did not locate the node in its branch');
+  await until(() => evaluate(() => {
+    const match = document.querySelector('.chain-atlas-row[data-focused="true"] .chain-atlas-match');
+    if (!match) return false;
+    match.click();
+    return true;
+  }), 'No library entity matched the atlas node');
+  await until(() => evaluate(entity =>
+    document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === entity,
+    entity), 'Atlas entity did not open the library detail drawer');
 
   if (mode !== 'read') fs.writeFileSync(baseline, JSON.stringify({ projectId: project.id, imported }));
   fs.writeFileSync(path.join(profile, `smoke-${mode}.ok`), origin + '\n');

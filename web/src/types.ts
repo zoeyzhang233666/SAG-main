@@ -91,6 +91,15 @@ export interface EventDetailRecord {
   };
 }
 
+export interface ChainAtlasEntityMatch {
+  term: string;
+  id: string;
+  name: string;
+  type: string;
+  sourceId: string;
+  sourceName: string;
+}
+
 export interface EntityDetailRecord {
   entity: EntityRecord & { eventCount: number };
   events: EventRecord[];
