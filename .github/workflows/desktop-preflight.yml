@@ -1,0 +1,97 @@
+name: Desktop preflight (V1)
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            label: macOS ARM64 runtime
+            arch: arm64
+          - runner: windows-2025
+            label: Windows x64 runtime
+            arch: x64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11'
+      - name: Confirm native architecture
+        shell: bash
+        run: test "$(node -p 'process.arch')" = "${{ matrix.arch }}"
+      - name: Build existing V1 frontend and backend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Build PostgreSQL 16 and pgvector from pinned upstream sources
+        shell: bash
+        run: |
+          git init pg-source
+          git -C pg-source fetch --depth=1 https://github.com/postgres/postgres.git c0534eb02de050ac1035ad7b3ad7c3f02980f153
+          git -C pg-source checkout --detach FETCH_HEAD
+          git init pgvector-source
+          git -C pgvector-source fetch --depth=1 https://github.com/pgvector/pgvector.git f37c13f68b57d2c3472b2214fbcff699d6d34876
+          git -C pgvector-source checkout --detach FETCH_HEAD
+      - name: Compile native database (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install bison flex
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          prefix="$GITHUB_WORKSPACE/postgres-runtime"
+          cd pg-source
+          ./configure --prefix="$prefix" --without-icu --without-readline --without-zlib
+          make -j 4
+          make install
+          cd ../pgvector-source
+          make PG_CONFIG="$prefix/bin/pg_config" OPTFLAGS="-O2"
+          make PG_CONFIG="$prefix/bin/pg_config" install
+      - name: Compile native database (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pip install meson ninja
+          if ($LASTEXITCODE -ne 0) { throw 'Build tool install failed' }
+          choco install winflexbison3 -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'winflexbison install failed' }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs) { throw 'Visual Studio compiler not found' }
+          $prefix = "$env:GITHUB_WORKSPACE/postgres-runtime" -replace '\\','/'
+          $script = @"
+          @echo off
+          call "$vs\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
+          cd /d "$env:GITHUB_WORKSPACE\pg-source"
+          meson setup build --prefix="$prefix" --libdir=lib --buildtype=release --auto-features=disabled -Dssl=none -Duuid=none || exit /b 1
+          ninja -C build || exit /b 1
+          ninja -C build install || exit /b 1
+          cd /d "$env:GITHUB_WORKSPACE\pgvector-source"
+          set "PGROOT=$prefix"
+          nmake /F Makefile.win || exit /b 1
+          nmake /F Makefile.win install || exit /b 1
+          "@
+          $script | Set-Content -Encoding ascii "$env:RUNNER_TEMP\build-pg.cmd"
+          cmd.exe /d /c "$env:RUNNER_TEMP\build-pg.cmd"
+          if ($LASTEXITCODE -ne 0) { throw 'Native database build failed' }
+      - name: Smoke test relocated database and V1 migrations
+        shell: bash
+        run: node desktop/scripts/smoke-db.mjs
