@@ -57,6 +57,8 @@ try {
     }
     const text = await client.query("select similarity('SAG', 'SAG') as score, unaccent('café') as normalized");
     if (Number(text.rows[0].score) !== 1 || text.rows[0].normalized !== 'cafe') throw new Error('Text extension smoke test failed');
+    const settings = await client.query("select metadata->>'mermaidTemplate' as template from ai_provider_settings where id = 'global'");
+    if (settings.rows.length !== 1 || !settings.rows[0].template?.includes('产业链关系图引用说明')) throw new Error('Mermaid settings migration failed');
     await client.query("create table desktop_smoke (id integer primary key, v vector(1024))");
     await client.query('insert into desktop_smoke values (1, $1::vector)', ['[' + Array(1024).fill(1).join(',') + ']']);
     const result = await client.query('select v <-> v as distance from desktop_smoke');
@@ -64,6 +66,8 @@ try {
   } finally { await client.end(); }
   stop();
   start();
+  // A second migration run must preserve the existing schema and data.
+  run(process.execPath, ['dist/src/db/migrate.js'], { env: { ...env, DATABASE_URL: url } });
   const reopened = new pg.Client({ connectionString: url });
   await reopened.connect();
   try {
