@@ -34,9 +34,12 @@ jobs:
       - name: Confirm native architecture
         shell: bash
         run: test "$(node -p 'process.arch')" = "${{ matrix.arch }}"
+      - name: Install locked dependencies
+        shell: bash
+        run: npm ci
       - name: Build existing V1 frontend and backend
+        shell: bash
         run: |
-          npm ci
           npm run typecheck
           npm test
           npm run build
