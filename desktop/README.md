@@ -22,6 +22,6 @@ npm ci --omit=dev --prefix desktop/build/resources/backend
 node desktop/scripts/smoke-app.mjs --source
 ```
 
-From the `desktop` directory, run `npm run package -- --mac --arm64` on Apple Silicon or `npm run package -- --win --x64` on Windows x64. Install the resulting package and run `node desktop/scripts/smoke-app.mjs "/path/to/installed/executable"` from the repository root. The smoke test submits a V1 structured import, verifies stored documents and graph relationships, opens the Hypergraph tab, then checks the same records and browser preferences after restart. Each run checks that PostgreSQL and the backend exit. GitHub Actions uploads the tested installers and SHA256 files.
+From the `desktop` directory, run `npm run package -- --mac --arm64` on Apple Silicon or `npm run package -- --win --x64` on Windows x64. Install the resulting package and run `node desktop/scripts/smoke-app.mjs "/path/to/installed/executable"` from the repository root. The smoke test submits three concurrent V1 structured imports with shared entities, verifies stored documents and graph relationships, opens the Hypergraph tab, then checks the same records and browser preferences after restart. Each run checks that PostgreSQL and the backend exit. GitHub Actions uploads the tested installers and SHA256 files.
 
 The preview uses ad-hoc signing on macOS and an unsigned Windows installer. Production code signing and macOS notarization require release credentials. The original V1 license is included.

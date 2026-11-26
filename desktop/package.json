@@ -1,7 +1,7 @@
 {
   "name": "sag-v1-desktop",
   "productName": "SAG V1",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "SAG V1 standalone desktop preview",
   "author": "ChemCloud",

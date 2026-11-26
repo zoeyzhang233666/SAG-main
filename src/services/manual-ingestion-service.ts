@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { embeddingClient, type EmbeddingClient } from "../ai/embedding-client.js";
 import { config } from "../config/env.js";
 import { pool } from "../db/pool.js";
-import { createSource, deleteDocument, upsertEntity } from "../db/repositories.js";
+import { createSource, deleteDocument, lockProjectGraph, upsertEntity } from "../db/repositories.js";
 import { toVectorLiteral } from "../db/vector.js";
 import { estimateTokens } from "../ingestion/chunking/markdown.js";
 import type { ManualKnowledgeDocument } from "../ingestion/manual-import.js";
@@ -350,6 +350,7 @@ export class ManualIngestionService {
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await lockProjectGraph(client, input.sourceId);
       for (const item of input.items) {
         await client.query(
           `

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { toVectorLiteral } from "../db/vector.js";
-import { createSource, upsertEntity } from "../db/repositories.js";
+import { createSource, lockProjectGraph, upsertEntity } from "../db/repositories.js";
 import { config } from "../config/env.js";
 import { embeddingClient, type EmbeddingClient } from "../ai/embedding-client.js";
 import { llmClient, type LlmClient } from "../ai/llm-client.js";
@@ -112,6 +112,7 @@ export class IngestionService {
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await lockProjectGraph(client, source.id);
       await client.query(
         `
           insert into documents (id, source_id, title, content, status, parse_status, metadata)

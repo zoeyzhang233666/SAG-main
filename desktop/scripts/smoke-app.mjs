@@ -24,13 +24,14 @@ function isListening(port) {
 
 try {
   for (const mode of [upgradeProfile ? 'upgrade' : 'write', 'read']) {
+    const marker = path.join(data, 'smoke-' + mode + '.ok');
+    fs.rmSync(marker, { force: true });
     const result = spawnSync(exe, [...args, '--desktop-smoke=' + mode], {
       env: { ...process.env, SAG_V1_SMOKE_DATA: data },
       stdio: 'inherit',
       timeout: 300000,
       windowsHide: true
     });
-    const marker = path.join(data, 'smoke-' + mode + '.ok');
     if (result.error) throw result.error;
     assert.equal(result.status, 0, 'Application smoke ' + mode + ' exited unsuccessfully');
     const origin = new URL(fs.readFileSync(marker, 'utf8').trim());

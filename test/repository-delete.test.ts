@@ -44,7 +44,7 @@ describe("deleteDocument repository operation", () => {
     expect(normalizeSql(db.client.query.mock.calls[0][0])).toBe("begin");
     expect(normalizeSql(db.client.query.mock.calls[1][0])).toContain("join sources s on s.id = d.source_id");
     expect(normalizeSql(db.client.query.mock.calls[1][0])).toContain("where d.id = $1 and s.tenant_id = $2");
-    expect(normalizeSql(db.client.query.mock.calls[1][0])).toContain("for update");
+    expect(normalizeSql(db.client.query.mock.calls[1][0])).toContain("for no key update of s");
     expect(normalizeSql(db.client.query.mock.calls[2][0])).toContain("candidate_entities");
     expect(normalizeSql(db.client.query.mock.calls[2][0])).toContain("shared_entities");
     expect(normalizeSql(db.client.query.mock.calls[2][0])).toContain("ent.id not in (select entity_id from shared_entities)");
