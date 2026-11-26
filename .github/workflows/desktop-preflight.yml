@@ -90,6 +90,9 @@ jobs:
           meson setup build --prefix="$prefix" --libdir=lib --buildtype=release --auto-features=disabled -Dssl=none -Duuid=none || exit /b 1
           ninja -C build || exit /b 1
           ninja -C build install || exit /b 1
+          rem Meson names the MSVC import library postgres.exe.lib; pgvector expects postgres.lib.
+          if not exist "$prefix/lib/postgres.lib" copy /Y "$prefix/lib/postgres.exe.lib" "$prefix/lib/postgres.lib" || exit /b 1
+          if not exist "$prefix/lib/postgres.lib" exit /b 1
           cd /d "$env:GITHUB_WORKSPACE\pgvector-source"
           set "PGROOT=$prefix"
           nmake /F Makefile.win || exit /b 1

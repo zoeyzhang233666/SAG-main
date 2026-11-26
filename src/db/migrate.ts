@@ -43,6 +43,7 @@ export async function migrate(): Promise<void> {
         logger.info({ migration: file }, "migration applied");
       } catch (error) {
         await client.query("rollback");
+        logger.error({ migration: file, error: error instanceof Error ? error.message : String(error) }, "SQL migration failed");
         throw error;
       }
     }
