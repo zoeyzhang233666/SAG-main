@@ -11,13 +11,13 @@ const resources=app.isPackaged?process.resourcesPath:path.join(__dirname,'build'
 const backend=path.join(resources,'backend'),pg=path.join(resources,'postgres');
 const data=path.join(dir,'postgres-data'),secret=path.join(dir,'postgres-password'),seed=path.join(dir,'seed-complete');
 const logs=path.join(dir,'logs');fs.mkdirSync(logs,{recursive:true,mode:0o700});
-const pgLog=path.join(logs,'postgres.log'),apiLog=path.join(logs,'backend.log');
+const pgLog=path.join(logs,'postgres.log'),pgCtlLog=path.join(logs,'postgres-control.log'),apiLog=path.join(logs,'backend.log');
 const pgExe=n=>path.join(pg,'bin',n+(process.platform==='win32'?'.exe':''));
 const base={...process.env};for(const k of Object.keys(base))if(/^(PG[A-Z_]+|NODE_OPTIONS|NODE_PATH|ELECTRON_RUN_AS_NODE|DATABASE_URL|PUBLIC_SHARE_TOKEN|ADMIN_SHARE_TOKEN|SAG_DESKTOP_ACCESS_TOKEN|HTTP_HOST|HTTP_PORT|AUTH_MODE|DEFAULT_TENANT_ID|DOTENV_CONFIG_.*)$/i.test(k))delete base[k];
 let win,child,dbStarted=false,closing=false,closed=false,origin,token,startup;
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const log=s=>fs.appendFileSync(path.join(logs,'desktop.log'),new Date().toISOString()+' '+s+'\n');
-function run(file,args,env=base,logFile=pgLog){
+function run(file,args,env=base,logFile=pgCtlLog){
  return new Promise((resolve,reject)=>{
   const fd=fs.openSync(logFile,'a');let c;
   try{c=spawn(file,args,{cwd:backend,env,stdio:['ignore',fd,fd],windowsHide:true});}
