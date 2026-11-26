@@ -1,0 +1,113 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { setTimeout: delay } = require('node:timers/promises');
+
+const name = 'SAG V1 desktop smoke';
+const title = '甲醇供应链测试';
+const event = '甲醇制烯烃测试事件';
+const entity = '测试乙烯';
+const preference = 'sag-desktop-smoke';
+const fixture = {
+  title,
+  chunks: [{
+    heading: '甲醇工艺',
+    content: '甲醇通过 MTO 工艺生产乙烯和丙烯。',
+    event: {
+      title: event,
+      content: '甲醇通过 MTO 工艺生产乙烯和丙烯。',
+      keywords: ['甲醇', 'MTO'],
+      entities: [
+        { type: '原料', name: '测试甲醇', description: 'MTO 工艺原料' },
+        { type: '产品', name: entity, description: 'MTO 工艺产品' }
+      ]
+    }
+  }]
+};
+
+async function until(predicate, message) {
+  for (let i = 0; i < 120; i++) {
+    const result = await predicate();
+    if (result) return result;
+    await delay(250);
+  }
+  throw new Error(message);
+}
+
+async function smoke(contents, origin, profile, mode) {
+  const unauthenticated = await fetch(origin + '/api/projects', { signal: AbortSignal.timeout(5000) });
+  assert.equal(unauthenticated.status, 401, 'Direct HTTP must require a desktop token');
+
+  const evaluate = (fn, ...args) => contents.executeJavaScript(
+    `(${fn})(${args.map(arg => JSON.stringify(arg)).join(',')})`
+  );
+  const api = (url, options = null, status = 200) => evaluate(async (url, options, status) => {
+    const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
+    if (response.status !== status) throw new Error(`${url}: ${response.status} ${await response.text()}`);
+    return response.json();
+  }, url, options, status);
+
+  await until(() => evaluate(() => document.querySelector('#root')?.childElementCount), 'V1 frontend did not mount');
+  const baseline = path.join(profile, 'smoke-records.json');
+  const { projects } = await api('/api/projects');
+  let project = projects.find(item => item.name === name);
+  let documentId;
+
+  if (mode === 'read') {
+    const records = JSON.parse(fs.readFileSync(baseline, 'utf8'));
+    assert.equal(project?.id, records.projectId, 'Project ID changed across restart');
+    assert.equal(await evaluate(key => localStorage.getItem(key), preference), 'saved', 'Browser storage was lost');
+    documentId = records.documentId;
+  } else {
+    if (mode === 'upgrade') {
+      assert.ok(project, 'The older installation project did not survive the upgrade');
+    } else {
+      assert.equal(projects.length, 0, 'New installation database was not empty');
+      ({ project } = await api('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      }, 201));
+    }
+
+    const params = new URLSearchParams({ sourceId: project.id, fileName: '甲醇.json', format: 'json' });
+    const { job } = await api('/api/documents/import-structured/file/jobs?' + params, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(fixture)
+    }, 202);
+    const completed = await until(async () => {
+      const { job: current } = await api('/api/documents/import-structured/jobs/' + job.id);
+      if (current.status === 'FAILED') throw new Error('V1 import failed: ' + current.error);
+      return current.status === 'COMPLETED' && current;
+    }, 'V1 structured file import timed out');
+    documentId = completed.documentId;
+    assert.ok(documentId, 'Import did not return a document ID');
+    await evaluate(key => localStorage.setItem(key, 'saved'), preference);
+  }
+
+  const { documents } = await api(`/api/projects/${project.id}/documents`);
+  assert.ok(documents.some(doc => doc.id === documentId && doc.title === title), 'Imported document missing');
+  const { graph } = await api(`/api/projects/${project.id}/graph`);
+  assert.ok(graph.events.some(item => item.title === event), 'Imported event missing from graph');
+  assert.ok(graph.entities.some(item => item.name === entity), 'Imported entity missing from graph');
+  assert.ok(graph.edges.length, 'Imported relationships missing from graph');
+
+  contents.reload();
+  await until(() => evaluate(() => {
+    const tab = Array.from(document.querySelectorAll('.chem-workspace-tabs button'))
+      .find(item => /^(知识超图|Hypergraph)$/.test(item.textContent.trim()));
+    if (!tab || tab.disabled) return false;
+    tab.click();
+    return true;
+  }), 'Could not open V1 Hypergraph tab');
+  await until(() => evaluate(event => {
+    return Array.from(document.querySelectorAll('.react-flow__node'))
+      .some(node => node.textContent.includes(event) && node.getBoundingClientRect().width > 0);
+  }, event), 'V1 Hypergraph did not render the imported event');
+
+  if (mode !== 'read') fs.writeFileSync(baseline, JSON.stringify({ projectId: project.id, documentId }));
+  fs.writeFileSync(path.join(profile, `smoke-${mode}.ok`), origin + '\n');
+}
+
+module.exports = { smoke };
