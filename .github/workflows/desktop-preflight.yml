@@ -64,6 +64,9 @@ jobs:
           ./configure --prefix="$prefix" --without-icu --without-readline --without-zlib
           make -j 4
           make install
+          # V1 uses PostgreSQL contrib extensions for text matching and normalization.
+          make -C contrib/pg_trgm all install
+          make -C contrib/unaccent all install
           cd ../pgvector-source
           make PG_CONFIG="$prefix/bin/pg_config" OPTFLAGS="-O2"
           make PG_CONFIG="$prefix/bin/pg_config" install

@@ -51,8 +51,12 @@ try {
   const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
-    const { rows } = await client.query("select extversion from pg_extension where extname = 'vector'");
-    if (!rows.length) throw new Error('pgvector not installed by migrations');
+    const { rows } = await client.query("select extname from pg_extension where extname in ('vector', 'pg_trgm', 'unaccent')");
+    for (const extName of ['vector', 'pg_trgm', 'unaccent']) {
+      if (!rows.some(row => row.extname === extName)) throw new Error(extName + ' not installed by migrations');
+    }
+    const text = await client.query("select similarity('SAG', 'SAG') as score, unaccent('café') as normalized");
+    if (Number(text.rows[0].score) !== 1 || text.rows[0].normalized !== 'cafe') throw new Error('Text extension smoke test failed');
     await client.query("create table desktop_smoke (id integer primary key, v vector(1024))");
     await client.query('insert into desktop_smoke values (1, $1::vector)', ['[' + Array(1024).fill(1).join(',') + ']']);
     const result = await client.query('select v <-> v as distance from desktop_smoke');
