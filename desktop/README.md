@@ -1,11 +1,14 @@
-# SAG V1 standalone desktop: build preflight
+# SAG V1 standalone desktop preview
 
-This is the first stage, not a desktop release. Keep the existing React/Fastify/TypeScript application and PostgreSQL 16 + pgvector data model. The native matrix builds PostgreSQL 16.16 and pgvector 0.8.7 from pinned official upstream commits and exercises V1 migrations and vector persistence in a relocated temporary runtime. It does not publish any installers or real business data.
+Independent from SAG-main-V2. Electron packaging uses the V2 dependency lock as its starting point; no V2 application code or database is used.
 
-Remaining release gates:
-- Electron desktop launcher with a packaged, self-contained database and Node runtime; no Docker or external PostgreSQL required.
-- Runtime relocation and dependency/signature verification on actual DMG and NSIS EXE.
-- Separate app identity and durable user data directory; authenticated loopback PostgreSQL, per-install credentials, graceful shutdown and no destructive migration.
-- Retain existing UI, structured import/export, search, settings and MCP; test API and large-file import, launch and restart using packaged application.
-- Reproducible dependency lockfiles, third-party license notices, no real databases or credentials in installers.
-- Both architecture checks and package smoke tests must pass before versioned GitHub prerelease with checksums.
+- macOS Apple Silicon DMG / Windows x64 NSIS EXE. Artifacts are uploaded only after native preflight, installer creation and actual packaged launch/write/restart tests.
+- First launch initializes PostgreSQL 16 + pgvector, pg_trgm and unaccent under the independent SAG-V1 data directory. No system Node, Docker or PostgreSQL is needed; Electron's Node runtime starts the existing Fastify server.
+- Desktop HTTP binds only to loopback and requires a per-launch header. The ordinary web/server deployment is unchanged when desktop authorization is not configured.
+- Data is stored under ~/Library/Application Support/SAG-V1 on macOS or %APPDATA%\SAG-V1 on Windows. Back up postgres-data and postgres-password together with the app closed. Do not delete during upgrades.
+- Existing server data is not copied automatically; use existing structured import/export workflows.
+- No knowledge data or API credentials bundled. Set AI provider credentials for remote AI functions.
+- macOS ad-hoc signing, no notarization; Windows unsigned preview. No automatic updates. Windows 10 and physical-device testing remain necessary.
+- The ordinary web UI and MCP-related features remain intact; a separate external MCP service is not started automatically.
+
+Do not merge or publish before both packaged launch tests pass. The original license is retained; publication authorization and licensing must be verified separately.

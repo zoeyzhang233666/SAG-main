@@ -106,3 +106,63 @@ jobs:
       - name: Smoke test relocated database and V1 migrations
         shell: bash
         run: node desktop/scripts/smoke-db.mjs
+      - name: Install Electron dependencies (V2 pinned toolchain)
+        working-directory: desktop
+        shell: bash
+        run: npm ci
+      - name: Stage independent V1 runtime
+        shell: bash
+        run: |
+          node desktop/scripts/stage.mjs
+          npm ci --omit=dev --prefix desktop/build/resources/backend
+      - name: Build desktop installer
+        working-directory: desktop
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_FOR_PULL_REQUEST: 'true'
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            npm run package -- --mac --arm64
+          else
+            npm run package -- --win --x64
+          fi
+      - name: Verify and launch actual Mac DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg=$(find desktop/release -maxdepth 1 -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          hdiutil verify "$dmg"
+          mount_dir=$(mktemp -d)
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$dmg"
+          trap 'hdiutil detach "$mount_dir"; rmdir "$mount_dir"' EXIT
+          app="$mount_dir/SAG V1.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          file "$app/Contents/MacOS/SAG V1" | grep -F arm64
+          file "$app/Contents/Resources/postgres/bin/postgres" | grep -F arm64
+          node desktop/scripts/smoke-app.mjs "$app/Contents/MacOS/SAG V1"
+      - name: Verify and launch installed Windows EXE
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem desktop/release -Filter 'SAG-V1-Setup-*-win-x64.exe' | Select-Object -First 1
+          if (!$installer) { throw 'Missing Windows installer' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'SAG V1 installed'
+          $p = Start-Process -FilePath $installer.FullName -ArgumentList ('/S /D=' + $installDir) -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer exited $($p.ExitCode)" }
+          $exe = Join-Path $installDir 'SAG V1.exe'
+          node desktop/scripts/smoke-app.mjs $exe
+          if ($LASTEXITCODE -ne 0) { throw 'Installed application smoke failed' }
+      - name: Upload verified installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sag-v1-${{ matrix.arch }}
+          path: |
+            desktop/release/SAG-V1-*-mac-arm64.dmg
+            desktop/release/SAG-V1-Setup-*-win-x64.exe
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
