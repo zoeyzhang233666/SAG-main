@@ -1,20 +1,14 @@
 import { aiSettingsService, type AiRuntimeSettings } from "../services/ai-settings-service.js";
 import type { ExtractedEntity, ExtractedEvent, EventRecord } from "../types.js";
+import { ModelHttpError, StructuredResponseError, structuredCompletion } from "./structured-output.js";
 import { createModelCallLogger } from "../observability/model-call-log.js";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 const MAX_CHAT_JSON_ATTEMPTS = 4;
 
-class JsonResponseCompatibilityError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "JsonResponseCompatibilityError";
-  }
-}
-
 export interface LlmClient {
-  extractNamedEntities(query: string): Promise<string[]>;
+  extractNamedEntities(query: string, signal?: AbortSignal): Promise<string[]>;
   extractEventsFromChunk(input: {
     title: string;
     heading?: string;
@@ -25,15 +19,13 @@ export interface LlmClient {
     query: string;
     candidates: EventRecord[];
     topK: number;
+    signal?: AbortSignal;
   }): Promise<string[]>;
-  repairMermaidDiagram?(input: {
-    source: string;
-    error?: string;
-  }): Promise<string | null>;
 }
 
 export class OpenAICompatibleLlmClient implements LlmClient {
-  async extractNamedEntities(query: string): Promise<string[]> {
+  async extractNamedEntities(query: string, signal?: AbortSignal): Promise<string[]> {
+    signal?.throwIfAborted();
     const settings = await aiSettingsService.getRuntimeSettings();
     if (!settings.hasRemoteLlm) {
       const log = createModelCallLogger({
@@ -48,6 +40,8 @@ export class OpenAICompatibleLlmClient implements LlmClient {
     let result: Record<string, any>;
     try {
       result = await this.chatJson(settings, {
+        signal,
+        schema: stringListSchema("named_entities"),
         system: "Extract named entities important for answering the question. Return JSON only.",
         user: JSON.stringify({
           question: query,
@@ -100,6 +94,7 @@ export class OpenAICompatibleLlmClient implements LlmClient {
     query: string;
     candidates: EventRecord[];
     topK: number;
+    signal?: AbortSignal;
   }): Promise<string[]> {
     const settings = await aiSettingsService.getRuntimeSettings();
     if (!settings.hasRemoteLlm) {
@@ -115,6 +110,8 @@ export class OpenAICompatibleLlmClient implements LlmClient {
     let result: Record<string, any>;
     try {
       result = await this.chatJson(settings, {
+        signal: input.signal,
+        schema: stringListSchema("useful_event_ids"),
         system: `Select up to ${input.topK} event ids that are directly useful for answering the question. Return JSON only. If no candidate directly supports the answer, return an empty useful_event_ids array.`,
         user: JSON.stringify({
           question: input.query,
@@ -136,51 +133,13 @@ export class OpenAICompatibleLlmClient implements LlmClient {
       : localRerank(input.query, input.candidates, input.topK);
   }
 
-  async repairMermaidDiagram(input: { source: string; error?: string }): Promise<string | null> {
-    const settings = await aiSettingsService.getRuntimeSettings();
-    if (!settings.hasRemoteLlm) {
-      const log = createModelCallLogger({
-        kind: "llm",
-        operation: "repairMermaidDiagram.local",
-        request: input
-      });
-      log.succeed({ repaired: null, reason: "remote LLM is not configured" });
-      return null;
-    }
-    try {
-      const result = await this.chatJson(settings, {
-        operation: "repairMermaidDiagram",
-        system: [
-          "Repair the Mermaid diagram syntax or redraw it as a conservative Mermaid flowchart.",
-          "Return JSON only with fields: repaired_source string, changed boolean.",
-          "The repaired_source must contain only Mermaid code, without markdown fences.",
-          "Use graph LR or flowchart LR only. Avoid HTML, click actions, icons, and unsupported syntax.",
-          "Preserve the original domain meaning when possible."
-        ].join("\n"),
-        user: JSON.stringify({
-          source: input.source.slice(0, 20000),
-          render_error: input.error?.slice(0, 4000) ?? "",
-          output_schema: {
-            repaired_source: "string",
-            changed: "boolean"
-          }
-        })
-      });
-      const repaired = String(result.repaired_source ?? result.source ?? "").trim()
-        .replace(/^```(?:mermaid)?\s*/i, "")
-        .replace(/\s*```$/i, "")
-        .trim();
-      return repaired.length > 0 ? repaired : null;
-    } catch {
-      return null;
-    }
-  }
-
   private async chatJson(settings: AiRuntimeSettings, input: {
     system?: string;
     user?: string;
     messages?: ChatMessage[];
     operation?: string;
+    signal?: AbortSignal;
+    schema?: Record<string, unknown>;
   }): Promise<Record<string, any>> {
     const url = buildChatCompletionsUrl(settings.llmBaseUrl);
     const messages = input.messages ?? [
@@ -193,107 +152,63 @@ export class OpenAICompatibleLlmClient implements LlmClient {
       temperature: 0.1
     };
 
-    let lastError: unknown;
-    const maxAttempts = Math.max(
-      1,
-      Math.min(MAX_CHAT_JSON_ATTEMPTS, settings.llmMaxRetries + 1)
-    );
-    for (const useJsonMode of [true, false]) {
-      let tryNextMode = false;
-      const body = useJsonMode
-        ? { ...baseBody, response_format: { type: "json_object" } }
-        : baseBody;
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const controller = new AbortController();
-        const timeout = setTimeout(
-          () => controller.abort(new Error(`llm request timeout (${settings.llmTimeoutMs} ms)`)),
-          settings.llmTimeoutMs
-        );
-        const log = createModelCallLogger({
-          kind: "llm",
-          operation: useJsonMode ? input.operation ?? "chatJson" : `${input.operation ?? "chatJson"}.noResponseFormat`,
-          request: {
-            url,
-            method: "POST",
-              attempt,
-              maxAttempts,
-              timeoutMs: settings.llmTimeoutMs,
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body
-          }
-        });
-        let logged = false;
-        try {
-          const response = await fetch(url, {
-            method: "POST",
-            signal: controller.signal,
-            headers: {
-              Authorization: `Bearer ${settings.llmApiKey}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(body)
+    const maxAttempts = Math.max(1, Math.min(MAX_CHAT_JSON_ATTEMPTS, settings.llmMaxRetries + 1));
+    const operation = input.operation ?? "chatJson";
+    const deadline = AbortSignal.timeout(settings.llmTimeoutMs);
+    const signal = input.signal ? AbortSignal.any([input.signal, deadline]) : deadline;
+    return structuredCompletion({
+      mode: settings.structuredOutputMode === "json_schema" && !input.schema
+        ? "json_object" : settings.structuredOutputMode ?? "auto",
+      capabilityKey: JSON.stringify([url, settings.llmModel, operation]),
+      // Keep the compatible object format for existing extraction, and support
+      // strict schemas on explicitly configured endpoints.
+      schema: settings.structuredOutputMode === "json_schema" ? input.schema : undefined,
+      signal,
+      parse: parseJsonObject,
+      call: async (format, mode) => {
+        const body = format ? { ...baseBody, response_format: format } : baseBody;
+        for (let attempt = 1; ; attempt += 1) {
+          signal.throwIfAborted();
+          const log = createModelCallLogger({
+            kind: "llm",
+            operation: mode === "prompt_only" ? `${operation}.noResponseFormat` : operation,
+            request: { url, model: settings.llmModel, mode, attempt, maxAttempts }
           });
-          const { responseText, responseBody } = await readResponseBody(response);
-          if (!response.ok) {
-            const error = new Error(`llm request failed: ${response.status} ${responseText.slice(0, 500)}`);
-            log.fail(error, {
-              status: response.status,
-              body: responseBody
-            });
-            logged = true;
-            lastError = error;
-            if (useJsonMode && isJsonModeCompatibilityStatus(response.status)) {
-              tryNextMode = true;
-              break;
-            }
-            if (attempt < maxAttempts && isRetryableHttpStatus(response.status)) {
-              await waitBeforeRetry(attempt);
-              continue;
-            }
-            throw error;
-          }
-          const content = extractChatResponseText(responseBody);
-          if (!content.trim()) {
-            throw new JsonResponseCompatibilityError("llm response did not include usable message content");
-          }
-          let parsed: Record<string, any>;
           try {
-            parsed = parseJsonObject(content);
+            const response = await fetch(url, {
+              method: "POST",
+              signal,
+              headers: {
+                Authorization: `Bearer ${settings.llmApiKey}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(body)
+            });
+            const { responseText, responseBody } = await readResponseBody(response);
+            if (!response.ok) throw new ModelHttpError(response.status, responseText.slice(0, 500));
+            const content = extractChatResponseText(responseBody);
+            if (!content.trim()) throw new StructuredResponseError("Empty structured response");
+            log.succeed({ status: response.status, contentLength: content.length, body: responseBody });
+            return content;
           } catch (error) {
-            throw new JsonResponseCompatibilityError(error instanceof Error ? error.message : String(error));
-          }
-          log.succeed({
-            status: response.status,
-            body: responseBody,
-            parsed
-          });
-          return parsed;
-        } catch (error) {
-          lastError = error;
-          if (!logged) {
             log.fail(error);
-          }
-          if (error instanceof JsonResponseCompatibilityError && useJsonMode) {
-            tryNextMode = true;
-            break;
-          }
-          if (attempt < maxAttempts && (controller.signal.aborted || isRetryableFetchError(error))) {
+            const retryable = error instanceof ModelHttpError ? isRetryableHttpStatus(error.status) : isRetryableFetchError(error);
+            if (signal.aborted || attempt >= maxAttempts || !retryable) throw error;
             await waitBeforeRetry(attempt);
-            continue;
           }
-          throw error;
-        } finally {
-          clearTimeout(timeout);
         }
       }
-      if (!tryNextMode) {
-        break;
-      }
-    }
-    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    });
   }
+}
+
+function stringListSchema(key: string) {
+  return {
+    type: "object",
+    properties: { [key]: { type: "array", items: { type: "string" } } },
+    required: [key],
+    additionalProperties: false
+  };
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
@@ -434,9 +349,6 @@ function isRetryableHttpStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
-function isJsonModeCompatibilityStatus(status: number): boolean {
-  return status === 400 || status === 415 || status === 422;
-}
 
 function isRetryableFetchError(error: unknown): boolean {
   if (!(error instanceof Error)) {

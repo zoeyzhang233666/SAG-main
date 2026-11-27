@@ -9,6 +9,7 @@ import type {
   McpSessionDetail,
   McpSessionRecord,
   McpStreamEvent,
+  QuestionAnchor,
   ModelCallLogRecord,
   ManualImportFormat,
   ProjectGraphRecord,
@@ -220,12 +221,6 @@ export const api = {
     };
   },
 
-  async repairMermaid(input: { source: string; error?: string }) {
-    return request<{ repairedSource: string | null }>("/api/mermaid/repair", {
-      method: "POST",
-      body: JSON.stringify(input)
-    });
-  },
 
   async getDocument(documentId: string) {
     return request<{ document: DocumentRecord }>(`/api/documents/${documentId}`);
@@ -542,7 +537,7 @@ export const api = {
     sessionId: string,
     content: string,
     onEvent: (event: McpStreamEvent) => void,
-    options: { signal?: AbortSignal; autoMermaid?: boolean } = {}
+    options: { signal?: AbortSignal; clientTurnId?: string; retry?: boolean; anchor?: QuestionAnchor } = {}
   ) {
     const response = await fetch(`/api/mcp/sessions/${sessionId}/messages/stream`, {
       method: "POST",
@@ -552,7 +547,9 @@ export const api = {
       },
       body: JSON.stringify({
         content,
-        autoMermaid: options.autoMermaid ?? false
+        clientTurnId: options.clientTurnId,
+        retry: options.retry,
+        anchor: options.anchor,
       })
     });
     if (!response.ok || !response.body) {
@@ -584,14 +581,13 @@ export const api = {
     clearLlmApiKey?: boolean;
     llmTimeoutMs: number;
     llmMaxRetries: number;
+    structuredOutputMode?: "auto" | "json_schema" | "json_object" | "prompt_only";
     defaultSearchMode: SearchMode;
     defaultSearchTopK: number;
     defaultChunkingMode: ChunkingMode;
     chunkTokenLimit: number;
     chunkOverlapTokens: number;
     answerSystemPrompt: string;
-    mermaidTemplate: string;
-    mermaidPendingText: string;
     mcpSearchMode: SearchMode;
     graphDefaultLayoutStyle: string;
     welcomePromptTemplates: string[];
@@ -627,6 +623,8 @@ export async function readSseStream<T>(
   let buffer = "";
   let sawDone = false;
   let streamClosed = false;
+  let streamRunId: string | undefined;
+  let lastSequence = 0;
 
   const consumeFrame = (frame: string) => {
     const lines = frame.split(/\r?\n/);
@@ -646,12 +644,29 @@ export async function readSseStream<T>(
     } catch {
       throw new Error("流式响应包含无法解析的事件数据。");
     }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("流式响应事件格式无效。");
+    }
     const eventTypeFromData =
       parsed && typeof parsed === "object" && "type" in parsed
         ? (parsed as { type?: unknown }).type
         : undefined;
+    if (namedEvent && typeof eventTypeFromData === "string" && namedEvent !== eventTypeFromData) {
+      throw new Error("流式响应事件名称与数据不一致。");
+    }
+    if ("runId" in parsed || "sequence" in parsed || streamRunId) {
+      if (!("runId" in parsed) || typeof parsed.runId !== "string" ||
+          !("sequence" in parsed) || !Number.isSafeInteger(parsed.sequence) ||
+          (streamRunId && streamRunId !== parsed.runId) ||
+          parsed.sequence !== lastSequence + 1) {
+        throw new Error("流式回答的运行标识或事件顺序不一致。");
+      }
+      streamRunId = parsed.runId;
+      lastSequence = parsed.sequence;
+    }
     const eventType =
       typeof eventTypeFromData === "string" ? eventTypeFromData : namedEvent;
+    if (eventType === "cancelled") throw new DOMException("已停止生成。", "AbortError");
     if (eventType === "error") {
       const message =
         parsed && typeof parsed === "object" && "message" in parsed

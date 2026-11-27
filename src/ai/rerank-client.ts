@@ -11,6 +11,7 @@ export interface RerankClient {
     query: string;
     candidates: EventRecord[];
     topK: number;
+    signal?: AbortSignal;
   }): Promise<string[]>;
 }
 
@@ -19,6 +20,7 @@ export class QwenRerankClient implements RerankClient {
     query: string;
     candidates: EventRecord[];
     topK: number;
+    signal?: AbortSignal;
   }): Promise<string[]> {
     if (input.candidates.length === 0 || input.topK <= 0) {
       return [];
@@ -65,6 +67,7 @@ export class QwenRerankClient implements RerankClient {
     query: string;
     candidates: EventRecord[];
     topK: number;
+    signal?: AbortSignal;
   }): Promise<string[]> {
     const url = buildRerankUrl(target.baseUrl);
     const documents = input.candidates.map((candidate) => eventToRerankDocument(candidate, input.candidates.length));
@@ -82,6 +85,7 @@ export class QwenRerankClient implements RerankClient {
       Math.min(MAX_RERANK_ATTEMPTS, settings.llmMaxRetries + 1)
     );
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      input.signal?.throwIfAborted();
       const controller = new AbortController();
       const timeoutMs = Math.min(settings.llmTimeoutMs, RERANK_TIMEOUT_MS);
       const timeout = setTimeout(
@@ -110,7 +114,7 @@ export class QwenRerankClient implements RerankClient {
       try {
         const response = await fetch(url, {
           method: "POST",
-          signal: controller.signal,
+          signal: input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal,
           headers: {
             Authorization: `Bearer ${target.apiKey}`,
             "Content-Type": "application/json"

@@ -8,17 +8,18 @@ const EMBEDDING_TIMEOUT_MS = 45_000;
 const MAX_EMBEDDING_ATTEMPTS = 3;
 
 export interface EmbeddingClient {
-  generate(text: string): Promise<number[]>;
-  batchGenerate(texts: string[]): Promise<number[][]>;
+  generate(text: string, signal?: AbortSignal): Promise<number[]>;
+  batchGenerate(texts: string[], signal?: AbortSignal): Promise<number[][]>;
 }
 
 export class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
-  async generate(text: string): Promise<number[]> {
-    const [embedding] = await this.batchGenerate([text]);
+  async generate(text: string, signal?: AbortSignal): Promise<number[]> {
+    const [embedding] = await this.batchGenerate([text], signal);
     return embedding;
   }
 
-  async batchGenerate(texts: string[]): Promise<number[][]> {
+  async batchGenerate(texts: string[], signal?: AbortSignal): Promise<number[][]> {
+    signal?.throwIfAborted();
     if (texts.length === 0) {
       return [];
     }
@@ -63,6 +64,7 @@ export class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
     );
     let lastError: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      signal?.throwIfAborted();
       const controller = new AbortController();
       const timeoutMs = Math.min(settings.llmTimeoutMs, EMBEDDING_TIMEOUT_MS);
       const timeout = setTimeout(
@@ -88,7 +90,7 @@ export class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
       try {
         const response = await fetch(url, {
           method: "POST",
-          signal: controller.signal,
+          signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
           headers: {
             Authorization: `Bearer ${settings.embeddingApiKey}`,
             "Content-Type": "application/json"

@@ -24,8 +24,6 @@ const baseSettings: AiRuntimeSettings = {
   chunkTokenLimit: 512,
   chunkOverlapTokens: 100,
   answerSystemPrompt: "Answer from evidence.",
-  mermaidTemplate: "graph LR",
-  mermaidPendingText: "drawing",
   mcpSearchMode: "fast",
   graphDefaultLayoutStyle: "force",
   welcomePromptTemplates: [],
@@ -123,7 +121,6 @@ describe("MCP final-answer streaming", () => {
       history: [],
       settings: baseSettings,
       observations: [],
-      autoMermaid: false,
       emit: (event) => {
         if (event.type === "assistant_delta") visibleDeltas.push(event.delta);
       }
@@ -166,7 +163,6 @@ describe("MCP final-answer streaming", () => {
       history: [],
       settings: baseSettings,
       observations: [],
-      autoMermaid: false,
       emit: (event) => {
         if (event.type === "assistant_delta") visibleDeltas.push(event.delta);
       }
@@ -195,7 +191,6 @@ describe("MCP final-answer streaming", () => {
       history: [],
       settings: baseSettings,
       observations: [],
-      autoMermaid: false,
       signal: controller.signal
     }).catch((error: unknown) => error);
 
@@ -233,7 +228,6 @@ describe("MCP final-answer prompt compaction", () => {
           content: [{ type: "text", text: JSON.stringify({ traceId: "trace", sections }) }]
         }
       }],
-      autoMermaid: false
     });
     const payload = JSON.parse(messages[1].content) as {
       recent_messages: Array<{ role: string; content: string }>;

@@ -19,8 +19,6 @@ const runtimeSettings = vi.hoisted(() => ({
     chunkTokenLimit: 512,
     chunkOverlapTokens: 100,
     answerSystemPrompt: "",
-    mermaidTemplate: "",
-    mermaidPendingText: "",
     mcpSearchMode: "fast" as const,
     graphDefaultLayoutStyle: "force",
     welcomePromptTemplates: [],

@@ -62,7 +62,8 @@ export function buildMcpServer(): McpServer {
         const result = await searchService.search(
           { ...input, sourceIds: [readConfiguredSourceId()], strategy: input.strategy ?? "multi", returnTrace: true },
           undefined,
-          notificationEmitter ? createMcpProgressEmitter(notificationEmitter) : undefined
+          notificationEmitter ? createMcpProgressEmitter(notificationEmitter) : undefined,
+          extra.signal
         );
         return jsonContent(result);
       } finally {
@@ -86,7 +87,8 @@ export function buildMcpServer(): McpServer {
         const result = await searchService.search(
           { ...input, sourceIds: [readConfiguredSourceId()], strategy: "multi", returnTrace: true },
           undefined,
-          notificationEmitter ? createMcpProgressEmitter(notificationEmitter) : undefined
+          notificationEmitter ? createMcpProgressEmitter(notificationEmitter) : undefined,
+          extra.signal
         );
         return jsonContent(result.trace ?? result);
       } finally {
@@ -102,7 +104,9 @@ export function buildMcpServer(): McpServer {
     },
     async (input) => {
       const result = await graphService.getEvent(input.eventId);
-      return jsonContent(result ?? { error: { code: "EVENT_NOT_FOUND", message: "Event not found" } });
+      return jsonContent(result?.event.sourceId === readConfiguredSourceId()
+        ? result
+        : { error: { code: "EVENT_NOT_FOUND", message: "Event not found in the active source" } });
     }
   );
 

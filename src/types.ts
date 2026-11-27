@@ -360,6 +360,7 @@ export interface AiProviderSettingsRecord {
   llmApiKey?: string | null;
   llmTimeoutMs: number;
   llmMaxRetries: number;
+  structuredOutputMode?: "auto" | "json_schema" | "json_object" | "prompt_only";
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -376,14 +377,13 @@ export interface PublicAiProviderSettings {
   hasLlmApiKey: boolean;
   llmTimeoutMs: number;
   llmMaxRetries: number;
+  structuredOutputMode?: "auto" | "json_schema" | "json_object" | "prompt_only";
   defaultSearchMode: SearchMode;
   defaultSearchTopK: number;
   defaultChunkingMode: ChunkingMode;
   chunkTokenLimit: number;
   chunkOverlapTokens: number;
   answerSystemPrompt: string;
-  mermaidTemplate: string;
-  mermaidPendingText: string;
   mcpSearchMode: SearchMode;
   graphDefaultLayoutStyle: string;
   welcomePromptTemplates: string[];

@@ -57,25 +57,26 @@ export class SearchService {
     private readonly reranker: RerankClient = rerankClient
   ) {}
 
-  async search(input: SearchInput, tenantId = config.DEFAULT_TENANT_ID, emit?: SearchProgressEmitter): Promise<SearchResult> {
+  async search(input: SearchInput, tenantId = config.DEFAULT_TENANT_ID, emit?: SearchProgressEmitter, signal?: AbortSignal): Promise<SearchResult> {
     const strategy = input.strategy ?? "multi";
     if (strategy !== "vector" && strategy !== "multi") {
       throw new Error(`Unsupported search strategy: ${String(strategy)}`);
     }
 
+    signal?.throwIfAborted();
     await assertSourcesAccessible(input.sourceIds, tenantId);
     if (strategy === "vector") {
-      return this.vectorSearch(input, emit);
+      return this.vectorSearch(input, emit, signal);
     }
-    return this.multiSearch(input, emit);
+    return this.multiSearch(input, emit, signal);
   }
 
-  async vectorSearch(input: SearchInput, emit?: SearchProgressEmitter): Promise<SearchResult> {
+  async vectorSearch(input: SearchInput, emit?: SearchProgressEmitter, signal?: AbortSignal): Promise<SearchResult> {
     const runtimeSettings = await aiSettingsService.getRuntimeSettings();
     const topK = resolveFinalSearchTopK(input.multi?.maxSections ?? input.topK ?? runtimeSettings.defaultSearchTopK);
     const traceId = randomUUID();
     const timings: Record<string, number> = {};
-    const queryVector = await timed(timings, "queryEmbedding", () => this.embeddings.generate(input.query), emit, {
+    const queryVector = await timed(timings, "queryEmbedding", () => this.embeddings.generate(input.query, signal), emit, {
       title: "查询向量化",
       detail: "把用户问题转成向量，用于向量召回。"
     });
@@ -93,7 +94,7 @@ export class SearchService {
     };
   }
 
-  async multiSearch(input: SearchInput, emit?: SearchProgressEmitter): Promise<SearchResult> {
+  async multiSearch(input: SearchInput, emit?: SearchProgressEmitter, signal?: AbortSignal): Promise<SearchResult> {
     const runtimeSettings = await aiSettingsService.getRuntimeSettings();
     const options = resolveMultiOptions(input, runtimeSettings.defaultSearchTopK);
     const searchMode = input.searchMode ?? runtimeSettings.defaultSearchMode;
@@ -113,10 +114,11 @@ export class SearchService {
       timings
     };
 
-    const queryEmbedding = await timedOptional(timings, "queryEmbedding", () => this.embeddings.generate(input.query), emit, {
+    const queryEmbedding = await timedOptional(timings, "queryEmbedding", () => this.embeddings.generate(input.query, signal), emit, {
       title: "查询向量化",
       detail: "把用户问题转成向量，用于召回相关事件和切片。"
     }, (error) => `查询向量化不可用，已继续使用文本检索：${formatSearchError(error)}`);
+    signal?.throwIfAborted();
     const queryVector = queryEmbedding.value;
     if (!queryVector) {
       appendFallbackReason(trace, queryEmbedding.fallbackDetail);
@@ -149,7 +151,7 @@ export class SearchService {
         }))
       });
     } else {
-      queryEntities = uniqueEntityNames(await timed(timings, "step1ExtractEntities", () => this.llm.extractNamedEntities(input.query), emit, {
+      queryEntities = uniqueEntityNames(await timed(timings, "step1ExtractEntities", () => this.llm.extractNamedEntities(input.query, signal), emit, {
         title: "抽取查询实体",
         detail: "识别用户问题中的关键实体。"
       }));
@@ -168,7 +170,7 @@ export class SearchService {
         });
         const vectorPromise = queryVector && queryEntities.length > 0
           ? timedOptional(timings, "step2EntityVectors", async () => {
-              const vectors = await this.embeddings.batchGenerate(queryEntities);
+              const vectors = await this.embeddings.batchGenerate(queryEntities, ...(signal ? [signal] : []));
               if (vectors.length !== queryEntities.length) {
                 throw new Error(`entity embedding count mismatch: expected=${queryEntities.length}, actual=${vectors.length}`);
               }
@@ -273,6 +275,7 @@ export class SearchService {
       payload: trace.textEvents
     });
 
+    signal?.throwIfAborted();
     const seedEventIds = unique([
       ...entityEventIds,
       ...queryEvents.map((event) => event.id),
@@ -387,25 +390,31 @@ export class SearchService {
       payload: trace.coarseRankedEvents
     });
 
+    signal?.throwIfAborted();
     const rerankStepKey = searchMode === "fast" ? "step7RerankModel" : "step7LlmRerank";
-    let selectedIds = await timed(timings, rerankStepKey, () => (
+    const reranked = await timedOptional(timings, rerankStepKey, () => (
       searchMode === "fast"
         ? this.reranker.rerankEvents({
             query: input.query,
             candidates: coarseRanked,
-            topK: options.rerankTopK
+            topK: options.rerankTopK,
+            ...(signal ? { signal } : {})
           })
         : this.llm.rerankEvents({
             query: input.query,
             candidates: coarseRanked,
-            topK: options.rerankTopK
+            topK: options.rerankTopK,
+            ...(signal ? { signal } : {})
           })
     ), emit, {
       title: searchMode === "fast" ? "Rerank 模型重排" : "LLM 重排",
       detail: searchMode === "fast"
         ? "用 rerank 模型对候选事件排序，不调用 LLM 过滤。"
         : "让 LLM 根据问题从候选事件中选择最终事件。"
-    });
+    }, (error) => `重排不可用，已保留粗排：${formatSearchError(error)}`);
+    signal?.throwIfAborted();
+    if (reranked.fallbackDetail) appendFallbackReason(trace, reranked.fallbackDetail);
+    let selectedIds = (reranked.value ?? []).filter((id) => coarseRanked.some((event) => event.id === id));
     if (selectedIds.length === 0) {
       const fallbackDetail = searchMode === "fast"
         ? "rerank model returned no ids; used coarse rank"
@@ -423,7 +432,7 @@ export class SearchService {
       payload: trace.rerankedEvents.length > 0 ? trace.rerankedEvents : undefined
     });
 
-    const sections = await timed(timings, "step8FetchChunks", () => this.sectionsForSelectedEvents(selectedIds, coarseRanked, options.maxSections), emit, {
+    let sections = await timed(timings, "step8FetchChunks", () => this.sectionsForSelectedEvents(selectedIds, coarseRanked, options.maxSections), emit, {
       title: "回取关联切片",
       detail: "读取最终事件关联的原文切片。"
     });
@@ -438,6 +447,20 @@ export class SearchService {
       }))
     });
 
+    if (!sections.length && queryVector) {
+      signal?.throwIfAborted();
+      const fallback = await timedOptional(timings, "fallbackVectorChunks", () => searchChunksByVector({
+        sourceIds: input.sourceIds,
+        queryVector,
+        topK: options.maxSections
+      }), emit, {
+        title: "向量召回切片",
+        detail: "最终事件没有可用原文，尝试召回相关切片。"
+      }, (error) => `切片向量召回不可用：${formatSearchError(error)}`);
+      sections = (fallback.value ?? []).filter((section) => section.score >= options.similarityThreshold);
+      appendFallbackReason(trace, fallback.fallbackDetail ?? "no event sections; tried vector chunk search");
+    }
+    signal?.throwIfAborted();
     return {
       traceId,
       sections: sections.slice(0, options.maxSections),
@@ -646,7 +669,7 @@ function filterUsefulEventIds(
       return true;
     }
     const score = event.score ?? 0;
-    if (score >= minVectorScore && (index === 0 || bestScore >= 0.48)) {
+    if (score >= minVectorScore && (index === 0 || score >= 0.48)) {
       return true;
     }
     return false;
@@ -668,7 +691,8 @@ function lexicalEventScore(query: string, event: EventRecord): number {
 }
 
 function extractSearchTerms(query: string): string[] {
-  const normalized = query.normalize("NFKC").toLowerCase();
+  const normalized = query.normalize("NFKC").toLowerCase()
+    .replace(/请问|帮我(?:查一下|看看)?|想了解|有哪些|是什么|都有什么|有什么|一下|能不能/g, " ");
   const terms = normalized
     .split(/[^\p{L}\p{N}]+/u)
     .map((term) => normalizeSearchText(term))

@@ -2776,6 +2776,7 @@ export async function deleteMcpSession(input: {
 
 export async function addMcpMessage(input: {
   sessionId: string;
+  id?: string;
   role: McpMessageRole;
   content: string;
   metadata?: Record<string, unknown>;
@@ -2784,10 +2785,19 @@ export async function addMcpMessage(input: {
     `
       insert into mcp_messages (id, session_id, role, content, metadata)
       values ($1, $2, $3, $4, $5::jsonb)
+      on conflict (id) do nothing
       returning *
     `,
-    [randomUUID(), input.sessionId, input.role, input.content, JSON.stringify(input.metadata ?? {})]
+    [input.id ?? randomUUID(), input.sessionId, input.role, input.content, JSON.stringify(input.metadata ?? {})]
   );
+  if (!result.rows[0]) {
+    const existing = await pool.query(
+      "select * from mcp_messages where id = $1 and session_id = $2 and role = $3 and content = $4",
+      [input.id, input.sessionId, input.role, input.content]
+    );
+    if (!existing.rows[0]) throw new Error("会话轮次标识和已存储的消息不匹配");
+    return mcpMessageFromRow(existing.rows[0]);
+  }
   await touchMcpSession(input.sessionId);
   return mcpMessageFromRow(result.rows[0]);
 }
