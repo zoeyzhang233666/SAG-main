@@ -285,6 +285,7 @@ export class McpAgentService {
             session: activeSession,
             messageId: userMessage.id,
             userContent,
+            anchorText,
             history,
             mcpSearchMode: settings.mcpSearchMode,
             toolCalls,
@@ -322,6 +323,7 @@ export class McpAgentService {
                 session: activeSession,
                 messageId: userMessage.id,
                 userContent,
+                anchorText,
                 history,
                 mcpSearchMode: settings.mcpSearchMode,
                 toolCalls,
@@ -435,6 +437,7 @@ export class McpAgentService {
     session: McpSessionRecord;
     messageId: string;
     userContent: string;
+    anchorText?: string;
     history: Array<{ role: string; content: string }>;
     mcpSearchMode: "standard" | "fast";
     toolCalls: McpToolCallRecord[];
@@ -449,7 +452,7 @@ export class McpAgentService {
     if (!isEventLookup || /search|检索|搜索|查找/.test(lower)) {
       assertNotAborted(input.signal);
       const args = {
-        query: fallbackQuery(input.userContent, input.history),
+        query: input.anchorText ?? fallbackQuery(input.userContent, input.history),
         strategy: "multi",
         searchMode: input.mcpSearchMode,
         returnTrace: true
@@ -1831,7 +1834,7 @@ async function resolveQuestionAnchor(projectId: string, tenantId: string, anchor
   const graph = await getProjectGraph({ sourceId: projectId, tenantId, ...selection, limit: 16 });
   const label = anchor.kind === "event" ? graph.events.find((item) => item.id === anchor.id)?.title :
     anchor.kind === "entity" ? graph.entities.find((item) => item.id === anchor.id)?.name :
-      graph.chunks.find((item) => item.id === anchor.id)?.heading;
+      graph.chunks.find((item) => item.id === anchor.id)?.heading || graph.chunks.find((item) => item.id === anchor.id)?.content;
   if (!label) throw new McpRunConflictError("该节点已经离开当前项目的可用图谱。");
   return label.slice(0, 180);
 }

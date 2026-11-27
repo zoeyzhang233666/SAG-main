@@ -110,6 +110,7 @@ export const api = {
   async getProjectGraph(
     projectId: string,
     input: { chunkIds?: string[]; eventIds?: string[]; entityIds?: string[]; entityName?: string; query?: string; limit?: number } = {},
+    signal?: AbortSignal,
   ) {
     const params = new URLSearchParams();
     if (input.chunkIds?.length) params.set("chunkIds", input.chunkIds.join(","));
@@ -121,6 +122,7 @@ export const api = {
     const query = params.toString();
     return request<{ graph: ProjectGraphRecord }>(
       `/api/projects/${projectId}/graph${query ? `?${query}` : ""}`,
+      { signal, cache: "no-store" },
     );
   },
 
