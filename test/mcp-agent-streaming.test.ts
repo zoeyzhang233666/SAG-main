@@ -324,3 +324,16 @@ function citationSection(chunkId: string, documentId: string, content: string) {
     score: 0.9
   };
 }
+
+it("keeps an earlier successful citation when the refined search is empty", () => {
+  const makeCall = (id: string, sections: unknown[]) => ({
+    id, sessionId: "session", toolName: "sag_search", arguments: { query: id }, status: "SUCCEEDED" as const,
+    result: { content: [{ type: "text", text: JSON.stringify({ sections }) }] }, createdAt: ""
+  });
+  const toolCalls = [
+    makeCall("first", [{ chunkId: "c1", sourceId: "project", content: "第一轮的已确认原文", heading: "第一轮" }]),
+    makeCall("second", [])
+  ];
+  expect(__mcpAgentTestUtils.collectAnswerCitations(toolCalls)).toMatchObject([{ index: 1, chunkId: "c1" }]);
+  expect(__mcpAgentTestUtils.buildEvidenceFallbackAnswer(toolCalls)).toContain("第一轮的已确认原文 [1]");
+});
