@@ -291,7 +291,6 @@ export default function ChainAtlasWorkspace({
         <nav className="chain-atlas-index" aria-label={t("图谱目录", "Atlas index")}>
           <div className="chain-atlas-index-heading">
             <span>{track === "source" ? t("一次原料", "Primary materials") : t("行业门类", "Industry sectors")}</span>
-            <small>{atlas.version}</small>
           </div>
           <ul>
             {atlas.roots.map(item => (

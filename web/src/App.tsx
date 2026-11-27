@@ -49,7 +49,6 @@ import { cn, formatDate, shortId } from "./lib/utils";
 import type {
   ChunkRecord,
   DocumentRecord,
-  EmbeddingPreview,
   EntityDetailRecord,
   EntityRecord,
   EventDetailRecord,
@@ -7604,42 +7603,6 @@ function OverviewPanel(props: {
         <Metric label={t("事件", "Events")} value={props.events.length} />
         <Metric label={t("实体", "Entities")} value={props.entities.length} />
       </div>
-      <Card>
-        <CardContent className="space-y-2">
-          <div className="text-sm font-semibold">
-            {t("Embedding 状态", "Embedding status")}
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <Metric
-              label={t("切片向量", "Chunk vectors")}
-              value={
-                props.chunks.filter((chunk) => Boolean(chunk.embedding)).length
-              }
-            />
-            <Metric
-              label={t("事件向量", "Event vectors")}
-              value={
-                props.events.filter((event) =>
-                  Boolean(event.titleEmbedding || event.contentEmbedding),
-                ).length
-              }
-            />
-            <Metric
-              label={t("实体向量", "Entity vectors")}
-              value={
-                props.entities.filter((entity) => Boolean(entity.embedding))
-                  .length
-              }
-            />
-          </div>
-          <p className="text-xs leading-5 text-muted-foreground">
-            {t(
-              "列表卡片会显示维度和前 8 位样本，用来确认向量已经真实写入数据库。",
-              "List cards show dimensions and the first 8 sample values to confirm vectors were written to the database.",
-            )}
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -8245,10 +8208,6 @@ function ChunkCard(props: {
             <p className="line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
               <RichTextFragment text={chunk.content} />
             </p>
-            <EmbeddingPreviewBlock
-              title={t("切片 Embedding", "Chunk Embedding")}
-              preview={chunk.embedding}
-            />
             <div className="flex flex-wrap gap-2">
               <MiniButton onClick={startEdit}>{t("编辑", "Edit")}</MiniButton>
               <MiniButton
@@ -8364,16 +8323,6 @@ function EventCard(props: {
                   </button>
                 ))
               )}
-            </div>
-            <div className="grid min-w-0 gap-2">
-              <EmbeddingPreviewBlock
-                title={t("标题 Embedding", "Title Embedding")}
-                preview={event.titleEmbedding}
-              />
-              <EmbeddingPreviewBlock
-                title={t("内容 Embedding", "Content Embedding")}
-                preview={event.contentEmbedding}
-              />
             </div>
             <div className="flex flex-wrap gap-2">
               <MiniButton onClick={startEdit}>{t("编辑", "Edit")}</MiniButton>
@@ -8505,12 +8454,6 @@ function EntityCard(props: {
               )}
             </p>
           ) : null}
-          <div className="mt-2 min-w-0">
-            <EmbeddingPreviewBlock
-              title={t("实体 Embedding", "Entity Embedding")}
-              preview={entity.embedding}
-            />
-          </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <MiniButton onClick={() => props.onOpenEntity(entity.id)}>
               {t("查看", "View")}
@@ -10210,67 +10153,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {label}
       {children}
     </label>
-  );
-}
-
-function EmbeddingPreviewBlock({
-  title,
-  preview,
-}: {
-  title: string;
-  preview?: EmbeddingPreview | null;
-}) {
-  const { t } = useI18n();
-  const sample = preview?.sample ?? [];
-  const dimensions = preview?.dimensions;
-  const hasSample = sample.length > 0;
-  const badgeLabel =
-    preview === undefined
-      ? t("状态按需", "Status on demand")
-      : !preview
-        ? t("未生成", "Not generated")
-        : dimensions != null
-          ? t(`${dimensions} 维`, `${dimensions} dims`)
-          : t("向量已写入", "Vector stored");
-  return (
-    <div className="min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-muted/30 p-2 text-left">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">
-          {title}
-        </span>
-        <Badge className="shrink-0">
-          {badgeLabel}
-        </Badge>
-      </div>
-      {preview === undefined ? (
-        <div className="text-xs text-muted-foreground">
-          {t(
-            "此列表没有加载向量状态或数值样本；这不代表数据库中没有向量。",
-            "This list did not load vector status or numeric samples; that does not mean the database has no vector.",
-          )}
-        </div>
-      ) : preview && hasSample ? (
-        <code className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted-foreground">
-          [
-          {sample.map((value) => formatEmbeddingNumber(value)).join(", ")}
-          {dimensions != null && dimensions > sample.length ? ", ..." : ""}]
-        </code>
-      ) : preview ? (
-        <div className="text-xs text-muted-foreground">
-          {t(
-            "向量已写入数据库；为提升列表速度，数值样本按需加载。",
-            "The vector is stored; numeric samples load on demand to keep lists fast.",
-          )}
-        </div>
-      ) : (
-        <div className="text-xs text-muted-foreground">
-          {t(
-            "数据库中还没有这个向量。",
-            "This vector is not in the database yet.",
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -12307,10 +12189,6 @@ function formatToolStatus(
   if (status === "SUCCEEDED") return t("成功", "Succeeded");
   if (status === "FAILED") return t("失败", "Failed");
   return t("等待中", "Pending");
-}
-
-function formatEmbeddingNumber(value: number) {
-  return Number.isFinite(value) ? value.toFixed(5) : "0.00000";
 }
 
 function formatMessageContent(
