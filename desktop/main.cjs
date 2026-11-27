@@ -122,7 +122,9 @@ if (!app.requestSingleInstanceLock()) {
     void exit(0);
   });
   startup = app.whenReady().then(async () => {
-    runtime = await startRuntime({ resources, profile, logs, smoke: Boolean(smokeMode), log });
+    const smokePort = smokeMode ? Number(process.env.SAG_V1_SMOKE_PG_PORT) : NaN;
+    const firstDatabasePort = Number.isInteger(smokePort) && smokePort > 0 && smokePort <= 65535 ? smokePort : undefined;
+    runtime = await startRuntime({ resources, profile, logs, smoke: Boolean(smokeMode), log, firstDatabasePort });
     if (shutdown) return;
     await openWindow();
     if (smokeMode) {

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { connect } from 'node:net';
+import { connect, createServer } from 'node:net';
 import { createRequire } from 'node:module';
 
 const [target, upgradeProfile] = process.argv.slice(2);
@@ -22,12 +22,18 @@ function isListening(port) {
   });
 }
 
+const occupiedPort = createServer();
+await new Promise((resolve, reject) => {
+  occupiedPort.on('error', reject);
+  occupiedPort.listen(0, '127.0.0.1', resolve);
+});
+const firstDatabasePort = occupiedPort.address().port;
 try {
   for (const mode of [upgradeProfile ? 'upgrade' : 'write', 'read']) {
     const marker = path.join(data, 'smoke-' + mode + '.ok');
     fs.rmSync(marker, { force: true });
     const result = spawnSync(exe, [...args, '--desktop-smoke=' + mode], {
-      env: { ...process.env, SAG_V1_SMOKE_DATA: data },
+      env: { ...process.env, SAG_V1_SMOKE_DATA: data, SAG_V1_SMOKE_PG_PORT: String(firstDatabasePort) },
       stdio: 'inherit',
       timeout: 300000,
       windowsHide: true
@@ -38,7 +44,10 @@ try {
     assert.ok(!await isListening(Number(origin.port)), 'Backend still running after app quit');
     assert.ok(!fs.existsSync(path.join(data, 'postgres-data', 'postmaster.pid')), 'PostgreSQL still running after app quit');
   }
-  console.log('Desktop large V2 import, document rename, Hypergraph, Chain Atlas entity details, restart persistence and process shutdown passed.');
+  const events = fs.readFileSync(path.join(data, 'logs', 'desktop.log'), 'utf8');
+  assert.ok(events.includes(`PostgreSQL loopback port ${firstDatabasePort} was occupied; retrying with another port`),
+    'Desktop did not exercise PostgreSQL port conflict recovery');
+  console.log('Desktop port-conflict recovery, import, graph details, restart persistence and process shutdown passed.');
 } catch (error) {
   for (const name of ['desktop.log', 'backend.log', 'postgres-control.log', 'postgres.log']) {
     const file = path.join(data, 'logs', name);
@@ -46,6 +55,7 @@ try {
   }
   throw error;
 } finally {
+  occupiedPort.close();
   if (!upgradeProfile && !fs.existsSync(path.join(data, 'postgres-data', 'postmaster.pid'))) {
     fs.rmSync(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
   }

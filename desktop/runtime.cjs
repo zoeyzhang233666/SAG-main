@@ -16,13 +16,13 @@ function spawnLogged(file, args, cwd, env, logFile, ipc = false) {
   }
 }
 
-function availablePort() {
+function availablePort(port = 0) {
   return new Promise((resolve, reject) => {
     const server = createServer();
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address();
-      server.close(error => error ? reject(error) : resolve(port));
+    server.listen(port, '127.0.0.1', () => {
+      const boundPort = server.address().port;
+      server.close(error => error ? reject(error) : resolve(boundPort));
     });
   });
 }
@@ -63,7 +63,7 @@ async function stopBackend(child) {
   }
 }
 
-async function startRuntime({ resources, profile, logs, smoke, log }) {
+async function startRuntime({ resources, profile, logs, smoke, log, firstDatabasePort }) {
   const backend = path.join(resources, 'backend');
   const data = path.join(profile, 'postgres-data');
   const passwordFile = path.join(profile, 'postgres-password');
@@ -136,14 +136,21 @@ async function startRuntime({ resources, profile, logs, smoke, log }) {
     }
     if (pgStatus()) await stopDatabase();
 
-    const pgPort = await availablePort();
-    const options = `-h 127.0.0.1 -p ${pgPort}${process.platform === 'win32' ? '' : ' -k ""'}`;
-    try {
-      await pgCtl('start', '-l', pgLog, '-o', options, '-w', '-t', '45');
-      databaseStarted = true;
-    } catch (error) {
-      databaseStarted = pgStatus();
-      throw error;
+    let pgPort;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      pgPort = attempt === 1 && firstDatabasePort ? firstDatabasePort : await availablePort();
+      const options = `-h 127.0.0.1 -p ${pgPort}${process.platform === 'win32' ? '' : ' -k ""'}`;
+      try {
+        await pgCtl('start', '-l', pgLog, '-o', options, '-w', '-t', '45');
+        databaseStarted = true;
+        break;
+      } catch (error) {
+        databaseStarted = pgStatus();
+        if (databaseStarted || attempt === 3) throw error;
+        const portInUse = await availablePort(pgPort).then(() => false, error => error.code === 'EADDRINUSE');
+        if (!portInUse) throw error;
+        log(`PostgreSQL loopback port ${pgPort} was occupied; retrying with another port`);
+      }
     }
 
     const token = randomBytes(32).toString('hex');
