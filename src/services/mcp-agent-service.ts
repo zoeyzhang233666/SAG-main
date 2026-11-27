@@ -1913,7 +1913,7 @@ function buildLocalSearchAnswer(toolCall: McpToolCallRecord): string {
     extractCitationSections(parseToolJsonResult(toolCall.result))
   );
   if (sections.length === 0) {
-    return "这个问题需要更具体的产品、时间、工艺、企业或事件线索才能继续缩小范围。请补充关键词后我可以再帮你精确定位。";
+    return "当前项目没有检索到足够证据回答这个问题。可补充产品、时间、工艺或来源后重试。";
   }
   const excerpts = sections.map((section, index) => {
     const heading = section.heading?.trim() || `原文片段 ${index + 1}`;
