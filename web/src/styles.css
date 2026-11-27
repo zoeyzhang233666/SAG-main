@@ -366,43 +366,6 @@ code {
   text-decoration-color: rgba(255, 255, 255, 0.72);
 }
 
-/* 用户气泡内的 Mermaid 图与代码块拥有独立的浅底配色，不能被上面「全部白字」规则吞掉，
-   否则会出现白底白字、白色图标看不清的情况（截图问题 #4）。这里恢复其原本配色。 */
-.chem-message-user .chem-markdown .chem-mermaid,
-.chem-message-user .chem-markdown .chem-mermaid * {
-  color: var(--text);
-}
-
-.chem-message-user .chem-markdown .chem-mermaid-toolbar .font-semibold,
-.chem-message-user .chem-markdown .chem-mermaid-toolbar .text-foreground {
-  color: var(--text-strong);
-}
-
-.chem-message-user .chem-markdown .chem-mermaid-toolbar .text-muted-foreground,
-.chem-message-user .chem-markdown .chem-mermaid-pending {
-  color: var(--text-muted);
-}
-
-.chem-message-user .chem-markdown .chem-mermaid-toolbar button {
-  color: var(--text-strong);
-}
-
-.chem-message-user .chem-markdown .chem-mermaid-toolbar button svg {
-  color: var(--chem-blue);
-}
-
-.chem-message-user .chem-markdown .chem-mermaid-toolbar button:hover {
-  color: var(--accent-color);
-}
-
-.chem-message-user .chem-markdown .chem-mermaid-toolbar button:hover svg {
-  color: var(--accent-color);
-}
-
-.chem-message-user .chem-markdown .chem-mermaid-error {
-  color: #d9603a;
-}
-
 /* 代码块本身是深色底，文字应保持浅色，而非被强制成纯白后丢失语义高亮层次。 */
 .chem-message-user .chem-markdown .chem-code-block pre,
 .chem-message-user .chem-markdown .chem-code-block code {
@@ -839,125 +802,6 @@ code {
   line-height: 1.65;
 }
 
-.chem-mermaid {
-  margin: 0.85rem 0;
-  overflow: hidden;
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
-  background: var(--surface-raised);
-  box-shadow: 0 12px 30px var(--shadow-soft);
-}
-
-.chem-mermaid-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.65rem;
-  border-bottom: 1px solid var(--hairline);
-  background: color-mix(in srgb, var(--surface-panel) 82%, transparent);
-  padding: 0.65rem 0.75rem;
-}
-
-.chem-mermaid-toolbar button {
-  border-color: var(--hairline);
-  background: var(--surface-raised);
-  color: var(--text-strong);
-  box-shadow: 0 1px 2px var(--shadow-soft);
-}
-
-.chem-mermaid-toolbar button svg {
-  color: var(--chem-blue);
-}
-
-.chem-mermaid-toolbar button:hover {
-  border-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
-  background: var(--accent-softer);
-  color: var(--accent-color);
-}
-
-.chem-mermaid-toolbar button:hover svg {
-  color: var(--accent-color);
-}
-
-.chem-mermaid-viewport {
-  min-height: 18rem;
-  max-height: 56rem;
-  overflow: auto;
-  background-image: radial-gradient(color-mix(in srgb, var(--text-muted) 22%, transparent) 0.7px, transparent 0.7px);
-  background-size: 18px 18px;
-  padding: 2rem;
-}
-
-.chem-mermaid-canvas {
-  width: max-content;
-  min-width: 100%;
-  transform-origin: top left;
-  transition: transform 140ms ease;
-}
-
-.chem-mermaid-canvas svg {
-  display: block;
-  max-width: none !important;
-  height: auto;
-  margin: 0 auto;
-}
-
-.chem-mermaid-pending {
-  display: flex;
-  min-height: 11rem;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-align: center;
-}
-
-.chem-mermaid-error {
-  padding: 1rem;
-  color: #d9603a;
-}
-
-.chem-mermaid-fullscreen-open {
-  overflow: hidden;
-}
-
-.chem-mermaid-fullscreen {
-  position: fixed;
-  inset: 18px;
-  z-index: 80;
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  border-radius: 12px;
-  background: var(--surface-raised);
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.35);
-}
-
-.chem-mermaid-fullscreen::before {
-  content: "";
-  position: fixed;
-  inset: -18px;
-  z-index: -1;
-  background: var(--surface-raised);
-}
-
-.chem-mermaid-fullscreen .chem-mermaid-viewport {
-  flex: 1;
-  max-height: none;
-  min-height: 0;
-  background-color: var(--surface-raised);
-  padding: 2.5rem;
-}
-
-.chem-mermaid-fullscreen .chem-mermaid-pending {
-  flex: 1;
-  min-height: 0;
-  background: var(--surface-raised);
-}
-
 .chem-composer-wrap {
   background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--surface-page) 90%, transparent));
   backdrop-filter: blur(16px);
@@ -1378,3 +1222,19 @@ select {
   border-color: rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.12);
 }
+
+.chem-answer-artifact {
+  margin: 0.65rem 0;
+  padding: 0.65rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  background: hsl(var(--muted) / 0.3);
+}
+
+.chem-answer-flow-scroll { overflow-x: auto; }
+.chem-answer-flow-scroll svg { display: block; width: 100%; min-width: 500px; }
+.chem-answer-flow-scroll text { fill: hsl(var(--foreground)); font-size: 13px; }
+.chem-answer-flow-scroll .chem-answer-flow-heading { fill: hsl(var(--muted-foreground)); font-weight: 600; }
+.chem-answer-flow-scroll rect { fill: hsl(var(--background)); stroke: hsl(var(--border)); }
+.chem-answer-flow-scroll [data-kind="event"] rect { fill: hsl(var(--accent)); stroke: hsl(var(--primary) / 0.45); }
+.chem-answer-flow-edge { fill: none; stroke: hsl(var(--primary) / 0.5); stroke-width: 1.5; }

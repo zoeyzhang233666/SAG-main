@@ -66,6 +66,7 @@ import type {
   ProjectStatsRecord,
   ChunkingMode,
   PublicAiProviderSettings,
+  QuestionAnchor,
   PublicMcpSettings,
   SearchMode,
   SearchResult,
@@ -79,6 +80,7 @@ import { Card, CardContent, CardHeader } from "./components/ui/card";
 import { Input } from "./components/ui/input";
 import { Textarea } from "./components/ui/textarea";
 import { ProjectGraphFlow } from "./components/ProjectGraphFlow";
+import { AnswerArtifacts } from "./components/AnswerArtifacts";
 import { MarkdownMessage } from "./components/MarkdownMessage";
 import { RichTextFragment } from "./components/RichText";
 import {
@@ -142,6 +144,8 @@ type AnswerCitation = {
   query?: string;
   document?: DocumentRecord | null;
 };
+type RetryTurn = { sessionId: string; projectId: string; clientTurnId: string; content: string };
+
 type ChunkDrawerDetail = {
   citation: AnswerCitation;
   events: Array<EventRecord & { entities: EntityRecord[] }>;
@@ -178,7 +182,6 @@ type ProjectGraphRequestInput = {
 
 const MODEL_LOGS_STORAGE_KEY = "sag:model-call-logs:v1";
 const MODEL_LOG_CURSOR_STORAGE_KEY = "sag:model-call-log-cursor:v1";
-const AUTO_MERMAID_STORAGE_KEY = "sag:auto-industry-chain-mermaid:v1";
 const LEFT_RAIL_WIDTH_STORAGE_KEY = "sag:left-rail-width:v1";
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = "sag:right-panel-width:v1";
 const DOC_RAIL_WIDTH_STORAGE_KEY = "sag:doc-rail-width:v1";
@@ -298,13 +301,11 @@ function AppShell() {
   const [mcpInput, setMcpInput] = useState("");
   const [isMcpRunning, setIsMcpRunning] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState("");
+  const [retryTurn, setRetryTurn] = useState<RetryTurn | null>(null);
   const [streamingAssistantText, setStreamingAssistantText] = useState("");
   const [runningMcpSearches, setRunningMcpSearches] = useState<
     RunningMcpSearch[]
   >([]);
-  const [autoMermaid, setAutoMermaid] = useState(
-    () => window.localStorage.getItem(AUTO_MERMAID_STORAGE_KEY) === "true",
-  );
   const [leftRailWidth, setLeftRailWidth] = useState(() =>
     loadStoredNumber(
       LEFT_RAIL_WIDTH_STORAGE_KEY,
@@ -333,6 +334,7 @@ function AppShell() {
   const modelLogCursorRef = useRef(modelLogCursor);
   const pendingSessionIdRef = useRef<string | null>(null);
   const mcpAbortControllerRef = useRef<AbortController | null>(null);
+  const sessionLoadRequestRef = useRef(0);
   const streamingAssistantSessionIdRef = useRef<string | null>(null);
   const streamingAssistantTextRef = useRef("");
   const streamingAssistantFlushTimerRef = useRef<number | null>(null);
@@ -426,10 +428,6 @@ function AppShell() {
   useEffect(() => {
     persistModelLogs(modelLogs);
   }, [modelLogs]);
-
-  useEffect(() => {
-    window.localStorage.setItem(AUTO_MERMAID_STORAGE_KEY, String(autoMermaid));
-  }, [autoMermaid]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1487,6 +1485,7 @@ function AppShell() {
 
   function handleMcpStreamEvent(event: McpStreamEvent) {
     if (event.type === "stage") {
+      addProcessStep({ title: event.label, detail: event.detail ?? "", status: "done" });
       return;
     }
     if (event.type === "message") {
@@ -1721,13 +1720,16 @@ function AppShell() {
   }
 
   async function loadMcpSession(sessionId: string) {
+    const request = ++sessionLoadRequestRef.current;
     if (
       streamingAssistantSessionIdRef.current &&
       streamingAssistantSessionIdRef.current !== sessionId
     ) {
+      mcpAbortControllerRef.current?.abort();
       clearStreamingAssistantDraft();
     }
     const detail = await api.getMcpSession(sessionId);
+    if (request !== sessionLoadRequestRef.current) return;
     setMcpDetail(detail);
     const latestSearch = [...detail.toolCalls]
       .reverse()
@@ -1820,14 +1822,18 @@ function AppShell() {
     }
   }
 
-  async function sendMcpMessage(contentOverride?: string) {
+  async function sendMcpMessage(contentOverride?: string, options?: { retry?: RetryTurn; anchor?: QuestionAnchor }) {
     const content = (contentOverride ?? mcpInput).trim();
-    if (!content || !selectedProjectId) return;
-    let sessionId = mcpDetail?.session.id;
+    if (!content || !selectedProjectId || mcpAbortControllerRef.current) return;
+    let sessionId = mcpDetail?.session.sourceIds.includes(selectedProjectId) ? mcpDetail.session.id : undefined;
+    const retry = options?.retry;
+    if (retry && (retry.sessionId !== sessionId || retry.projectId !== selectedProjectId)) return;
+    const clientTurnId = retry?.clientTurnId ?? newClientTurnId();
+    setRetryTurn(null);
     const abortController = new AbortController();
     mcpAbortControllerRef.current = abortController;
     setIsMcpRunning(true);
-    setPendingUserMessage(content);
+    setPendingUserMessage(retry ? "" : content);
     clearStreamingAssistantDraft();
     setRunningMcpSearches([]);
     setMcpInput("");
@@ -1847,14 +1853,25 @@ function AppShell() {
         }));
         await loadMcpSession(sessionId);
       }
+      abortController.signal.throwIfAborted();
       streamingAssistantSessionIdRef.current = sessionId;
-      await api.streamMcpMessage(sessionId, content, handleMcpStreamEvent, {
+      await api.streamMcpMessage(sessionId, content, (event) => {
+        if (mcpAbortControllerRef.current !== abortController || abortController.signal.aborted) return;
+        if (event.type === "message" && event.message.role === "assistant" && event.message.metadata.generationIncomplete && sessionId) {
+          setRetryTurn({ sessionId, projectId: selectedProjectId, clientTurnId, content });
+        }
+        handleMcpStreamEvent(event);
+      }, {
         signal: abortController.signal,
-        autoMermaid,
+        clientTurnId,
+        retry: Boolean(retry),
+        anchor: options?.anchor,
       });
       await syncModelLogs();
       await refreshSessionsForProjects([selectedProjectId]);
     } catch (err) {
+      if (sessionId) setRetryTurn({ sessionId, projectId: selectedProjectId, clientTurnId, content });
+      else setMcpInput(content);
       flushStreamingAssistantText();
       await syncModelLogs();
       if (isAbortError(err)) {
@@ -1883,9 +1900,9 @@ function AppShell() {
       flushStreamingAssistantText();
       if (mcpAbortControllerRef.current === abortController) {
         mcpAbortControllerRef.current = null;
+        setPendingUserMessage("");
+        setIsMcpRunning(false);
       }
-      setPendingUserMessage("");
-      setIsMcpRunning(false);
     }
   }
 
@@ -1893,53 +1910,6 @@ function AppShell() {
     if (!isMcpRunning) return;
     setStatus(t("正在停止生成...", "Stopping generation..."));
     mcpAbortControllerRef.current?.abort();
-  }
-
-  async function requestMermaidRedraw(input: {
-    source: string;
-    error?: string;
-  }) {
-    if (isMcpRunning) return;
-    const hasSyntaxError = Boolean(input.error?.trim());
-    const prompt = hasSyntaxError
-      ? [
-          "上一条回答中的 Mermaid 产业链图渲染失败。请根据下面的错误信息和原 Mermaid 代码，重新生成一份语法正确、保守兼容的 Mermaid flowchart/graph 代码。",
-          "",
-          "要求：",
-          "1. 不要使用 HTML、click、icon 或 Mermaid 不稳定语法。",
-          "2. 节点和边标签里不要使用 [1]、[2]、[网1]、URL 或脚注；如果需要引用，请放在 Mermaid 代码块外的普通文字里。",
-          "3. 每条节点定义、每条边、每个 classDef 都必须单独一行，避免把 end 和下一条边写在同一行。",
-          "4. 边标签只写关系名称，例如 进入、生成、副产、主要下游，不要写证据编号。",
-          "5. 只输出修复后的简短说明和一个完整闭合的 ```mermaid 代码块。",
-          "",
-          "Mermaid 报错：",
-          "```text",
-          input.error?.trim() ?? "",
-          "```",
-          "",
-          "原 Mermaid 代码：",
-          "```mermaid",
-          input.source,
-          "```",
-        ].join("\n")
-      : [
-          "上一条回答中的 Mermaid 产业链图已经可以渲染，但我对这张图的表达效果不够满意。请在保持原有主题和证据含义的基础上，重新生成一份更清晰、更专业、更适合展示产业链关系的 Mermaid flowchart/graph 图。",
-          "",
-          "优化方向：",
-          "1. 结构层级更清楚，尽量体现上游、中游、下游、应用或企业关系。",
-          "2. 节点命名简洁，边关系清楚，每条边单独一行。",
-          "3. 不要使用 HTML、click、icon 或 Mermaid 不稳定语法。",
-          "4. 节点和边标签里不要放 [1]、[2]、[网1]、URL 或脚注；产业链关系图引用必须放在 Mermaid 代码块外，标题写“产业链关系图引用说明”，编号用 [1]、[2]。",
-          "5. 每条节点定义、每条边、每个 classDef 都必须单独一行。",
-          "6. 只输出简短说明和一个完整闭合的 ```mermaid 代码块。",
-          "",
-          "原 Mermaid 代码：",
-          "```mermaid",
-          input.source,
-          "```",
-        ].join("\n");
-    setMcpInput(prompt);
-    await sendMcpMessage(prompt);
   }
 
   function rememberCurrentDrawerForBackNavigation(currentDrawer: DetailDrawer) {
@@ -2525,18 +2495,15 @@ function AppShell() {
                 pendingUserMessage={pendingUserMessage}
                 streamingAssistantText={streamingAssistantText}
                 runningMcpSearches={runningMcpSearches}
-                autoMermaid={autoMermaid}
-                mermaidPendingText={aiSettings?.mermaidPendingText}
-                onRequestMermaidRedraw={(input) =>
-                  void requestMermaidRedraw(input)
-                }
                 onInputChange={setMcpInput}
-                onAutoMermaidChange={setAutoMermaid}
                 onCreateSession={() => void createMcpSession()}
                 onClearSession={() => void clearCurrentMcpSession()}
                 onDeleteSession={() => void deleteCurrentMcpSession()}
                 onOpenCitation={(citation) => void openCitationDetail(citation)}
                 onStop={() => stopMcpMessage()}
+                onRetry={retryTurn?.sessionId === mcpDetail?.session.id && retryTurn?.projectId === selectedProjectId
+                  ? () => { if (retryTurn) void sendMcpMessage(retryTurn.content, { retry: retryTurn }); }
+                  : undefined}
                 onSend={() => void sendMcpMessage()}
                 onSendPrompt={(text) => {
                   setMcpInput(text);
@@ -3848,16 +3815,13 @@ function ConversationWorkspace(props: {
   pendingUserMessage: string;
   streamingAssistantText: string;
   runningMcpSearches: RunningMcpSearch[];
-  autoMermaid: boolean;
-  mermaidPendingText?: string;
   onInputChange: (value: string) => void;
-  onAutoMermaidChange: (value: boolean) => void;
   onCreateSession: () => void;
   onClearSession: () => void;
   onDeleteSession: () => void;
   onOpenCitation: (citation: AnswerCitation) => void;
-  onRequestMermaidRedraw: (input: { source: string; error?: string }) => void;
   onStop: () => void;
+  onRetry?: () => void;
   onSend: () => void;
   onSendPrompt: (text: string) => void;
 }) {
@@ -4032,14 +3996,14 @@ function ConversationWorkspace(props: {
                     <MarkdownMessage
                       content={formatMessageContent(message.content, t)}
                       citations={citations}
-                      mermaidPendingText={props.mermaidPendingText}
                       onOpenCitation={props.onOpenCitation}
-                      onRequestMermaidRedraw={
-                        message.role === "assistant"
-                          ? props.onRequestMermaidRedraw
-                          : undefined
-                      }
                     />
+                    {message.role === "assistant" && (
+                      <AnswerArtifacts value={message.metadata.artifacts} onCitation={(index) => {
+                        const citation = citations.find((item) => item.index === index);
+                        if (citation) props.onOpenCitation(citation);
+                      }} />
+                    )}
                     {message.role === "assistant" && citations.length > 0 ? (
                       <CitationStrip
                         citations={citations}
@@ -4060,7 +4024,6 @@ function ConversationWorkspace(props: {
                 </div>
                 <MarkdownMessage
                   content={props.pendingUserMessage}
-                  mermaidPendingText={props.mermaidPendingText}
                 />
               </div>
             </div>
@@ -4089,14 +4052,16 @@ function ConversationWorkspace(props: {
                     props.streamingAssistantText,
                     t,
                   )}
-                  mermaidPendingText={props.mermaidPendingText}
-                  isStreaming={props.isRunning}
-                  onRequestMermaidRedraw={props.onRequestMermaidRedraw}
                 />
               </div>
             </div>
           ) : null}
 
+          {!props.isRunning && props.onRetry && (
+            <Button type="button" variant="outline" size="sm" className="self-start" onClick={props.onRetry}>
+              <RotateCcw className="h-3.5 w-3.5" /> {t("重试本轮", "Retry turn")}
+            </Button>
+          )}
           {followUpQuestions.length > 0 ? (
             <div className="flex items-start gap-2.5">
               <span className="mt-0.5 h-8 w-8 shrink-0" />
@@ -4163,19 +4128,6 @@ function ConversationWorkspace(props: {
             {props.isRunning ? t("停止", "Stop") : t("发送", "Send")}
           </Button>
         </div>
-        <label className="mx-auto mt-2 flex max-w-4xl cursor-pointer items-center justify-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={props.autoMermaid}
-            onChange={(event) =>
-              props.onAutoMermaidChange(event.target.checked)
-            }
-          />
-          {t(
-            "自动在回答底部生成美化的 Mermaid 产业链图（仅在检索证据支持时生成）",
-            "Append a styled Mermaid industry-chain diagram when supported by retrieved evidence",
-          )}
-        </label>
         <div className="mx-auto mt-1.5 max-w-4xl text-center text-[10px] text-muted-foreground">
           {t(
             "回答由项目知识资产与知识超图共同提供依据，请核验关键业务结论。",
@@ -8593,14 +8545,13 @@ type SettingsInput = {
   clearLlmApiKey?: boolean;
   llmTimeoutMs: number;
   llmMaxRetries: number;
+  structuredOutputMode?: PublicAiProviderSettings["structuredOutputMode"];
   defaultSearchMode: SearchMode;
   defaultSearchTopK: number;
   defaultChunkingMode: ChunkingMode;
   chunkTokenLimit: number;
   chunkOverlapTokens: number;
   answerSystemPrompt: string;
-  mermaidTemplate: string;
-  mermaidPendingText: string;
   mcpSearchMode: SearchMode;
   graphDefaultLayoutStyle: string;
   welcomePromptTemplates: string[];
@@ -8647,6 +8598,8 @@ function SettingsPanel(props: {
   const [clearLlmApiKey, setClearLlmApiKey] = useState(false);
   const [llmTimeoutMs, setLlmTimeoutMs] = useState(300000);
   const [llmMaxRetries, setLlmMaxRetries] = useState(2);
+  const [structuredOutputMode, setStructuredOutputMode] =
+    useState<NonNullable<PublicAiProviderSettings["structuredOutputMode"]>>("auto");
   const [defaultSearchMode, setDefaultSearchMode] =
     useState<SearchMode>("fast");
   const [defaultSearchTopK, setDefaultSearchTopK] = useState(10);
@@ -8655,8 +8608,6 @@ function SettingsPanel(props: {
   const [chunkTokenLimit, setChunkTokenLimit] = useState(512);
   const [chunkOverlapTokens, setChunkOverlapTokens] = useState(100);
   const [answerSystemPrompt, setAnswerSystemPrompt] = useState("");
-  const [mermaidTemplate, setMermaidTemplate] = useState("");
-  const [mermaidPendingText, setMermaidPendingText] = useState("");
   const [mcpSearchMode, setMcpSearchMode] = useState<SearchMode>("fast");
   const [graphDefaultLayoutStyle, setGraphDefaultLayoutStyle] =
     useState("search_layers");
@@ -8676,6 +8627,7 @@ function SettingsPanel(props: {
     setClearLlmApiKey(false);
     setLlmTimeoutMs(props.settings.llmTimeoutMs);
     setLlmMaxRetries(props.settings.llmMaxRetries);
+    setStructuredOutputMode(props.settings.structuredOutputMode ?? "auto");
     setDefaultSearchMode(props.settings.defaultSearchMode);
     setDefaultSearchTopK(
       boundedInteger(
@@ -8704,8 +8656,6 @@ function SettingsPanel(props: {
       ),
     );
     setAnswerSystemPrompt(props.settings.answerSystemPrompt);
-    setMermaidTemplate(props.settings.mermaidTemplate);
-    setMermaidPendingText(props.settings.mermaidPendingText);
     setMcpSearchMode(props.settings.mcpSearchMode);
     setGraphDefaultLayoutStyle(props.settings.graphDefaultLayoutStyle);
     setWelcomePromptText(props.settings.welcomePromptTemplates.join("\n"));
@@ -8743,14 +8693,13 @@ function SettingsPanel(props: {
           clearLlmApiKey,
           llmTimeoutMs,
           llmMaxRetries,
+          structuredOutputMode,
           defaultSearchMode,
           defaultSearchTopK,
           defaultChunkingMode,
           chunkTokenLimit,
           chunkOverlapTokens,
           answerSystemPrompt,
-          mermaidTemplate,
-          mermaidPendingText,
           mcpSearchMode,
           graphDefaultLayoutStyle,
           welcomePromptTemplates: welcomePromptText
@@ -8984,6 +8933,18 @@ function SettingsPanel(props: {
             onChange={(event) => setLlmTimeoutMs(Number(event.target.value))}
           />
         </Field>
+        <Field label={t("结构化输出", "Structured output")}>
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3"
+            value={structuredOutputMode}
+            onChange={(event) => setStructuredOutputMode(event.target.value as typeof structuredOutputMode)}
+          >
+            <option value="auto">{t("自动兼容", "Automatic")}</option>
+            <option value="json_schema">JSON Schema</option>
+            <option value="json_object">JSON Object</option>
+            <option value="prompt_only">{t("仅提示词", "Prompt only")}</option>
+          </select>
+        </Field>
         <Field label={t("重试次数", "Retry count")}>
           <Input
             type="number"
@@ -8991,67 +8952,6 @@ function SettingsPanel(props: {
             max={10}
             value={llmMaxRetries}
             onChange={(event) => setLlmMaxRetries(Number(event.target.value))}
-          />
-        </Field>
-        <Field
-          label={t(
-            `LLM 密钥：${props.settings.hasLlmApiKey ? "已配置" : "未配置"}`,
-            `LLM key: ${props.settings.hasLlmApiKey ? "configured" : "not configured"}`,
-          )}
-        >
-          <Input
-            type="password"
-            value={llmApiKey}
-            onChange={(event) => {
-              setLlmApiKey(event.target.value);
-              if (event.target.value.trim()) setClearLlmApiKey(false);
-            }}
-            placeholder={t("留空不修改", "Leave blank to keep unchanged")}
-          />
-        </Field>
-      </SettingsCard>
-
-      <SettingsCard
-        title={t("回答风格", "Answer style")}
-        badge={t("可编辑", "Editable")}
-      >
-        <div className="space-y-2 md:col-span-2">
-          <div className="text-sm font-medium">
-            {t("系统提示词", "System prompt")}
-          </div>
-          <Textarea
-            className="min-h-36 font-mono text-xs leading-5"
-            value={answerSystemPrompt}
-            onChange={(event) => setAnswerSystemPrompt(event.target.value)}
-          />
-          <div className="text-xs leading-5 text-muted-foreground">
-            {t(
-              "用于控制智能问答最终答案的专业程度、语气、结构和引用方式。留空保存时会恢复默认提示词。",
-              "Controls the final Q&A answer style, tone, structure, and citation behavior. Saving an empty value restores the default prompt.",
-            )}
-          </div>
-        </div>
-        <div className="space-y-2 md:col-span-2">
-          <div className="text-sm font-medium">
-            {t("Mermaid 产业链图模板", "Mermaid industry-chain template")}
-          </div>
-          <Textarea
-            className="min-h-72 font-mono text-xs leading-5"
-            value={mermaidTemplate}
-            onChange={(event) => setMermaidTemplate(event.target.value)}
-          />
-          <div className="text-xs leading-5 text-muted-foreground">
-            {t(
-              "开启“自动生成 Mermaid 图”后，模型会参考这里的生成规则、分组和样式。建议把“禁止图内引用标记、每条连线单独一行、产业链关系图引用说明放图外并使用 [1] 编号”等规则直接保留在这里。",
-              "When automatic Mermaid diagrams are enabled, the model follows these generation rules, groups, and styles. Keep the rules about no citations inside the diagram, one edge per line, and graph citations outside the Mermaid block.",
-            )}
-          </div>
-        </div>
-        <Field label={t("Mermaid 等待文案", "Mermaid loading text")}>
-          <Input
-            value={mermaidPendingText}
-            onChange={(event) => setMermaidPendingText(event.target.value)}
-            placeholder="ChemClaw正在绘制产业链关系图"
           />
         </Field>
       </SettingsCard>
@@ -12252,4 +12152,13 @@ function formatDataContent(
     .replaceAll("projectIds", projectIds)
     .replaceAll("projectId", projectId)
     .replaceAll("来源", project);
+}
+
+function newClientTurnId() {
+  if (globalThis.crypto.randomUUID) return globalThis.crypto.randomUUID();
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-");
 }

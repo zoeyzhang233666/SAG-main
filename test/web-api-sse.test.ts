@@ -58,3 +58,16 @@ describe("readSseStream", () => {
     );
   });
 });
+
+it("rejects a mismatched event name and event data", async () => {
+  const response = new Response('event: delta\ndata: {"type":"done"}\n\n');
+  await expect(readSseStream(response, () => undefined)).rejects.toThrow("事件名称");
+});
+
+it("rejects a frame from a different run before accepting completion", async () => {
+  const response = new Response([
+    'event: stage\ndata: {"type":"stage","runId":"one","sequence":1}\n\n',
+    'event: done\ndata: {"type":"done","runId":"two","sequence":2}\n\n',
+  ].join(""));
+  await expect(readSseStream(response, () => undefined)).rejects.toThrow("运行标识");
+});

@@ -295,7 +295,19 @@ export interface McpSessionDetail {
   toolCalls: McpToolCallRecord[];
 }
 
+export type QuestionAnchor = { kind: "event" | "entity" | "chunk"; id: string };
+
+export type AnswerEvidence = {
+  version: 1;
+  projectId: string;
+  chunkIds: string[];
+  eventIds: string[];
+  entityIds: string[];
+  citations: Array<{ index: number; chunkId: string; eventIds: string[] }>;
+};
+
 export type McpStreamEvent =
+  | { type: "evidence"; evidence: AnswerEvidence }
   | { type: "stage"; label: string; detail?: string }
   | { type: "message"; message: McpMessageRecord }
   | { type: "assistant_delta"; delta: string }
@@ -316,14 +328,13 @@ export interface PublicAiProviderSettings {
   hasLlmApiKey: boolean;
   llmTimeoutMs: number;
   llmMaxRetries: number;
+  structuredOutputMode?: "auto" | "json_schema" | "json_object" | "prompt_only";
   defaultSearchMode: SearchMode;
   defaultSearchTopK: number;
   defaultChunkingMode: ChunkingMode;
   chunkTokenLimit: number;
   chunkOverlapTokens: number;
   answerSystemPrompt: string;
-  mermaidTemplate: string;
-  mermaidPendingText: string;
   mcpSearchMode: SearchMode;
   graphDefaultLayoutStyle: string;
   welcomePromptTemplates: string[];

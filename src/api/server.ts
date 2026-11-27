@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { Readable } from "node:stream";
@@ -10,12 +11,11 @@ import { searchService } from "../services/search-service.js";
 import { graphService } from "../services/graph-service.js";
 import { logger } from "../observability/logger.js";
 import { webuiService } from "../services/webui-service.js";
-import { mcpAgentService } from "../services/mcp-agent-service.js";
+import { McpRunConflictError, mcpAgentService } from "../services/mcp-agent-service.js";
 import { aiSettingsService } from "../services/ai-settings-service.js";
 import { getPublicMcpSettings } from "../services/mcp-settings-service.js";
 import { listModelCallLogs } from "../observability/model-call-log.js";
 import { projectExportService } from "../services/project-export-service.js";
-import { llmClient } from "../ai/llm-client.js";
 
 const rootDir = process.cwd();
 const webDistDir = path.join(rootDir, "web", "dist");
@@ -166,14 +166,13 @@ const createMcpSessionSchema = z.object({
 });
 
 const mcpMessageSchema = z.object({
-  content: z.string().min(1),
-  autoMermaid: z.boolean().optional().default(false)
+  content: z.string().trim().min(1).max(60000),
+  clientTurnId: z.guid().optional(),
+  retry: z.boolean().optional(),
+  anchor: z.object({ kind: z.enum(["chunk", "event", "entity"]), id: z.guid() }).optional()
 });
 
-const mermaidRepairSchema = z.object({
-  source: z.string().min(1).max(20000),
-  error: z.string().max(4000).optional()
-});
+
 
 const chunkAssetsSchema = z.object({
   chunkIds: z.array(z.guid()).min(1).max(50)
@@ -190,6 +189,7 @@ const aiSettingsSchema = z.object({
   llmApiKey: z.string().optional(),
   clearLlmApiKey: z.boolean().optional(),
   llmTimeoutMs: z.number().int().positive(),
+  structuredOutputMode: z.enum(["auto", "json_schema", "json_object", "prompt_only"]).optional(),
   llmMaxRetries: z.number().int().min(0).max(10),
   defaultSearchMode: z.enum(["standard", "fast"]).default("fast"),
   defaultSearchTopK: z.number().int().min(1).max(50).default(10),
@@ -197,8 +197,6 @@ const aiSettingsSchema = z.object({
   chunkTokenLimit: z.number().int().min(64).max(8192).default(512),
   chunkOverlapTokens: z.number().int().min(0).max(4096).default(100),
   answerSystemPrompt: z.string().max(12000).optional(),
-  mermaidTemplate: z.string().max(20000).optional(),
-  mermaidPendingText: z.string().max(200).optional(),
   mcpSearchMode: z.enum(["standard", "fast"]).optional(),
   graphDefaultLayoutStyle: z.enum(["search_layers", "entity_inner", "columns", "spiral"]).optional(),
   welcomePromptTemplates: z.array(z.string().max(800)).max(8).optional(),
@@ -322,13 +320,6 @@ export function buildHttpServer() {
     return listModelCallLogs(Number.isFinite(after) ? after : 0);
   });
 
-  app.post("/api/mermaid/repair", async (request) => {
-    const input = mermaidRepairSchema.parse(request.body);
-    const repairedSource = await llmClient.repairMermaidDiagram(input);
-    return {
-      repairedSource
-    };
-  });
 
   app.get("/sources", async (request) => {
     const query = request.query as { limit?: string; cursor?: string };
@@ -893,8 +884,7 @@ export function buildHttpServer() {
     const input = mcpMessageSchema.parse(request.body);
     const result = await mcpAgentService.runUserMessage({
       sessionId: params.sessionId,
-      content: input.content,
-      autoMermaid: input.autoMermaid
+      ...input
     });
     return reply.code(201).send(result);
   });
@@ -903,6 +893,10 @@ export function buildHttpServer() {
     const params = request.params as { sessionId: string };
     z.guid().parse(params.sessionId);
     const input = mcpMessageSchema.parse(request.body);
+    const runId = randomUUID();
+    let sequence = 0;
+    let terminal: "completed" | "failed" | "cancelled" = "failed";
+    const started = performance.now();
     const abortController = new AbortController();
     let completed = false;
     const abortRun = () => {
@@ -913,10 +907,13 @@ export function buildHttpServer() {
     request.raw.on("aborted", abortRun);
     reply.raw.on("close", abortRun);
 
+    reply.hijack();
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Connection": "keep-alive"
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+      "X-Run-Id": runId
     });
     reply.raw.write(": connected\n\n");
     const heartbeat = setInterval(() => {
@@ -925,32 +922,39 @@ export function buildHttpServer() {
       }
     }, 15_000);
 
-    const send = (event: string, data: unknown) => {
+    const send = (event: string, data: Record<string, unknown>) => {
       if (abortController.signal.aborted || reply.raw.destroyed || reply.raw.writableEnded) {
         return;
       }
-      reply.raw.write(`event: ${event}\n`);
-      reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify({ ...data, runId, sequence: ++sequence })}\n\n`);
     };
 
     try {
       await mcpAgentService.runUserMessage({
         sessionId: params.sessionId,
-        content: input.content,
-        autoMermaid: input.autoMermaid,
+        ...input,
         signal: abortController.signal
       }, config.DEFAULT_TENANT_ID, (event) => {
+        if (event.type === "done") terminal = "completed";
         send(event.type, event);
       });
     } catch (error) {
-      if (!isAbortError(error)) {
+      if (abortController.signal.aborted || isAbortError(error) || error instanceof Error && error.name === "McpRunAbortedError") {
+        terminal = "cancelled";
+        send("cancelled", { type: "cancelled", message: "已停止生成。" });
+      } else {
+        const conflict = error instanceof McpRunConflictError;
         send("error", {
           type: "error",
-          message: getErrorMessage(error)
+          code: conflict ? "turn_conflict" : "turn_failed",
+          message: conflict ? error.message : "本轮回答未完成，请重试或查看检索过程。",
+          retryable: !conflict
         });
       }
     } finally {
       completed = true;
+      logger.info({ requestId: request.id, runId, sessionId: params.sessionId, state: terminal,
+        durationMs: Math.round(performance.now() - started) }, "MCP answer stream ended");
       clearInterval(heartbeat);
       request.raw.off("aborted", abortRun);
       reply.raw.off("close", abortRun);
@@ -979,7 +983,7 @@ export function buildHttpServer() {
       : null;
     const payloadTooLarge = (error as { code?: unknown }).code === "FST_ERR_CTP_BODY_TOO_LARGE" ||
       getErrorMessage(error).includes("超过");
-    const statusCode = error instanceof z.ZodError
+    const statusCode = error instanceof McpRunConflictError ? 409 : error instanceof z.ZodError
       ? 400
       : payloadTooLarge
         ? 413

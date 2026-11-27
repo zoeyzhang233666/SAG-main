@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ingestionService } from "../services/ingestion-service.js";
 import { searchService } from "../services/search-service.js";
 import { graphService } from "../services/graph-service.js";
+import { closePool } from "../db/pool.js";
 import { logger } from "../observability/logger.js";
 import { subscribeModelCallLogs, type ModelCallLogRecord } from "../observability/model-call-log.js";
 import type { SearchProgressEvent } from "../types.js";
@@ -62,7 +63,8 @@ export function buildMcpServer(): McpServer {
         const result = await searchService.search(
           { ...input, sourceIds: [readConfiguredSourceId()], strategy: input.strategy ?? "multi", returnTrace: true },
           undefined,
-          notificationEmitter ? createMcpProgressEmitter(notificationEmitter) : undefined
+          notificationEmitter ? createMcpProgressEmitter(notificationEmitter) : undefined,
+          extra.signal
         );
         return jsonContent(result);
       } finally {
@@ -86,7 +88,8 @@ export function buildMcpServer(): McpServer {
         const result = await searchService.search(
           { ...input, sourceIds: [readConfiguredSourceId()], strategy: "multi", returnTrace: true },
           undefined,
-          notificationEmitter ? createMcpProgressEmitter(notificationEmitter) : undefined
+          notificationEmitter ? createMcpProgressEmitter(notificationEmitter) : undefined,
+          extra.signal
         );
         return jsonContent(result.trace ?? result);
       } finally {
@@ -102,7 +105,9 @@ export function buildMcpServer(): McpServer {
     },
     async (input) => {
       const result = await graphService.getEvent(input.eventId);
-      return jsonContent(result ?? { error: { code: "EVENT_NOT_FOUND", message: "Event not found" } });
+      return jsonContent(result?.event.sourceId === readConfiguredSourceId()
+        ? result
+        : { error: { code: "EVENT_NOT_FOUND", message: "Event not found in the active source" } });
     }
   );
 
@@ -191,6 +196,9 @@ export async function startMcpServer(): Promise<void> {
   const server = buildMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  process.stdin.once("end", () => {
+    void closePool().catch((error: unknown) => logger.warn({ error }, "MCP database shutdown failed"));
+  });
   logger.info("SAG MCP stdio server started");
 }
 
