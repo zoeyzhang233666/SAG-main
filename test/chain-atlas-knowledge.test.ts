@@ -33,7 +33,7 @@ describe("chain atlas chemical knowledge matching", () => {
     expect(matchBelongsToChemical("氢氧化钠装置", caustic)).toBe(false);
   });
 
-  it("does not treat broad 盐 labels as 氯化钠 without identity evidence", () => {
+  it("does not confirm identity from description mentions of a chemical or CAS", () => {
     const nacl = chemical("氯化钠");
     expect(resolveChemicalByName("盐")).toBeUndefined();
     expect(matchBelongsToChemical("盐", nacl)).toBe(false);
@@ -45,13 +45,17 @@ describe("chain atlas chemical knowledge matching", () => {
         { name: "工业盐", description: "原料盐 CAS 7647-14-5" },
         nacl,
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       entityBelongsToChemical(
-        { name: "盐", description: "泛指盐类化合物，不含具体 CAS" },
+        {
+          name: "氯碱装置",
+          description: "电解氯化钠水溶液，CAS 7647-14-5",
+        },
         nacl,
       ),
     ).toBe(false);
+    expect(resolveEntityChemical({ name: "盐", description: "CAS 7647-14-5" })).toBeUndefined();
   });
 
   it("attaches the 氯化钠 chemical node used by the chlor-alkali feedstock branch", () => {
@@ -132,17 +136,12 @@ describe("knowledge bundle batching helpers", () => {
     expect(pickPrimaryKnowledgeEntity(merged.entities)?.eventCount).toBe(42);
   });
 
-  it("resolves entity chemical from CAS in description for ambiguous names", () => {
+  it("resolves entity chemical only from the entity name", () => {
+    expect(resolveEntityChemical({ name: "烧碱" })?.name).toBe("氢氧化钠");
     expect(
       resolveEntityChemical({
         name: "原料盐",
         description: "氯化钠原料，CAS 7647-14-5",
-      })?.name,
-    ).toBe("氯化钠");
-    expect(
-      resolveEntityChemical({
-        name: "盐",
-        description: "广义盐类，无 CAS",
       }),
     ).toBeUndefined();
     expect(isAmbiguousChemicalTerm("AA")).toBe(false);

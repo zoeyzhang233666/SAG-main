@@ -730,7 +730,7 @@ export class WebuiService {
   }
 
   async getChemicalKnowledgeBundle(
-    input: { terms: string[]; cas?: string; projectId?: string },
+    input: { terms: string[]; cas?: string; chemicalName?: string; projectId?: string },
     tenantId = config.DEFAULT_TENANT_ID
   ) {
     return getChemicalKnowledgeBundle({ ...input, tenantId });

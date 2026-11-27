@@ -829,10 +829,11 @@ export function buildHttpServer() {
     const body = z.object({
       terms: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
       cas: z.string().trim().min(1).max(32).optional(),
+      chemicalName: z.string().trim().min(1).max(120).optional(),
       projectId: z.guid().optional()
     }).refine(
-      (value) => value.terms.length > 0 || Boolean(value.cas),
-      { message: "terms or cas required" }
+      (value) => value.terms.length > 0 || Boolean(value.cas) || Boolean(value.chemicalName),
+      { message: "terms, cas, or chemicalName required" }
     ).parse(request.body);
     return await webuiService.getChemicalKnowledgeBundle(body);
   });

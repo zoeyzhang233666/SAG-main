@@ -24,6 +24,11 @@ import type {
   ProjectStatsRecord,
   SourceRecord
 } from "../types.js";
+import {
+  chemicalIdentityTerms,
+  entityBelongsToChemical,
+  resolveChemicalFromQuery
+} from "../lib/chemical-identity.js";
 
 type Queryable = Pick<pg.Pool | pg.PoolClient, "query">;
 
@@ -2420,7 +2425,6 @@ export async function matchChainAtlasEntities(input: {
 
 async function listEntityIdsByIdentityPage(input: {
   terms: string[];
-  cas?: string;
   tenantId: string;
   projectId?: string;
   includeArchived?: boolean;
@@ -2428,12 +2432,12 @@ async function listEntityIdsByIdentityPage(input: {
   offset: number;
 }): Promise<{ ids: string[]; hasMore: boolean }> {
   const terms = [...new Set(input.terms.map((term) => term.trim()).filter(Boolean))];
-  const normalized = terms.map(normalizeEntityName);
-  const cas = input.cas?.trim() || null;
-  if (terms.length === 0 && !cas) {
+  const normalized = [...new Set(terms.map(normalizeEntityName).filter(Boolean))];
+  if (normalized.length === 0) {
     return { ids: [], hasMore: false };
   }
   const archiveSql = input.includeArchived ? "" : "and s.archived_at is null";
+  // Candidate recall is exact name / normalized_name only — never description text.
   const result = await pool.query<{ id: string }>(
     `
       select ent.id
@@ -2445,13 +2449,6 @@ async function listEntityIdsByIdentityPage(input: {
         and (
           ent.normalized_name = any($3::text[])
           or lower(ent.name) = any($4::text[])
-          or (
-            $5::text is not null
-            and (
-              ent.normalized_name = lower($5)
-              or coalesce(ent.description, '') ilike ('%' || $5 || '%')
-            )
-          )
         )
         and exists (
           select 1
@@ -2463,14 +2460,13 @@ async function listEntityIdsByIdentityPage(input: {
             ${input.includeArchived ? "" : "and d.archived_at is null"}
         )
       order by ent.name, ent.type, ent.id
-      limit $6 offset $7
+      limit $5 offset $6
     `,
     [
       input.tenantId,
       input.projectId ?? null,
       normalized,
       terms.map((term) => term.toLowerCase()),
-      cas,
       input.limit + 1,
       input.offset
     ]
@@ -2639,28 +2635,64 @@ export async function getEntitiesKnowledgeBundle(input: {
 export async function getChemicalKnowledgeBundle(input: {
   terms: string[];
   cas?: string;
+  chemicalName?: string;
   tenantId: string;
   projectId?: string;
   includeArchived?: boolean;
 }): Promise<KnowledgeBundleRecord> {
-  const entityIds: string[] = [];
+  const chemical = resolveChemicalFromQuery({
+    terms: input.terms,
+    cas: input.cas,
+    chemicalName: input.chemicalName
+  });
+  if (!chemical) {
+    return { entities: [], events: [] };
+  }
+
+  // Only unambiguous identity terms are used for candidate recall.
+  const confirmedTerms = chemicalIdentityTerms(chemical);
+  const candidateIds: string[] = [];
   let offset = 0;
   for (;;) {
     const page = await listEntityIdsByIdentityPage({
-      terms: input.terms,
-      cas: input.cas,
+      terms: confirmedTerms,
       tenantId: input.tenantId,
       projectId: input.projectId,
       includeArchived: input.includeArchived,
       limit: KNOWLEDGE_ENTITY_PAGE_SIZE,
       offset
     });
-    entityIds.push(...page.ids);
+    candidateIds.push(...page.ids);
     if (!page.hasMore) break;
     offset += KNOWLEDGE_ENTITY_PAGE_SIZE;
   }
+  if (candidateIds.length === 0) {
+    return { entities: [], events: [] };
+  }
+
+  // Fetch entity metadata first, then re-confirm identity before loading events.
+  const candidateBundle = await getEntitiesKnowledgeBundle({
+    entityIds: candidateIds,
+    tenantId: input.tenantId,
+    includeArchived: input.includeArchived
+  });
+  const confirmedEntities = candidateBundle.entities.filter((entity) =>
+    entityBelongsToChemical(entity, chemical)
+  );
+  if (confirmedEntities.length === 0) {
+    return { entities: [], events: [] };
+  }
+  if (confirmedEntities.length === candidateBundle.entities.length) {
+    return {
+      entities: confirmedEntities,
+      events: candidateBundle.events
+    };
+  }
+
+  // Reload events strictly for confirmed entities so rejected candidates
+  // (and any events only linked to them) cannot leak into the aggregate.
   return getEntitiesKnowledgeBundle({
-    entityIds,
+    entityIds: confirmedEntities.map((entity) => entity.id),
     tenantId: input.tenantId,
     includeArchived: input.includeArchived
   });

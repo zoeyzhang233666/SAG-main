@@ -89,93 +89,18 @@ for (const chemical of chemicals) {
 
 const chemicalsByCas = new Map(chemicals.filter(item => item.cas).map(item => [item.cas, item]));
 
-export function resolveChemicalByName(name: string): Chemical | undefined {
-  const hit = chemicalsByName.get(normalizeAtlasSearch(name));
-  return hit || undefined;
-}
-
-export function resolveChemicalByCas(cas: string): Chemical | undefined {
-  return chemicalsByCas.get(cas.trim()) ?? undefined;
-}
-
-export function chemicalIdentityTerms(chemical: Chemical): string[] {
-  return [...new Set([
-    ...chemicalNames(chemical),
-    ...(chemical.cas ? [chemical.cas] : []),
-  ])];
-}
-
-export type ChemicalMatchCandidate = {
-  name: string;
-  description?: string | null;
-};
-
-/** True when a dictionary key maps to more than one chemical (shared alias). */
-export function isAmbiguousChemicalTerm(term: string): boolean {
-  return chemicalsByName.get(normalizeAtlasSearch(term)) === null;
-}
-
-function descriptionMentionsIdentity(description: string, term: string): boolean {
-  const hay = description.normalize("NFKC");
-  const needle = term.normalize("NFKC").trim();
-  if (!needle || needle.length < 2) return false;
-  return hay.includes(needle);
-}
-
-/**
- * Conservative identity check: exact dictionary terms / CAS, or CAS/name confirmed via description.
- * Broad labels such as 「盐」 are not treated as 氯化钠 unless identity evidence exists.
- */
-export function entityBelongsToChemical(
-  candidate: ChemicalMatchCandidate,
-  chemical: Chemical,
-): boolean {
-  const nameKey = normalizeAtlasSearch(candidate.name);
-  if (!nameKey) return false;
-  const identityKeys = new Set(
-    chemicalIdentityTerms(chemical).map((term) => normalizeAtlasSearch(term)),
-  );
-  if (identityKeys.has(nameKey)) return true;
-
-  const other = chemicalsByName.get(nameKey);
-  if (other && other.name !== chemical.name) return false;
-  if (other === null) return false;
-
-  const description = candidate.description?.trim() ?? "";
-  if (chemical.cas) {
-    const casKey = normalizeAtlasSearch(chemical.cas);
-    if (nameKey === casKey) return true;
-    if (description.includes(chemical.cas)) return true;
-  }
-
-  if (!description) return false;
-  for (const term of [chemical.name, chemical.english, ...(chemical.aliases ?? [])]) {
-    if (!term || isAmbiguousChemicalTerm(term)) continue;
-    if (term.trim().length < 2) continue;
-    if (descriptionMentionsIdentity(description, term)) return true;
-  }
-  return false;
-}
-
-export function matchBelongsToChemical(
-  matchName: string,
-  chemical: Chemical,
-  description?: string | null,
-): boolean {
-  return entityBelongsToChemical({ name: matchName, description }, chemical);
-}
-
-export function resolveEntityChemical(
-  entity: ChemicalMatchCandidate,
-): Chemical | undefined {
-  const byName = resolveChemicalByName(entity.name);
-  if (byName) return byName;
-  const description = entity.description?.trim() ?? "";
-  const casHit = description.match(/\b(\d{2,7}-\d{2}-\d)\b/);
-  if (casHit) return resolveChemicalByCas(casHit[1]);
-  return undefined;
-}
-
+export {
+  chemicalIdentityTerms,
+  entityBelongsToChemical,
+  filterEntitiesBelongingToChemical,
+  isAmbiguousChemicalTerm,
+  matchBelongsToChemical,
+  resolveChemicalByCas,
+  resolveChemicalByName,
+  resolveChemicalFromQuery,
+  resolveEntityChemical,
+  type ChemicalMatchCandidate,
+} from "./chemical-identity.js";
 
 function cleanLabel(label: string) {
   return label.replace(/\s*(?:★\s*注[：:]|注[：:]|★\s*修订[：:]).*$/u, "")

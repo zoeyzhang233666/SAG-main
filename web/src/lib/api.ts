@@ -342,6 +342,7 @@ export const api = {
   async getChemicalKnowledgeBundle(input: {
     terms: string[];
     cas?: string;
+    chemicalName?: string;
     projectId?: string;
   }) {
     return request<{

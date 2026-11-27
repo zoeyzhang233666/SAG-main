@@ -53,7 +53,6 @@ import {
 } from "./lib/event-category";
 import {
   chemicalIdentityTerms,
-  entityBelongsToChemical,
   resolveChemicalByName,
   resolveEntityChemical,
   type Chemical,
@@ -2028,34 +2027,22 @@ function AppShell() {
     const previousDrawer = drawer;
     try {
       const detail = await api.getEntity(entityId);
-      const sameNameEntitySource =
-        options?.matchCurrentProject === false
-          ? []
-          : projectEntities.length > 0
-            ? projectEntities
-            : entities;
       const chemical = resolveEntityChemical(detail.entity);
-      const shouldAggregate = options?.aggregate !== false;
-      const confirmedEntityIds = shouldAggregate
-        ? collectConfirmedChemicalKnowledgeEntityIds(
-            sameNameEntitySource,
-            detail.entity,
-            chemical,
-          )
-        : [entityId];
+      const shouldAggregate = options?.aggregate !== false && Boolean(chemical);
       let nextDetail = detail;
       let sameNameDetails: EntityDetailRecord[] | undefined;
-      if (confirmedEntityIds.length > 1) {
-        const bundle = chemical
-          ? await api.getChemicalKnowledgeBundle({
-              terms: chemicalIdentityTerms(chemical),
-              cas: chemical.cas,
-              projectId:
-                options?.matchCurrentProject === false
-                  ? undefined
-                  : selectedProject?.id,
-            })
-          : await loadKnowledgeBundleByEntityIds(confirmedEntityIds);
+      if (shouldAggregate && chemical) {
+        // Always ask the backend for the full confirmed set — do not rely on
+        // whichever entity rows the knowledge-assets UI currently has loaded.
+        const bundle = await api.getChemicalKnowledgeBundle({
+          terms: chemicalIdentityTerms(chemical),
+          cas: chemical.cas,
+          chemicalName: chemical.name,
+          projectId:
+            options?.matchCurrentProject === false
+              ? undefined
+              : selectedProject?.id,
+        });
         const primary =
           pickPrimaryKnowledgeEntity(bundle.entities, entityId) ??
           ({
@@ -2122,6 +2109,7 @@ function AppShell() {
               ? input.terms
               : chemicalIdentityTerms(chemical),
             cas: input.cas ?? chemical.cas,
+            chemicalName: chemical.name,
             projectId: input.projectId,
           })
         : await loadKnowledgeBundleByEntityIds(input.entityIds);
@@ -11084,20 +11072,6 @@ function pickKnowledgeAssetEntityRepresentative(entities: EntityRecord[]) {
       left.id.localeCompare(right.id)
     );
   })[0];
-}
-
-function collectConfirmedChemicalKnowledgeEntityIds(
-  entities: EntityRecord[],
-  target: EntityRecord,
-  chemical?: Chemical,
-) {
-  if (!chemical) return [target.id];
-  return uniqueKnowledgeAssetValues([
-    target.id,
-    ...entities
-      .filter((entity) => entityBelongsToChemical(entity, chemical))
-      .map((entity) => entity.id),
-  ]);
 }
 
 function getKnowledgeAssetEntityNameKey(
