@@ -285,6 +285,7 @@ export class McpAgentService {
             session: activeSession,
             messageId: userMessage.id,
             userContent,
+            anchorText,
             history,
             mcpSearchMode: settings.mcpSearchMode,
             toolCalls,
@@ -322,6 +323,7 @@ export class McpAgentService {
                 session: activeSession,
                 messageId: userMessage.id,
                 userContent,
+                anchorText,
                 history,
                 mcpSearchMode: settings.mcpSearchMode,
                 toolCalls,
@@ -435,6 +437,7 @@ export class McpAgentService {
     session: McpSessionRecord;
     messageId: string;
     userContent: string;
+    anchorText?: string;
     history: Array<{ role: string; content: string }>;
     mcpSearchMode: "standard" | "fast";
     toolCalls: McpToolCallRecord[];
@@ -449,7 +452,7 @@ export class McpAgentService {
     if (!isEventLookup || /search|检索|搜索|查找/.test(lower)) {
       assertNotAborted(input.signal);
       const args = {
-        query: fallbackQuery(input.userContent, input.history),
+        query: input.anchorText ?? fallbackQuery(input.userContent, input.history),
         strategy: "multi",
         searchMode: input.mcpSearchMode,
         returnTrace: true

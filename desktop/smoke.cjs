@@ -6,7 +6,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 
 const name = 'SAG V1 desktop smoke';
 const title = '甲醇供应链测试';
-const event = '甲醇制烯烃测试事件';
+const event = '甲醇制烯烃产业链测试事件';
 const entity = '乙烯';
 const sulfuricAcid = 'Sulphuric acid';
 const preference = 'sag-desktop-smoke';
@@ -222,7 +222,7 @@ async function smoke(contents, origin, profile, mode) {
       if (!frames.some(frame => frame.type === 'done')) throw new Error('MCP ask failed: ' + raw.slice(-1800));
       return frames;
     }, session.id, input);
-    const prompt = { content: `${event} 产业链图`, clientTurnId: randomUUID() };
+    const prompt = { content: event, clientTurnId: randomUUID() };
     const first = await ask(prompt);
     const firstEvidence = first.find(frame => frame.type === 'evidence')?.evidence;
     assert.ok(firstEvidence?.eventIds.length, 'First answer did not emit real event evidence');
