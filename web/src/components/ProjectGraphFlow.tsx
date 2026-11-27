@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -32,6 +32,19 @@ import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import type { SupportedLanguage } from "../i18n";
 import { RichTextFragment } from "./RichText";
+import { buildSceneData, type SceneNode } from "../lib/graph-scene-data";
+
+const ProjectGraph3D = lazy(() => import("./ProjectGraph3D"));
+
+class SceneBoundary extends Component<{ onUnavailable: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() { return { failed: true }; }
+
+  componentDidCatch() { this.props.onUnavailable(); }
+
+  render() { return this.state.failed ? null : this.props.children; }
+}
 
 type GraphNodeData = {
   label: string;
@@ -123,6 +136,7 @@ export function ProjectGraphFlow(props: {
     primaryEntityId?: string;
   } | null;
   defaultLayoutStyle?: string;
+  compact?: boolean;
   language: SupportedLanguage;
   onSearch?: (query: string) => void;
   onRequestSuggestions?: (
@@ -152,6 +166,7 @@ function ProjectGraphCanvas(props: {
     primaryEntityId?: string;
   } | null;
   defaultLayoutStyle?: string;
+  compact?: boolean;
   language: SupportedLanguage;
   onSearch?: (query: string) => void;
   onRequestSuggestions?: (
@@ -188,6 +203,9 @@ function ProjectGraphCanvas(props: {
     new Set(),
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"2d" | "3d">("2d");
+  const [sceneUnavailable, setSceneUnavailable] = useState(false);
+  const camera = useRef<{ x: number; y: number; z: number } | null>(null);
   const [graphQuery, setGraphQuery] = useState("");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [remoteSuggestionState, setRemoteSuggestionState] = useState<{
@@ -222,6 +240,14 @@ function ProjectGraphCanvas(props: {
   const expandedEventIdsRef = useRef(expandedEventIds);
   const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
+  const sceneData = useMemo(() => buildSceneData({
+    nodes: nodes.flatMap((node): SceneNode[] => node.data.kind === "question" ? [] : [{
+      id: node.id, kind: node.data.kind, label: node.data.label, color: node.data.entityTypeColor
+    }]),
+    graph: props.graph,
+    priority: new Set([...(selectedNodeId ? [selectedNodeId] : []), ...queryLinkedNodeIds, ...expandedEventIds]),
+    compact: props.compact ?? false
+  }), [nodes, props.graph, selectedNodeId, queryLinkedNodeIds, expandedEventIds, props.compact]);
   const { fitView, getNode, setCenter, setViewport } = useReactFlow<GraphNode, GraphEdge>();
   const graphEdgeTypes = useMemo(() => ({ bus: BusEdge }), []);
   const graphNodeTypes = useMemo(() => ({ rich: RichGraphNode }), []);
@@ -824,8 +850,12 @@ function ProjectGraphCanvas(props: {
 
   const onNodeClick: NodeMouseHandler<GraphNode> = (event, node) => {
     event.stopPropagation();
+    selectGraphNode(node);
+  };
+
+  function selectGraphNode(node: GraphNode) {
     clearClickTimer();
-    const data = node.data as GraphNodeData;
+    const data = node.data;
     if (data.kind === "question") {
       setSelectedNodeId(null);
       return;
@@ -847,7 +877,12 @@ function ProjectGraphCanvas(props: {
       requestEventEntityFit(node.id);
       clickTimerRef.current = null;
     }, 220);
-  };
+  }
+
+  function unavailable() {
+    setSceneUnavailable(true);
+    setMode("2d");
+  }
 
   const onNodeDoubleClick: NodeMouseHandler<GraphNode> = (event, node) => {
     event.stopPropagation();
@@ -1297,7 +1332,14 @@ function ProjectGraphCanvas(props: {
           pointer-events: none;
         }
       `}</style>
-      <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 rounded-xl border border-border bg-background/90 p-2 shadow-[0_10px_30px_rgba(24,36,58,0.08)] backdrop-blur">
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-20">
+      <div className="pointer-events-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-border bg-background/90 p-2 shadow-[0_10px_30px_rgba(24,36,58,0.08)] backdrop-blur">
+        <div role="group" aria-label={graphText(props.language, "图谱视图", "Graph view")} className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "2d" ? "default" : "outline"}
+            aria-pressed={mode === "2d"} onClick={() => setMode("2d")}>2D</Button>
+          <Button type="button" size="sm" variant={mode === "3d" ? "default" : "outline"}
+            aria-pressed={mode === "3d"} onClick={() => { setSceneUnavailable(false); setMode("3d"); }}>3D</Button>
+        </div>
         <Button type="button" variant="outline" size="sm" onClick={resetGraph}>
           {graphText(props.language, "重置", "Reset")}
         </Button>
@@ -1367,7 +1409,7 @@ function ProjectGraphCanvas(props: {
             </Button>
           </div>
         ) : null}
-        <select
+        {mode === "2d" && <select
           value={layoutStyle}
           title={graphText(props.language, "重排风格", "Layout style")}
           className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -1384,8 +1426,8 @@ function ProjectGraphCanvas(props: {
           <option value="columns">
             {graphText(props.language, "分栏", "Columns")}
           </option>
-        </select>
-        <Button
+        </select>}
+        {mode === "2d" && <Button
           type="button"
           variant="outline"
           size="sm"
@@ -1393,9 +1435,12 @@ function ProjectGraphCanvas(props: {
         >
           <RefreshCw className="h-3.5 w-3.5" />
           {graphText(props.language, "自动重排", "Auto layout")}
-        </Button>
+        </Button>}
+        {sceneUnavailable && <span className="text-xs text-muted-foreground" role="status">
+          {graphText(props.language, "当前设备无法使用 3D，已返回 2D。", "3D is unavailable on this device. Returned to 2D.")}
+        </span>}
       </div>
-      <div className="absolute left-3 top-[68px] z-20 w-[min(520px,calc(100%-24px))]">
+      <div className="pointer-events-auto relative mt-2 w-full max-w-[520px]">
         <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <input
           value={graphQuery}
@@ -1472,6 +1517,7 @@ function ProjectGraphCanvas(props: {
           </div>
         ) : null}
       </div>
+      </div>
       <EntityTypeFilterPanel
         language={props.language}
         options={filteredEntityTypeOptions}
@@ -1487,6 +1533,7 @@ function ProjectGraphCanvas(props: {
         onSelectAll={selectAllEntityTypes}
         onClear={clearEntityTypeFilter}
       />
+      <div className={cn("absolute inset-0", mode === "3d" && "invisible pointer-events-none")} aria-hidden={mode === "3d"}>
       <ReactFlow<GraphNode, GraphEdge>
         className="sag-graph-flow"
         nodes={nodes}
@@ -1527,6 +1574,21 @@ function ProjectGraphCanvas(props: {
           maskColor="rgba(238,242,247,0.72)"
         />
       </ReactFlow>
+      </div>
+      {mode === "3d" && (
+        <SceneBoundary onUnavailable={unavailable}>
+          <Suspense fallback={<div role="status" className="grid h-full place-items-center text-sm text-muted-foreground">
+            {graphText(props.language, "正在加载 3D 图谱", "Loading 3D graph")}
+          </div>}>
+            <ProjectGraph3D data={sceneData} selectedId={selectedNodeId} camera={camera}
+              onUnavailable={unavailable} onClear={() => setSelectedNodeId(null)}
+              onSelect={(id) => { const node = nodes.find((item) => item.id === id); if (node) selectGraphNode(node); }} />
+          </Suspense>
+          {sceneData.cropped && <span className="pointer-events-none absolute bottom-3 left-3 rounded bg-background/85 px-2 py-1 text-xs text-muted-foreground">
+            {graphText(props.language, "3D 已限制显示范围，搜索可聚焦更多节点。", "3D display is capped. Search to focus other nodes.")}
+          </span>}
+        </SceneBoundary>
+      )}
     </div>
   );
 }

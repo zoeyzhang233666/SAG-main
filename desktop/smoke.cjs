@@ -169,6 +169,42 @@ async function smoke(contents, origin, profile, mode) {
     return Array.from(document.querySelectorAll('.react-flow__node'))
       .some(node => node.textContent.includes(event) && node.getBoundingClientRect().width > 0);
   }, event), 'V1 Hypergraph did not render the imported event');
+  const graphModeButton = label => evaluate(label => {
+    const button = Array.from(document.querySelectorAll('[role="group"] button'))
+      .find(element => element.textContent.trim() === label);
+    if (!button) return false;
+    button.click();
+    return true;
+  }, label);
+  const supportsWebGL = await evaluate(() => {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('webgl2');
+    context?.getExtension('WEBGL_lose_context')?.loseContext();
+    return Boolean(context);
+  });
+  if (supportsWebGL) {
+    assert.ok(await graphModeButton('3D'), 'Could not select 3D');
+    await until(() => evaluate(() => Boolean(document.querySelector('[data-graph-3d="ready"] canvas'))),
+      '3D graph did not create a WebGL canvas');
+    assert.ok(await graphModeButton('2D'), 'Could not return to 2D');
+    await until(() => evaluate(() => !document.querySelector('[data-graph-3d]')), '3D scene was not released');
+    console.log('WebGL2 graph mounted and released');
+  }
+  await evaluate(() => {
+    window.__sagSmokeWebGL2 = Object.getOwnPropertyDescriptor(window, 'WebGL2RenderingContext');
+    Object.defineProperty(window, 'WebGL2RenderingContext', { configurable: true, value: undefined });
+  });
+  assert.ok(await graphModeButton('3D'), 'Could not check 3D fallback');
+  await until(() => evaluate(() => Array.from(document.querySelectorAll('[role="status"]'))
+    .some(item => /已返回 2D|Returned to 2D/.test(item.textContent))), 'Missing 3D fallback message');
+  await evaluate(() => {
+    const original = window.__sagSmokeWebGL2;
+    if (original) Object.defineProperty(window, 'WebGL2RenderingContext', original);
+    else delete window.WebGL2RenderingContext;
+    delete window.__sagSmokeWebGL2;
+  });
+  console.log('WebGL-unavailable fallback passed');
+
 
   await evaluate(() => {
     const tab = Array.from(document.querySelectorAll('.chem-workspace-tabs button'))
