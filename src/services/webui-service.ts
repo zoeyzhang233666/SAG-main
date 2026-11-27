@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Readable } from "node:stream";
 import { config } from "../config/env.js";
 import {
   archiveDocument,
@@ -15,6 +16,7 @@ import {
   getEventDetail,
   getProjectGraph,
   getProjectStats,
+  getSource,
   listChunksByDocument,
   listChunksByProject,
   listDocumentsBySource,
@@ -33,13 +35,15 @@ import {
   updateEvent,
   updateSource
 } from "../db/repositories.js";
-import { parseManualKnowledgeDocuments, type ManualImportFormat } from "../ingestion/manual-import.js";
+import { parseManualKnowledgeDocuments, type ManualImportFormat, type ManualKnowledgeDocument } from "../ingestion/manual-import.js";
+import { MAX_STRUCTURED_TEXT_BYTES, stageStructuredImportFile } from "../ingestion/structured-import-file.js";
+import { logger } from "../observability/logger.js";
 import { ingestionService } from "./ingestion-service.js";
 import { manualIngestionService } from "./manual-ingestion-service.js";
 import type { ChunkingMode, IngestProgressStage, IngestProgressUpdate } from "../types.js";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const MAX_STRUCTURED_IMPORT_BYTES = 50 * 1024 * 1024;
+
 const ALLOWED_EXTENSIONS = new Set([".md", ".txt"]);
 
 type UploadJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
@@ -65,6 +69,17 @@ export interface UploadJobRecord {
   error?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface StructuredImportJobInput {
+  title: string;
+  fileName: string;
+  sourceId: string;
+  format: ManualImportFormat;
+  importBytes: number;
+  streamed?: boolean;
+  readDocuments: () => AsyncIterable<ManualKnowledgeDocument>;
+  cleanup?: () => Promise<void>;
 }
 
 export class WebuiService {
@@ -243,6 +258,39 @@ export class WebuiService {
     content: string;
   }, tenantId = config.DEFAULT_TENANT_ID) {
     const structuredImport = validateStructuredImportInput(input);
+    return this.queueStructuredImport({
+      ...structuredImport,
+      readDocuments: async function* () {
+        yield* parseManualKnowledgeDocuments(structuredImport.content, {
+          format: structuredImport.format,
+          fileName: structuredImport.fileName,
+          fallbackTitle: structuredImport.title
+        });
+      }
+    }, tenantId);
+  }
+
+  async createStructuredImportFileJob(input: {
+    sourceId: string;
+    title?: string;
+    fileName: string;
+    format: ManualImportFormat;
+    stream: Readable;
+  }, tenantId = config.DEFAULT_TENANT_ID) {
+    const source = await getSource(input.sourceId, tenantId);
+    if (!source || source.archivedAt) {
+      throw Object.assign(new Error("导入数据必须先选择未归档项目"), { statusCode: 404 });
+    }
+    const fileName = input.fileName.trim() || "structured-import.json";
+    const title = input.title?.trim() || fileName.replace(/\.[^.]+$/, "") || "结构化导入";
+    const staged = await stageStructuredImportFile(input.stream, { fileName, format: input.format, fallbackTitle: title });
+    return this.queueStructuredImport({
+      sourceId: input.sourceId, title, fileName, format: input.format, importBytes: staged.bytes,
+      streamed: staged.streamed, readDocuments: staged.readDocuments, cleanup: staged.cleanup
+    }, tenantId);
+  }
+
+  private queueStructuredImport(structuredImport: StructuredImportJobInput, tenantId: string) {
     const now = new Date().toISOString();
     const job: UploadJobRecord = {
       id: randomUUID(),
@@ -306,14 +354,11 @@ export class WebuiService {
     return this.uploadJobs.get(jobId) ?? null;
   }
 
-  private async runStructuredImportJob(jobId: string, input: {
-    title: string;
-    fileName: string;
-    content: string;
-    sourceId: string;
-    format?: ManualImportFormat;
-    importBytes: number;
-  }, tenantId: string) {
+  private async runStructuredImportJob(jobId: string, input: StructuredImportJobInput, tenantId: string) {
+    let completedChunks = 0;
+    let completedEvents = 0;
+    let completedDocuments = 0;
+    let first: Awaited<ReturnType<typeof manualIngestionService.ingest>> | undefined;
     this.updateUploadJob(jobId, {
       status: "RUNNING",
       stage: "PARSING",
@@ -321,68 +366,72 @@ export class WebuiService {
       progress: 5
     });
     try {
-      const documents = parseManualKnowledgeDocuments(input.content, {
-        format: input.format,
-        fileName: input.fileName,
-        fallbackTitle: input.title
-      });
-      if (documents.length === 0) {
-        throw new Error("没有可导入的文档");
+      const buffered: ManualKnowledgeDocument[] = [];
+      let documentCount = 0;
+      let totalChunks = 0;
+      for await (const document of input.readDocuments()) {
+        documentCount += 1;
+        totalChunks += document.chunks.length;
+        if (!input.streamed) buffered.push(document);
+        this.updateUploadJob(jobId, { message: `已校验 ${documentCount} 个文档 · ${totalChunks} 个切片` });
       }
-      const totalChunks = documents.reduce((sum, document) => sum + document.chunks.length, 0);
-      let completedChunks = 0;
-      const results = [];
+      if (documentCount === 0) throw new Error("没有可导入的文档");
+
+      // Validate the entire file before writing and only keep one document in memory.
+      const documents = input.streamed ? input.readDocuments() : buffered;
       this.updateUploadJob(jobId, {
         status: "RUNNING",
         stage: "PARSING",
-        message: `解析完成：${documents.length} 个文档，${totalChunks} 个切片`,
+        message: `解析完成：${documentCount} 个文档，${totalChunks} 个切片`,
         progress: 8,
-        documentCount: documents.length,
+        documentCount,
         totalChunks,
         currentChunk: 0
       });
 
-      for (const [documentIndex, document] of documents.entries()) {
+      for await (const document of documents) {
+        const documentIndex = completedDocuments;
         const result = await manualIngestionService.ingest({
           sourceId: input.sourceId,
           document,
           fileName: input.fileName,
-          format: input.format ?? "auto"
+          format: input.format
         }, tenantId, (update) => {
           const documentProgress = Math.max(0, Math.min(100, update.progress));
           const overallProgress = totalChunks > 0
             ? 8 + ((completedChunks + ((update.currentChunk ?? 0) || 0)) / totalChunks) * 90
-            : 8 + ((documentIndex + documentProgress / 100) / documents.length) * 90;
+            : 8 + ((documentIndex + documentProgress / 100) / documentCount) * 90;
           this.updateUploadJob(jobId, {
             status: "RUNNING",
             ...update,
-            message: documents.length > 1
-              ? `[${documentIndex + 1}/${documents.length}] ${update.message}`
+            message: documentCount > 1
+              ? `[${documentIndex + 1}/${documentCount}] ${update.message}`
               : update.message,
             progress: Math.min(99, overallProgress),
-            documentCount: documents.length,
+            documentCount,
             currentChunk: completedChunks + (update.currentChunk ?? 0),
             totalChunks
           });
         });
         completedChunks += result.chunkCount;
-        results.push(result);
+        completedEvents += result.eventCount;
+        completedDocuments += 1;
+        first ??= result;
       }
 
-      const first = results[0];
       if (!first) {
         throw new Error("没有可导入的文档");
       }
       this.updateUploadJob(jobId, {
         status: "COMPLETED",
         stage: "COMPLETED",
-        message: `导入完成：${documents.length} 个文档，${completedChunks} 个切片`,
+        message: `导入完成：${documentCount} 个文档，${completedChunks} 个切片`,
         progress: 100,
         documentId: first.documentId,
         traceId: first.traceId,
-        chunkCount: results.reduce((sum, result) => sum + result.chunkCount, 0),
-        eventCount: results.reduce((sum, result) => sum + result.eventCount, 0),
-        documentCount: documents.length,
+        chunkCount: completedChunks,
+        eventCount: completedEvents,
+        documentCount,
         currentChunk: completedChunks,
         totalChunks
       });
@@ -390,10 +439,17 @@ export class WebuiService {
       this.updateUploadJob(jobId, {
         status: "FAILED",
         stage: "FAILED",
-        message: "导入失败",
+        message: completedDocuments > 0 ? `导入中断 · 已保存 ${completedDocuments} 个文档` : "导入失败",
         progress: 100,
+        documentCount: completedDocuments,
+        documentId: first?.documentId,
+        chunkCount: completedChunks,
+        eventCount: completedEvents,
+        currentChunk: completedChunks,
         error: error instanceof Error ? error.message : String(error)
       });
+    } finally {
+      await input.cleanup?.().catch(error => logger.warn({ error }, "could not remove staged import file"));
     }
   }
 
@@ -681,8 +737,8 @@ function validateStructuredImportInput(input: {
   if (importBytes === 0) {
     throw new Error("导入内容为空");
   }
-  if (importBytes > MAX_STRUCTURED_IMPORT_BYTES) {
-    throw new Error(`导入内容超过 ${MAX_STRUCTURED_IMPORT_BYTES} 字节限制`);
+  if (importBytes > MAX_STRUCTURED_TEXT_BYTES) {
+    throw new Error("粘贴内容超过 50 MiB，请选择 JSON 文件导入");
   }
   if (!input.sourceId) {
     throw new Error("导入数据必须先选择项目");

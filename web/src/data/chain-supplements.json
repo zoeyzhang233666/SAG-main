@@ -1,0 +1,275 @@
+{
+  "references": {
+    "petrochemicals": { "label": "EPA · 有机化工产品与原料路径", "url": "https://gaftp.epa.gov/ap42/ch09/s121/reference/bref03_c09s1201_ch4_1996.pdf" },
+    "carbonBlack": { "label": "EPA · 炭黑行业原料", "url": "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=910169ND.TXT" },
+    "helium": { "label": "USGS · 氦资源与供应", "url": "https://pubs.usgs.gov/publication/sir20255021/full" },
+    "hydrogen": { "label": "DOE · 氢能供应与需求", "url": "https://www.energy.gov/sites/default/files/2025-07/LIFTOFF_DOE_Clean-Hydrogen.pdf" },
+    "batteries": { "label": "DOE · 锂离子电池供应链", "url": "https://www.energy.gov/sites/default/files/2024-12/Supply_Chain_Readiness_Level_SCRL_Analysis_Nov-2024_2024.12.20.pdf" },
+    "electrolytes": { "label": "VDMA · 锂离子电池组件生产", "url": "https://vdma.eu/documents/34570/35405938/Production%20of%20lithium%20ion%20battery%20cell%20components.pdf/14b0e5cb-a16b-e352-b9da-7d327d971c46?filename=Production%20of%20lithium%20ion%20battery%20cell%20components.pdf" },
+    "water": { "label": "EPA · 水处理化学品供应链", "url": "https://www.epa.gov/waterutilityresponse/water-treatment-chemical-supply-chain-profiles" },
+    "biomass": { "label": "NREL · 生物质平台化合物", "url": "https://www.nrel.gov/docs/fy04osti/35523.pdf" },
+    "glass": { "label": "EPA · 玻璃制造原料", "url": "https://www.epa.gov/eg/glass-manufacturing-effluent-guidelines" },
+    "cement": { "label": "EPA · 硅酸盐水泥制造", "url": "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=P100RGTU.TXT" },
+    "concrete": { "label": "EPA · 混凝土原料及外加剂", "url": "https://www.epa.gov/sites/production/files/2020-10/documents/b11s12_0.pdf" },
+    "sodiumIon": { "label": "DOE · 储能供应链评估", "url": "https://www.energy.gov/sites/default/files/2024-12/Energy%2520Storage%2520Supply%2520Chain%2520Report%2520-%2520final%5B1%5D.pdf" },
+    "industrialGases": { "label": "Air Liquide · 空气分离工业气体", "url": "https://www.youtube.com/watch?v=t1S1Azb83rw" },
+    "sodaAsh": { "label": "EPA · 碳酸钠生产及用途", "url": "https://www.epa.gov/sites/default/files/2020-09/documents/8.12_sodium_carbonate.pdf" }
+  },
+  "source": [
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "环氧乙烷 EO"],
+      "reference": "petrochemicals",
+      "children": [
+        { "label": "二甘醇", "children": ["不饱和聚酯树脂"] },
+        { "label": "三甘醇", "children": ["天然气脱水"] }
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "环氧乙烷 EO", "乙二醇 MEG"],
+      "reference": "petrochemicals",
+      "children": ["聚对苯二甲酸乙二醇酯", "发动机冷却液"]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene"],
+      "reference": "petrochemicals",
+      "children": [
+        { "label": "乙酸乙烯酯", "notes": ["工业主流链条使用乙烯和乙酸。"],
+          "children": [
+            { "label": "聚乙酸乙烯酯", "children": ["水性胶黏剂"] },
+            { "label": "聚乙烯醇", "children": ["水溶性薄膜", "纺织浆料"] },
+            { "label": "乙烯-乙酸乙烯酯共聚物", "children": ["热熔胶", "发泡材料"] }
+          ]
+        }
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丙烯 Propylene", "环氧丙烷 PO"],
+      "reference": "petrochemicals",
+      "children": [{ "label": "1,2-丙二醇", "children": ["不饱和聚酯树脂", "传热流体"] }]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丙烯 Propylene", "丙烯腈 AN"],
+      "reference": "petrochemicals",
+      "children": ["丁腈橡胶", "苯乙烯-丙烯腈共聚物"]
+    },
+    {
+      "under": "S-01-03", "path": ["重整原料", "二甲苯 Xylenes", "对二甲苯 PX", "PTA"],
+      "reference": "petrochemicals",
+      "children": [{ "label": "聚对苯二甲酸乙二醇酯", "children": ["聚酯纤维", "聚酯薄膜", "聚酯瓶片"] }]
+    },
+    {
+      "under": "S-01-03", "path": ["重整原料", "二甲苯 Xylenes", "邻二甲苯", "邻苯二甲酸酐"],
+      "reference": "petrochemicals",
+      "children": ["邻苯二甲酸酯类增塑剂", "醇酸树脂", "不饱和聚酯树脂"]
+    },
+    {
+      "under": "S-01-03", "path": ["重整原料", "二甲苯 Xylenes", "间二甲苯"],
+      "reference": "petrochemicals",
+      "children": [{ "label": "间苯二甲酸", "children": ["不饱和聚酯树脂", "涂料用聚酯树脂"] }]
+    },
+    {
+      "under": "S-01", "reference": "carbonBlack",
+      "children": [{ "label": "芳香烃油与炭黑", "children": [{ "label": "炭黑", "children": ["轮胎补强炭黑", "橡胶补强炭黑", "颜料用炭黑"] }] }]
+    },
+    {
+      "under": "S-02", "reference": "helium",
+      "children": [{ "label": "含氦天然气处理", "children": [{ "label": "氦气", "children": ["磁共振设备低温冷却", "半导体及光纤制造", "氦质谱检漏"] }] }]
+    },
+    {
+      "under": "S-02-02", "path": ["合成气", "合成氨 Ammonia"],
+      "reference": "hydrogen",
+      "children": ["硝酸"]
+    },
+    {
+      "under": "S-03-02", "path": ["煤炭 → 炼焦", "焦炉煤气", "氢气"],
+      "reference": "hydrogen",
+      "children": ["合成氨用氢", "炼油加氢用氢"]
+    },
+    {
+      "under": "S-04-02", "path": ["炭黑 Carbon Black"],
+      "reference": "carbonBlack",
+      "note": "原骨架按填料保留此索引。工业炭黑原料路径见 S-01 的芳香烃油与炭黑。"
+    },
+    {
+      "under": "S-04-01", "path": ["锂矿", "碳酸锂"],
+      "reference": "batteries",
+      "children": ["磷酸铁锂", "锰酸锂"]
+    },
+    {
+      "under": "S-04-01", "path": ["锂矿", "氢氧化锂"],
+      "reference": "batteries",
+      "children": ["高镍镍钴锰酸锂", "镍钴铝酸锂"]
+    },
+    {
+      "under": "S-04-01", "path": ["镍矿", "硫酸镍"],
+      "reference": "batteries",
+      "children": ["镍钴锰三元正极前驱体"]
+    },
+    {
+      "under": "S-04-04", "path": ["磷矿石", "湿法磷酸"],
+      "reference": "batteries",
+      "children": [{ "label": "净化湿法磷酸", "children": [{ "label": "磷酸铁", "children": ["磷酸铁锂"] }] }]
+    },
+    {
+      "under": "S-05-01", "path": ["空气 → 深冷分离/PSA", "氦气 He"],
+      "reference": "helium",
+      "note": "空气含有微量氦。商业供应主要来自含氦天然气，见 S-02。"
+    },
+    {
+      "under": "S-05-01", "path": ["空气 → 深冷分离/PSA"],
+      "reference": "industrialGases",
+      "note": "深冷空分可分离氧、氮、氩。变压吸附常用于制氧或制氮。"
+    },
+    {
+      "under": "S-05-01", "path": ["空气 → 深冷分离/PSA", "氧气 O₂", "工业氧气"],
+      "reference": "industrialGases",
+      "children": ["转炉炼钢用氧", "金属切割用氧", "医疗用氧"]
+    },
+    {
+      "under": "S-05-01", "path": ["空气 → 深冷分离/PSA", "氩气 Ar"],
+      "reference": "industrialGases",
+      "children": ["焊接保护气", "冶金保护气"]
+    },
+    {
+      "under": "S-04-05", "path": ["石灰石（CaCO₃）"],
+      "reference": "cement",
+      "children": [{ "label": "石灰石", "children": ["硅酸盐水泥熟料"] }]
+    },
+    {
+      "under": "S-06-01", "path": ["水 H₂O", "电解水", "氢气 H₂"],
+      "reference": "hydrogen",
+      "children": ["炼油加氢用氢", "合成氨用氢", "直接还原铁用氢", "燃料电池用氢"]
+    },
+    {
+      "under": "S-06-02", "path": ["混凝/絮凝剂"],
+      "reference": "water",
+      "children": ["三氯化铁", "硫酸铁"]
+    },
+    {
+      "under": "S-06-02",
+      "reference": "water",
+      "children": [{ "label": "吸附剂", "children": ["颗粒活性炭", "粉末活性炭"] }]
+    },
+    {
+      "under": "S-07-03", "path": ["发酵产品"],
+      "reference": "biomass",
+      "children": [
+        { "label": "丁二酸", "children": ["聚丁二酸丁二醇酯"] },
+        { "label": "衣康酸", "children": ["水性聚合物改性"] }
+      ]
+    },
+    {
+      "under": "S-07-03",
+      "reference": "biomass",
+      "children": [
+        { "label": "糖类衍生平台化合物", "notes": ["涵盖生物基示范和工业候选路线。"],
+          "children": [
+            { "label": "山梨醇", "children": ["异山梨醇"] },
+            "木糖醇",
+            { "label": "乙酰丙酸", "children": ["乙酰丙酸酯"] },
+            { "label": "2,5-呋喃二甲酸", "children": ["聚呋喃二甲酸乙二醇酯"] }
+          ]
+        }
+      ]
+    },
+    {
+      "under": "S-08-01", "path": ["海水/盐湖/岩盐", "纯碱"],
+      "reference": "sodaAsh",
+      "children": ["平板玻璃", "玻璃容器", "无机硅酸盐", "洗涤剂"]
+    },
+    {
+      "under": "S-08-03", "path": ["盐湖卤水", "盐湖提锂", "碳酸锂"],
+      "reference": "batteries",
+      "children": ["磷酸铁锂", "钴酸锂", "锰酸锂"]
+    }
+  ],
+  "applications": [
+    {
+      "under": "A-38-3841-01",
+      "reference": "batteries",
+      "children": [
+        { "label": "磷酸铁锂", "children": ["磷酸铁", "碳酸锂"] },
+        { "label": "镍钴锰酸锂", "children": [{ "label": "镍钴锰三元正极前驱体", "children": ["硫酸镍", "硫酸钴", "硫酸锰"] }, "氢氧化锂", "碳酸锂"] },
+        { "label": "镍钴铝酸锂", "children": ["镍钴铝三元正极前驱体", "氢氧化锂"] },
+        { "label": "钴酸锂", "children": ["四氧化三钴", "碳酸锂"] },
+        { "label": "锰酸锂", "children": ["二氧化锰", "碳酸锂"] }
+      ]
+    },
+    {
+      "under": "A-38-3841-04", "path": ["涂覆材料", "勃姆石"],
+      "reference": "electrolytes",
+      "note": "隔膜可采用无机颗粒涂层。基膜与涂层属于不同物料层级。"
+    },
+    {
+      "under": "A-38-3849", "reference": "sodiumIon",
+      "children": [
+        { "label": "钠离子电池", "children": [
+          { "label": "正极材料", "children": ["普鲁士白类正极材料"] },
+          { "label": "负极材料", "children": ["硬碳"] },
+          { "label": "电解液", "children": ["六氟磷酸钠", "碳酸酯溶剂"] },
+          { "label": "隔膜", "children": ["多孔聚烯烃隔膜"] }
+        ] }
+      ]
+    },
+    {
+      "under": "A-30-3011-01", "reference": "cement",
+      "children": [
+        { "label": "硅酸盐水泥熟料", "children": ["石灰石", "黏土", "铁质校正原料"] },
+        { "label": "调凝材料", "children": ["石膏"] }
+      ]
+    },
+    {
+      "under": "A-30-3041-01", "path": ["配合料"], "reference": "glass",
+      "children": ["石英砂", "碳酸钠", "石灰石", "白云石", "碎玻璃"]
+    },
+    {
+      "under": "A-30-3055", "reference": "glass",
+      "children": [{ "label": "钠钙玻璃配合料", "children": ["石英砂", "碳酸钠", "石灰石", "碎玻璃"] }]
+    },
+    {
+      "under": "A-47-4710", "reference": "concrete",
+      "children": [
+        { "label": "混凝土胶凝材料", "children": ["硅酸盐水泥", "粉煤灰", "粒化高炉矿渣粉", "硅灰"] }
+      ]
+    },
+    {
+      "under": "A-46-4610", "path": ["混凝剂"],
+      "reference": "water",
+      "children": ["三氯化铁", "硫酸铁"]
+    },
+    {
+      "under": "A-46-4610", "path": ["pH调节剂"],
+      "reference": "water",
+      "children": ["氢氧化钠", "碳酸钠"]
+    },
+    {
+      "under": "A-46-4610",
+      "reference": "water",
+      "children": [
+        { "label": "吸附处理", "children": ["颗粒活性炭", "粉末活性炭"] },
+        { "label": "缓蚀与稳定处理", "children": ["正磷酸盐", "硅酸钠"] }
+      ]
+    },
+    {
+      "under": "A-77-7721", "path": ["絮凝剂"],
+      "reference": "water",
+      "children": ["三氯化铁", "硫酸铁"]
+    },
+    {
+      "under": "A-77-7721", "path": ["吸附剂", "活性炭"],
+      "reference": "water",
+      "children": ["颗粒活性炭", "粉末活性炭"]
+    },
+    {
+      "under": "A-77-7721", "path": ["pH调节剂"],
+      "reference": "water",
+      "children": ["碳酸钠", "氢氧化钙"]
+    },
+    {"under": "A-38-3841-03", "path": ["溶剂", "EC"], "reference": "electrolytes", "displayName": "碳酸乙烯酯"},
+    {"under": "A-38-3841-03", "path": ["溶剂", "DMC"], "reference": "electrolytes", "displayName": "碳酸二甲酯"},
+    {"under": "A-38-3841-03", "path": ["溶剂", "EMC"], "reference": "electrolytes", "displayName": "碳酸甲乙酯"},
+    {"under": "A-38-3841-03", "path": ["溶剂", "DEC"], "reference": "electrolytes", "displayName": "碳酸二乙酯"},
+    {"under": "A-38-3841-03", "path": ["添加剂", "VC"], "reference": "electrolytes", "displayName": "碳酸亚乙烯酯"},
+    {"under": "A-38-3841-03", "path": ["添加剂", "FEC"], "reference": "electrolytes", "displayName": "氟代碳酸乙烯酯"}
+  ]
+}

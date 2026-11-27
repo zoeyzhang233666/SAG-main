@@ -22,17 +22,13 @@ const RESULT_LIMIT = 60;
 const MATCH_BATCH_SIZE = 100;
 
 interface TreeSelection {
-  rootId: string;
+  rootId?: string;
   expanded: Set<string>;
   focusedId?: string;
 }
 
-function initialSelection(root: ChainNode): TreeSelection {
-  const first = root.children[0];
-  return {
-    rootId: root.id,
-    expanded: new Set([first?.id, first?.children[0]?.id].filter((id): id is string => Boolean(id))),
-  };
+function collapsedSelection(rootId?: string): TreeSelection {
+  return { rootId, expanded: new Set() };
 }
 
 function visibleNodes(nodes: ChainNode[], expanded: Set<string>): ChainNode[] {
@@ -49,8 +45,8 @@ export default function ChainAtlasWorkspace({
   const { t } = useI18n();
   const [track, setTrack] = useState<ChainTrack>("source");
   const [selections, setSelections] = useState<Record<ChainTrack, TreeSelection>>(() => ({
-    source: initialSelection(chainAtlas.source.roots[0]),
-    applications: initialSelection(chainAtlas.applications.roots[0]),
+    source: collapsedSelection(),
+    applications: collapsedSelection(),
   }));
   const [query, setQuery] = useState("");
   const searchTerm = normalizeAtlasSearch(useDeferredValue(query));
@@ -62,15 +58,18 @@ export default function ChainAtlasWorkspace({
   const content = useRef<HTMLDivElement>(null);
   const atlas = chainAtlas[track];
   const selection = selections[track];
-  const root = atlas.roots.find(item => item.id === selection.rootId) ?? atlas.roots[0];
+  const root = atlas.roots.find(item => item.id === selection.rootId);
 
   const results = useMemo(() => {
     if (!searchTerm) return [];
     return atlas.entries.filter(item => item.searchText.includes(searchTerm));
   }, [atlas, searchTerm]);
   const nodes = useMemo(
-    () => searchTerm ? results.slice(0, RESULT_LIMIT) : [root, ...visibleNodes(root.children, selection.expanded)],
-    [searchTerm, results, root, selection.expanded],
+    () => {
+      if (searchTerm) return results.slice(0, RESULT_LIMIT);
+      return root ? [root, ...visibleNodes(root.children, selection.expanded)] : visibleNodes(atlas.roots, selection.expanded);
+    },
+    [searchTerm, results, root, atlas.roots, selection.expanded],
   );
   const terms = useMemo(
     () => [...new Set(nodes.flatMap(node => node.terms))],
@@ -128,7 +127,7 @@ export default function ChainAtlasWorkspace({
   function chooseRoot(item: ChainNode) {
     setQuery("");
     clearRowFeedback();
-    updateSelection(() => initialSelection(item));
+    updateSelection(() => collapsedSelection(item.id));
     content.current?.scrollTo(0, 0);
   }
 
@@ -147,7 +146,7 @@ export default function ChainAtlasWorkspace({
     const targetRoot = parents[0] ?? item;
     updateSelection(() => ({
       rootId: targetRoot.id,
-      expanded: new Set([...parents.map(parent => parent.id), item.id]),
+      expanded: new Set(parents.map(parent => parent.id)),
       focusedId: item.id === targetRoot.id ? undefined : item.id,
     }));
     setQuery("");
@@ -212,7 +211,7 @@ export default function ChainAtlasWorkspace({
     );
   }
 
-  const rootMatches = !searchTerm ? matchesFor(root) : [];
+  const rootMatches = root && !searchTerm ? matchesFor(root) : [];
 
   function renderNode(item: ChainNode, searchResult: boolean) {
     const matches = matchesFor(item);
@@ -222,7 +221,7 @@ export default function ChainAtlasWorkspace({
     const label = <span className="chain-atlas-node-label">{item.label}</span>;
     return (
       <li key={item.id} data-chain-node={item.id} className="chain-atlas-node">
-        <div className="chain-atlas-row" data-focused={selection.focusedId === item.id} data-branch={item.children.length > 0}>
+        <div className="chain-atlas-row" data-focused={selection.focusedId === item.id} data-branch={item.children.length > 0} data-root={item.parents.length === 0}>
           {searchResult ? (
             <button className="chain-atlas-disclosure" type="button" onClick={() => locate(item)}
               title={t("在目录中定位", "Locate in tree")} aria-label={`${t("定位", "Locate")} ${item.label}`}>
@@ -249,7 +248,20 @@ export default function ChainAtlasWorkspace({
                 </button>
               ) : label}
             </div>
+            {item.chemical ? (
+              <div className="chain-atlas-chemical">
+                <span>{item.chemical.english}</span>
+                {item.chemical.formula ? <code>{item.chemical.formula}</code> : null}
+                {item.chemical.cas ? <code title="CAS">CAS {item.chemical.cas}</code> : null}
+              </div>
+            ) : null}
+            {item.context ? <p className="chain-atlas-note">{item.context}</p> : null}
             {item.notes?.map((note, index) => <p className="chain-atlas-note" key={index}>{note}</p>)}
+            {item.reference && (open || searchResult || item.notes?.length) ? (
+              <a className="chain-atlas-reference" href={item.reference.url} target="_blank" rel="noreferrer">
+                {item.reference.label} <ArrowUpRight size={12} />
+              </a>
+            ) : null}
           </div>
           {matches.length > 0 ? renderMatchAction(item, matches) : item.children.length > 0 && !searchResult ? (
             <span className="chain-atlas-branch-count">{item.children.length} {t("分支", "branches")}</span>
@@ -257,7 +269,7 @@ export default function ChainAtlasWorkspace({
         </div>
         {renderMatches(item, matches)}
         {unmatched === item.id && matches.length === 0 && !loading && !failed ? (
-          <p className="chain-atlas-unmatched">{t("当前范围暂无同名实体", "No matching entity in this scope")}</p>
+          <p className="chain-atlas-unmatched">{t("当前范围没有匹配的知识库实体", "No matching library entity in this scope")}</p>
         ) : null}
         {!searchResult && open && item.children.length > 0 ? (
           <ul className="chain-atlas-children">{item.children.map(child => renderNode(child, false))}</ul>
@@ -293,7 +305,7 @@ export default function ChainAtlasWorkspace({
           <ul>
             {atlas.roots.map(item => (
               <li key={item.id}>
-                <button type="button" aria-current={!searchTerm && root.id === item.id ? "true" : undefined}
+                <button type="button" aria-current={!searchTerm && root?.id === item.id ? "true" : undefined}
                   onClick={() => chooseRoot(item)}>
                   <code>{item.code}</code>
                   <span>{item.label}</span>
@@ -309,7 +321,7 @@ export default function ChainAtlasWorkspace({
             <div className="chain-atlas-search">
               <Search size={16} aria-hidden="true" />
               <input value={query} type="search" aria-label={t("搜索图谱节点", "Search atlas nodes")}
-                placeholder={t("搜索节点、名称或编码", "Search nodes, names or codes")}
+                placeholder={t("搜索标准名称、别名、CAS 或行业编码", "Search names, aliases, CAS or industry codes")}
                 onChange={event => { setQuery(event.target.value); clearRowFeedback(); }} />
               {query ? <button type="button" onClick={() => { setQuery(""); clearRowFeedback(); }}
                 aria-label={t("清空搜索", "Clear search")}><X size={15} /></button> : null}
@@ -328,23 +340,25 @@ export default function ChainAtlasWorkspace({
           <div className="chain-atlas-scroll" ref={content}>
             <div className="chain-atlas-section-heading">
               <div>
-                {!searchTerm ? <code>{root.code}</code> : null}
-                <h2>{searchTerm ? t("搜索结果", "Search results") : root.label}</h2>
+                {root && !searchTerm ? <code>{root.code}</code> : null}
+                <h2>{searchTerm ? t("搜索结果", "Search results") : root?.label
+                  ?? (track === "source" ? t("全部来源", "All sources") : t("全部行业", "All industries"))}</h2>
                 <span>{searchTerm
                   ? t(`${results.length} 个结果${results.length > RESULT_LIMIT ? ` · 显示前 ${RESULT_LIMIT} 个` : ""}`,
                     `${results.length} results${results.length > RESULT_LIMIT ? ` · First ${RESULT_LIMIT} shown` : ""}`)
-                  : t(`${root.size - 1} 个节点`, `${root.size - 1} nodes`)}</span>
+                  : t(`${root ? root.size - 1 : atlas.entries.length} 个节点`,
+                    `${root ? root.size - 1 : atlas.entries.length} nodes`)}</span>
               </div>
               <div className="chain-atlas-section-actions">
-                {renderMatchAction(root, rootMatches)}
-                {!searchTerm && selection.expanded.size > 0 ? (
-                  <button type="button" onClick={() => { updateSelection(current => ({ ...current, expanded: new Set(), focusedId: undefined })); clearRowFeedback(); }}>
-                    {t("收起分支", "Collapse branches")}
+                {root ? renderMatchAction(root, rootMatches) : null}
+                {!searchTerm && (root || selection.expanded.size > 0) ? (
+                  <button type="button" onClick={() => { updateSelection(() => collapsedSelection()); clearRowFeedback(); content.current?.scrollTo(0, 0); }}>
+                    {t("全部收起", "Collapse all")}
                   </button>
                 ) : null}
               </div>
             </div>
-            {!searchTerm ? renderMatches(root, rootMatches) : null}
+            {root && !searchTerm ? renderMatches(root, rootMatches) : null}
 
             {failed ? (
               <p className="chain-atlas-status" role="status">
@@ -360,7 +374,7 @@ export default function ChainAtlasWorkspace({
               </div>
             ) : (
               <ul className={searchTerm ? "chain-atlas-results" : "chain-atlas-tree"}>
-                {(searchTerm ? nodes : root.children).map(item => renderNode(item, Boolean(searchTerm)))}
+                {(searchTerm ? nodes : root?.children ?? atlas.roots).map(item => renderNode(item, Boolean(searchTerm)))}
               </ul>
             )}
           </div>

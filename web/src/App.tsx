@@ -908,7 +908,8 @@ function AppShell() {
       );
       await syncModelLogs();
       const completedJobs = latestJobs.filter(
-        (job) => job.status === "COMPLETED" && job.documentId,
+        (job) => (job.status === "COMPLETED" || job.status === "FAILED") &&
+          job.sourceId === selectedProjectId && job.documentId,
       );
       for (const job of completedJobs) {
         if (refreshedUploadJobsRef.current.has(job.id)) {
@@ -1132,23 +1133,10 @@ function AppShell() {
     }
   }
 
-  async function renameDocument(document: DocumentRecord) {
-    const title = window
-      .prompt(
-        t("请输入新的文档名称", "Enter a new document name"),
-        document.title,
-      )
-      ?.trim();
-    if (!title || title === document.title) return;
-    try {
-      await api.updateDocument(document.id, { title });
-      await loadProjectWorkspace(document.sourceId);
-      if (selectedDocumentId === document.id) {
-        await loadDocumentWorkspace(document.id);
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
+  async function renameDocument(document: DocumentRecord, title: string) {
+    const { document: updated } = await api.updateDocument(document.id, { title });
+    setDocuments(current => current.map(item => item.id === updated.id ? { ...item, ...updated } : item));
+    setSelectedDocument(current => current?.id === updated.id ? { ...current, ...updated } : current);
   }
 
   async function archiveOrRestoreDocument(document: DocumentRecord) {
@@ -2471,7 +2459,7 @@ function AppShell() {
                   setIsUploadQueueExpanded((current) => !current)
                 }
                 onSelectDocument={setSelectedDocumentId}
-                onRenameDocument={(document) => void renameDocument(document)}
+                onRenameDocument={renameDocument}
                 onArchiveOrRestoreDocument={(document) =>
                   void archiveOrRestoreDocument(document)
                 }
@@ -4322,7 +4310,7 @@ function ProjectDocumentsWorkspace(props: {
   ) => void;
   onToggleUploadQueue: () => void;
   onSelectDocument: (documentId: string) => void;
-  onRenameDocument: (document: DocumentRecord) => void;
+  onRenameDocument: (document: DocumentRecord, title: string) => Promise<void>;
   onArchiveOrRestoreDocument: (document: DocumentRecord) => void;
   onDeleteDocument: (document: DocumentRecord) => void;
   onSetResultView: (view: ResultView) => void;
@@ -4356,6 +4344,7 @@ function ProjectDocumentsWorkspace(props: {
   const { language, t } = useI18n();
   const [resultTitleQuery, setResultTitleQuery] = useState("");
   const [resultPage, setResultPage] = useState(1);
+  const [renameTarget, setRenameTarget] = useState<DocumentRecord | null>(null);
   const [manualImportOpen, setManualImportOpen] = useState(false);
   const [manualImportMode, setManualImportMode] = useState<"new" | "append">("new");
   const [manualImportContent, setManualImportContent] = useState("");
@@ -4959,7 +4948,7 @@ function ProjectDocumentsWorkspace(props: {
                     {document.id === props.selectedDocumentId ? (
                       <div className="flex flex-wrap gap-1 px-3 pb-2">
                         <MiniButton
-                          onClick={() => props.onRenameDocument(document)}
+                          onClick={() => setRenameTarget(document)}
                         >
                           {t("重命名", "Rename")}
                         </MiniButton>
@@ -5128,6 +5117,14 @@ function ProjectDocumentsWorkspace(props: {
         </div>
       )}
 
+      {renameTarget ? (
+        <RenameDocumentDialog
+          key={renameTarget.id}
+          document={renameTarget}
+          onRename={props.onRenameDocument}
+          onDismiss={() => setRenameTarget(null)}
+        />
+      ) : null}
       {manualImportOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
@@ -5150,8 +5147,8 @@ function ProjectDocumentsWorkspace(props: {
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {t(
-                  "默认自动识别简化 JSON v2、18 列 CSV、Markdown 表格，也兼容完整备份 JSON / CSV。大文件会作为后台任务导入，处理队列会显示进度；系统会分批生成 embedding 并写入数据库。简化格式不包含数据库 ID 和 embedding；重新导入时会重新生成这些字段。相同“切片编号”的多行会合并为一个事件和多个实体。",
-                  "The default is auto detect for simple JSON v2, 18-column CSV, Markdown tables, and full backup JSON / CSV. Large files are imported as background jobs with progress in the processing queue; embeddings and database writes are processed in batches. Simple files do not include database IDs or embeddings; those are regenerated on import. Rows with the same chunk ID are merged into one event with multiple entities.",
+                  "支持简化 JSON、V1/V2 的完整项目 JSON、CSV 和 Markdown。大型项目 JSON 可直接选择整包文件（最高 2 GiB），上传后在处理队列查看进度。粘贴、CSV 和 Markdown 支持 50 MiB。",
+                  "Import simple JSON, full V1/V2 project JSON, CSV, or Markdown. Select the full project JSON file (up to 2 GiB) and track the background job in the processing queue. Paste, CSV, and Markdown support up to 50 MiB.",
                 )}
               </p>
             </div>
@@ -5384,6 +5381,68 @@ function ProjectDocumentsWorkspace(props: {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function RenameDocumentDialog({ document, onRename, onDismiss }: {
+  document: DocumentRecord;
+  onRename: (document: DocumentRecord, title: string) => Promise<void>;
+  onDismiss: () => void;
+}) {
+  const { t } = useI18n();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [title, setTitle] = useState(document.title);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const trimmed = title.trim();
+  const canSave = !saving && Boolean(trimmed) && trimmed !== document.title;
+
+  useEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    return () => element?.close();
+  }, []);
+
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setError("");
+    try {
+      await onRename(document, trimmed);
+      onDismiss();
+    } catch (error) {
+      setError(getErrorMessage(error));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <dialog
+      ref={dialog}
+      className="w-full max-w-sm rounded-xl border border-border bg-background p-4 text-foreground shadow-xl backdrop:bg-black/30"
+      aria-labelledby="rename-document-title"
+      onCancel={event => { event.preventDefault(); if (!saving) onDismiss(); }}
+    >
+      <form onSubmit={event => { event.preventDefault(); void save(); }}>
+        <h2 id="rename-document-title" className="text-sm font-semibold">{t("重命名文档", "Rename document")}</h2>
+        <label className="mt-3 block text-xs font-medium text-muted-foreground" htmlFor="rename-document-input">
+          {t("文档名称", "Document name")}
+        </label>
+        <Input id="rename-document-input" className="mt-1" autoFocus value={title} disabled={saving}
+          onFocus={event => event.currentTarget.select()}
+          onChange={event => setTitle(event.target.value)} />
+        {error ? <p className="mt-2 text-xs text-red-600" role="alert">{error}</p> : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onDismiss} disabled={saving}>
+            {t("取消", "Cancel")}
+          </Button>
+          <Button type="submit" size="sm" disabled={!canSave}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {t("保存名称", "Save name")}
+          </Button>
+        </div>
+      </form>
+    </dialog>
   );
 }
 

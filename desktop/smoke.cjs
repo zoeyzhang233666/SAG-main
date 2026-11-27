@@ -7,12 +7,13 @@ const name = 'SAG V1 desktop smoke';
 const title = '甲醇供应链测试';
 const event = '甲醇制烯烃测试事件';
 const entity = '乙烯';
+const sulfuricAcid = 'Sulphuric acid';
 const preference = 'sag-desktop-smoke';
 const chunksPerFile = 30;
 const entities = [
   { type: '原料', name: '测试甲醇', description: 'MTO 工艺原料' },
   { type: '产品', name: entity, description: 'MTO 工艺产品' },
-  { type: '产品', name: '硫酸', description: '无机酸节点匹配样例' }
+  { type: '产品', name: sulfuricAcid, description: '无机酸节点别名匹配样例' }
 ];
 // More than one batch per document, with overlapping entities in different orders.
 const fixtures = Array.from({ length: 3 }, (_, fileIndex) => ({
@@ -77,11 +78,28 @@ async function smoke(contents, origin, profile, mode) {
 
     imported = await Promise.all(fixtures.map(async fixture => {
       const params = new URLSearchParams({ sourceId: project.id, fileName: fixture.title + '.json', format: 'json' });
-      const { job } = await api('/api/documents/import-structured/file/jobs?' + params, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(fixture)
-      }, 202);
+      const { job } = fixture === fixtures[0]
+        ? await evaluate(async (url, fixture) => {
+          const documents = [{
+            ...fixture,
+            chunks: fixture.chunks.map(({ event, ...chunk }) => ({ ...chunk, events: [event] })),
+            eventsWithoutChunk: []
+          }];
+          // The V2 envelope also crosses the legacy Fastify 64 MiB request limit.
+          const body = new Blob([
+            '\uFEFF',
+            ...Array(65).fill(' '.repeat(1024 ** 2)),
+            JSON.stringify({ schemaVersion: 1, project: { name: 'V2 export' }, documents })
+          ], { type: 'application/octet-stream' });
+          const response = await fetch(url, { method: 'POST', body, signal: AbortSignal.timeout(90000) });
+          if (response.status !== 202) throw new Error('Large V2 import: ' + response.status + ' ' + await response.text());
+          return response.json();
+        }, '/api/documents/import-structured/file/jobs?' + params, fixture)
+        : await api('/api/documents/import-structured/file/jobs?' + params, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(fixture)
+        }, 202);
       const completed = await until(async () => {
         const { job: current } = await api('/api/documents/import-structured/jobs/' + job.id);
         if (current.status === 'FAILED') throw new Error(fixture.title + ': ' + current.error);
@@ -93,6 +111,40 @@ async function smoke(contents, origin, profile, mode) {
       return { id: completed.documentId, title: fixture.title };
     }));
     await evaluate(key => localStorage.setItem(key, 'saved'), preference);
+    contents.reload();
+    await until(() => evaluate(() => {
+      const tab = Array.from(document.querySelectorAll('.chem-workspace-tabs button'))
+        .find(item => /^(知识资产|Assets)$/.test(item.textContent.trim()));
+      if (!tab || tab.disabled) return false;
+      tab.click();
+      return true;
+    }), 'Could not open the knowledge assets tab');
+    await until(() => evaluate(title => {
+      const row = Array.from(document.querySelectorAll('.chem-assets-rail button'))
+        .find(item => item.textContent.includes(title));
+      if (!row) return false;
+      row.click();
+      return true;
+    }, imported[0].title), 'The large package document was not visible in the asset list');
+    await until(() => evaluate(() => {
+      const button = Array.from(document.querySelectorAll('.chem-assets-rail button'))
+        .find(item => /^(重命名|Rename)$/.test(item.textContent.trim()));
+      if (!button) return false;
+      button.click();
+      return true;
+    }), 'Could not invoke document rename');
+    imported[0].title += '（已重命名）';
+    await until(() => evaluate(title => {
+      const input = document.querySelector('dialog[open] #rename-document-input');
+      if (!input) return false;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, title);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    }, imported[0].title), 'The renderer did not open the rename dialog');
+    await evaluate(() => document.querySelector('dialog[open] button[type=submit]').click());
+    await until(() => evaluate(title => !document.querySelector('dialog[open]') &&
+      document.querySelector('.chem-assets-rail')?.textContent.includes(title), imported[0].title),
+    'The updated title was not shown in the knowledge assets');
   }
 
   const { documents } = await api(`/api/projects/${project.id}/documents`);
@@ -126,6 +178,8 @@ async function smoke(contents, origin, profile, mode) {
   });
   await until(() => evaluate(() => document.querySelector('.chain-atlas-index-heading')?.textContent.includes('v2.1')),
     'Source tree did not open');
+  assert.equal(await evaluate(() => document.querySelectorAll('.chain-atlas-tree [aria-expanded="true"]').length), 0,
+    'Source tree should start with every branch collapsed');
   await evaluate(() => {
     document.querySelectorAll('.chain-atlas-tabs button')[1].click();
   });
@@ -134,6 +188,8 @@ async function smoke(contents, origin, profile, mode) {
     return index?.textContent.includes('v3.0') && index.textContent.includes('制造业') &&
       !index.textContent.includes('原油及石油产品');
   }), 'Applications tree did not switch independently');
+  assert.equal(await evaluate(() => document.querySelectorAll('.chain-atlas-tree [aria-expanded="true"]').length), 0,
+    'Applications tree should start with every branch collapsed');
   const enterAtlasSearch = query => evaluate(query => {
     const input = document.querySelector('.chain-atlas-search input');
     if (!input) return false;
@@ -148,15 +204,18 @@ async function smoke(contents, origin, profile, mode) {
     match.click();
     return true;
   }), 'The sulfuric acid classification did not match its library entity');
-  await until(() => evaluate(() => document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === '硫酸'),
-    'Applications entity did not open the library detail drawer');
+  await until(() => evaluate(name => document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === name,
+    sulfuricAcid), 'The standard name did not resolve the imported English alias');
   await evaluate(() => document.querySelector('[data-sag-detail-drawer] button')?.click());
   await evaluate(() => document.querySelectorAll('.chain-atlas-tabs button')[0].click());
   await until(() => evaluate(() => document.querySelector('.chain-atlas-index-heading')?.textContent.includes('v2.1')),
     'Source tree did not reopen');
-  await until(() => enterAtlasSearch('乙烯 Ethylene'), 'Source search was unavailable');
+  await until(() => enterAtlasSearch('74-85-1'), 'Source search was unavailable');
   await until(() => evaluate(() => {
-    const locate = document.querySelector('.chain-atlas-results .chain-atlas-disclosure');
+    const row = Array.from(document.querySelectorAll('.chain-atlas-results .chain-atlas-row'))
+      .find(item => item.querySelector('.chain-atlas-node-label')?.textContent === '乙烯' &&
+        item.textContent.includes('CAS 74-85-1'));
+    const locate = row?.querySelector('.chain-atlas-disclosure');
     if (!locate) return false;
     locate.click();
     return true;

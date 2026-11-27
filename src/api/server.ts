@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { Readable } from "node:stream";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { z } from "zod";
@@ -586,21 +587,16 @@ export function buildHttpServer() {
     return reply.code(202).send({ job });
   });
 
-  app.post("/api/documents/import-structured/file/jobs", async (request, reply) => {
-    const query = structuredImportFileJobQuerySchema.parse(request.query);
-    const rawBody = request.body;
-    const content =
-      typeof rawBody === "string"
-        ? rawBody
-        : Buffer.isBuffer(rawBody)
-          ? rawBody.toString("utf8")
-          : "";
-    const input = structuredImportSchema.parse({
-      ...query,
-      content
+  app.register(async (uploads) => {
+    uploads.removeAllContentTypeParsers();
+    uploads.addContentTypeParser(["application/octet-stream", "text/plain", "application/json"], (_request, payload, done) => {
+      done(null, payload);
     });
-    const job = await webuiService.createStructuredImportJob(input);
-    return reply.code(202).send({ job });
+    uploads.post<{ Body: Readable }>("/api/documents/import-structured/file/jobs", async (request, reply) => {
+      const query = structuredImportFileJobQuerySchema.parse(request.query);
+      const job = await webuiService.createStructuredImportFileJob({ ...query, stream: request.body });
+      return reply.code(202).send({ job });
+    });
   });
 
   app.get("/api/documents/import-structured/jobs/:jobId", async (request, reply) => {

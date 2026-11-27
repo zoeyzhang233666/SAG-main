@@ -524,3 +524,39 @@
     width: 8px;
   }
 }
+
+.chain-atlas-row[data-root="true"] {
+  min-height: 52px;
+  padding-inline: 8px 12px;
+}
+
+.chain-atlas-row[data-root="true"] .chain-atlas-branch-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chain-atlas-chemical {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 8px;
+  margin: 2px 0 1px;
+  color: var(--text-muted);
+  font-size: .72rem;
+}
+
+.chain-atlas-chemical code {
+  padding: 1px 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chain-atlas-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 4px;
+  color: var(--atlas-accent);
+  font-size: .71rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
