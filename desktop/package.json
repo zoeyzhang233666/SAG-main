@@ -1,12 +1,12 @@
 {
   "name": "sag-v1-desktop",
   "productName": "化工产业链图谱",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Chemical Supply Chain Atlas for SAG V1",
   "author": "ChemCloud",
   "license": "UNLICENSED",
-  "homepage": "https://github.com/zoeyzhang233666/SAG-main",
+  "homepage": "https://github.com/zoeyzhang233666/chemical-chain-atlas",
   "main": "main.cjs",
   "engines": {
     "node": ">=22.12.0"

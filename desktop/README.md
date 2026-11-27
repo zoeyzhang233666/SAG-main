@@ -6,7 +6,7 @@ The installers run this repository's original React UI and Fastify backend. Elec
 
 First launch creates a password-protected, loopback-only database and seeds the default entity types. Every launch checks the data directory version and applies pending V1 migrations before starting the local API. The renderer uses a stable app origin and the main process forwards requests through an authenticated loopback connection. Closing the app stops the backend and database. Installer upgrades and Windows uninstall preserve the V1 data directory. To back up a closed app, keep the whole `SAG-V1` directory together. Use V1 structured import/export to move existing V1 server data into a desktop project.
 
-The atlas includes the source pathways v2.1 and industry applications v3.0 as separate trees. Search matches the atlas labels and codes, and the entity lookup links exact names to the existing knowledge library. To update the tree data from revised Markdown attachments, run `node scripts/build-chain-atlas.mjs <source-tree.md> <applications-tree.md>` from the repository root.
+The atlas includes the source pathways and industry applications as separate trees. Search matches the atlas labels and codes, and the entity lookup links exact names to the existing knowledge library. To update the tree data from revised Markdown attachments, run `node scripts/build-chain-atlas.mjs <source-tree.md> <applications-tree.md>` from the repository root.
 
 ## Build and verify
 

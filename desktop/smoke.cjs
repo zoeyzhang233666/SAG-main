@@ -176,8 +176,10 @@ async function smoke(contents, origin, profile, mode) {
     if (!tab) throw new Error('Missing chain atlas tab');
     tab.click();
   });
-  await until(() => evaluate(() => document.querySelector('.chain-atlas-index-heading')?.textContent.includes('v2.1')),
-    'Source tree did not open');
+  await until(() => evaluate(() => {
+    const heading = document.querySelector('.chain-atlas-index-heading')?.textContent ?? '';
+    return /一次原料|Primary materials/.test(heading);
+  }), 'Source tree did not open');
   assert.equal(await evaluate(() => document.querySelectorAll('.chain-atlas-tree [aria-expanded="true"]').length), 0,
     'Source tree should start with every branch collapsed');
   await evaluate(() => {
@@ -207,7 +209,9 @@ async function smoke(contents, origin, profile, mode) {
   });
   await until(() => evaluate(() => {
     const index = document.querySelector('.chain-atlas-index');
-    return index?.textContent.includes('v3.0') && index.textContent.includes('制造业') &&
+    const heading = document.querySelector('.chain-atlas-index-heading')?.textContent ?? '';
+    return /行业门类|Industry sectors/.test(heading) &&
+      index?.textContent.includes('制造业') &&
       !index.textContent.includes('原油及石油产品');
   }), 'Applications tree did not switch independently');
   assert.equal(await evaluate(() => document.querySelectorAll('.chain-atlas-tree [aria-expanded="true"]').length), 0,
@@ -264,8 +268,10 @@ async function smoke(contents, origin, profile, mode) {
   }, sulfuricAcid), 'The standard name did not resolve the imported English alias');
   await evaluate(() => document.querySelector('[data-sag-detail-drawer] button')?.click());
   await evaluate(() => document.querySelectorAll('.chain-atlas-tabs button')[0].click());
-  await until(() => evaluate(() => document.querySelector('.chain-atlas-index-heading')?.textContent.includes('v2.1')),
-    'Source tree did not reopen');
+  await until(() => evaluate(() => {
+    const heading = document.querySelector('.chain-atlas-index-heading')?.textContent ?? '';
+    return /一次原料|Primary materials/.test(heading);
+  }), 'Source tree did not reopen');
   await until(() => enterAtlasSearch('74-85-1'), 'Source search was unavailable');
   await until(() => evaluate(() => {
     const row = Array.from(document.querySelectorAll('.chain-atlas-results .chain-atlas-row'))
