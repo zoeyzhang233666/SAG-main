@@ -179,6 +179,19 @@ function parseJsonDocuments(text: string, fallbackTitle?: string): ManualKnowled
   return buildDocumentsFromRows(rows.filter(isRecord), fallbackTitle);
 }
 
+export function normalizeManualJsonDocument(
+  value: unknown,
+  index: number,
+  fallbackTitle?: string
+): ManualKnowledgeDocument | null {
+  if (!isRecord(value)) return null;
+  const isExport = Array.isArray(value.eventsWithoutChunk) ||
+    (Array.isArray(value.chunks) && value.chunks.some(chunk => isRecord(chunk) && Array.isArray(chunk.events)));
+  return isExport
+    ? normalizeExportDocument(value, index, fallbackTitle)
+    : normalizeSimpleDocument(value, index, fallbackTitle);
+}
+
 function looksLikeKnowledgeExport(value: Record<string, any>): value is Record<string, any> & { documents: any[] } {
   return value.schemaVersion === 1 &&
     (value.idPolicy == null || isRecord(value.idPolicy)) &&

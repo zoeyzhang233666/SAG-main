@@ -1,6 +1,7 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const {createRequire}=require('node:module');
+const { productName } = require('./package.json');
 
 // electron-builder's ordinary resource filtering can omit nested node_modules.
 // Copy the locked production dependency tree verbatim before signing.
@@ -24,4 +25,46 @@ async function afterPack(context){
   }
 }
 
-module.exports={appId:'com.chemclaw.sag.v1',productName:'SAG V1',asar:true,compression:'normal',npmRebuild:false,afterPack,directories:{output:'release'},files:['main.cjs','runtime.cjs','smoke.cjs','package.json'],extraResources:[{from:'build/resources/backend',to:'backend',filter:['**/*','!node_modules/**']},{from:'build/resources/postgres',to:'postgres'},{from:'build/resources/SAG-LICENSE.txt',to:'SAG-LICENSE.txt'},{from:'build/resources/PostgreSQL-LICENSE.txt',to:'PostgreSQL-LICENSE.txt'},{from:'build/resources/pgvector-LICENSE.txt',to:'pgvector-LICENSE.txt'}],mac:{category:'public.app-category.productivity',target:[{target:'dmg',arch:['arm64']}],artifactName:'SAG-V1-${version}-mac-${arch}.${ext}',identity:'-',hardenedRuntime:false,gatekeeperAssess:false,notarize:false},dmg:{sign:false},win:{target:[{target:'nsis',arch:['x64']}],artifactName:'SAG-V1-Setup-${version}-win-${arch}.${ext}'},nsis:{oneClick:true,perMachine:false,allowElevation:true,createDesktopShortcut:true,createStartMenuShortcut:true,shortcutName:'SAG V1',deleteAppDataOnUninstall:false},publish:null};
+module.exports = {
+  appId: 'com.chemclaw.sag.v1',
+  productName,
+  icon: '../web/public/app-icon.png',
+  asar: true,
+  compression: 'normal',
+  npmRebuild: false,
+  afterPack,
+  directories: { output: 'release' },
+  files: ['main.cjs', 'runtime.cjs', 'smoke.cjs', 'package.json'],
+  extraResources: [
+    { from: 'build/resources/backend', to: 'backend', filter: ['**/*', '!node_modules/**'] },
+    { from: 'build/resources/postgres', to: 'postgres' },
+    { from: 'build/resources/SAG-LICENSE.txt', to: 'SAG-LICENSE.txt' },
+    { from: 'build/resources/PostgreSQL-LICENSE.txt', to: 'PostgreSQL-LICENSE.txt' },
+    { from: 'build/resources/pgvector-LICENSE.txt', to: 'pgvector-LICENSE.txt' },
+  ],
+  mac: {
+    category: 'public.app-category.productivity',
+    target: [{ target: 'dmg', arch: ['arm64'] }],
+    artifactName: 'SAG-V1-${version}-mac-${arch}.${ext}',
+    identity: '-',
+    hardenedRuntime: false,
+    gatekeeperAssess: false,
+    notarize: false,
+  },
+  dmg: { sign: false },
+  win: {
+    executableName: 'SAG V1',
+    target: [{ target: 'nsis', arch: ['x64'] }],
+    artifactName: 'SAG-V1-Setup-${version}-win-${arch}.${ext}',
+  },
+  nsis: {
+    oneClick: true,
+    perMachine: false,
+    allowElevation: true,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    shortcutName: productName,
+    deleteAppDataOnUninstall: false,
+  },
+  publish: null,
+};

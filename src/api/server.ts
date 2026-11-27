@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { Readable } from "node:stream";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { z } from "zod";
@@ -106,6 +107,11 @@ const graphQuerySchema = z.object({
   entityName: z.string().trim().max(240).optional(),
   query: z.string().trim().max(120).optional(),
   limit: z.coerce.number().int().positive().max(300).optional()
+});
+
+const chainAtlasMatchSchema = z.object({
+  names: z.array(z.string().trim().min(1).max(120)).min(1).max(100),
+  projectId: z.guid().optional()
 });
 
 const graphSuggestionsQuerySchema = z.object({
@@ -431,6 +437,11 @@ export function buildHttpServer() {
     };
   });
 
+  app.post("/api/chain-atlas/entity-matches", async request => {
+    const input = chainAtlasMatchSchema.parse(request.body);
+    return { matches: await webuiService.matchChainAtlasEntities(input) };
+  });
+
   app.get("/api/projects/:projectId/graph", async (request) => {
     const params = request.params as { projectId: string };
     const query = graphQuerySchema.parse(request.query);
@@ -576,21 +587,16 @@ export function buildHttpServer() {
     return reply.code(202).send({ job });
   });
 
-  app.post("/api/documents/import-structured/file/jobs", async (request, reply) => {
-    const query = structuredImportFileJobQuerySchema.parse(request.query);
-    const rawBody = request.body;
-    const content =
-      typeof rawBody === "string"
-        ? rawBody
-        : Buffer.isBuffer(rawBody)
-          ? rawBody.toString("utf8")
-          : "";
-    const input = structuredImportSchema.parse({
-      ...query,
-      content
+  app.register(async (uploads) => {
+    uploads.removeAllContentTypeParsers();
+    uploads.addContentTypeParser(["application/octet-stream", "text/plain", "application/json"], (_request, payload, done) => {
+      done(null, payload);
     });
-    const job = await webuiService.createStructuredImportJob(input);
-    return reply.code(202).send({ job });
+    uploads.post<{ Body: Readable }>("/api/documents/import-structured/file/jobs", async (request, reply) => {
+      const query = structuredImportFileJobQuerySchema.parse(request.query);
+      const job = await webuiService.createStructuredImportFileJob({ ...query, stream: request.body });
+      return reply.code(202).send({ job });
+    });
   });
 
   app.get("/api/documents/import-structured/jobs/:jobId", async (request, reply) => {

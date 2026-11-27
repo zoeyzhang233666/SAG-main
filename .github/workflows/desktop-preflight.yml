@@ -151,12 +151,13 @@ jobs:
           hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$dmg"
           install_dir=$(mktemp -d)
           trap 'hdiutil detach "$mount_dir"; rmdir "$mount_dir"; rm -rf "$install_dir"' EXIT
-          app="$install_dir/SAG V1.app"
-          ditto "$mount_dir/SAG V1.app" "$app"
+          product=$(node -p 'require("./desktop/package.json").productName')
+          app="$install_dir/$product.app"
+          ditto "$mount_dir/$product.app" "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
-          file "$app/Contents/MacOS/SAG V1" | grep -F arm64
+          file "$app/Contents/MacOS/$product" | grep -F arm64
           file "$app/Contents/Resources/postgres/bin/postgres" | grep -F arm64
-          node desktop/scripts/smoke-app.mjs "$app/Contents/MacOS/SAG V1"
+          node desktop/scripts/smoke-app.mjs "$app/Contents/MacOS/$product"
       - name: Verify and launch installed Windows EXE
         if: runner.os == 'Windows'
         shell: pwsh

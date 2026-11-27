@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -24,6 +26,7 @@ import {
   Folder,
   FolderOpen,
   Layers3,
+  ListTree,
   Loader2,
   MoreHorizontal,
   Network,
@@ -46,7 +49,6 @@ import { cn, formatDate, shortId } from "./lib/utils";
 import type {
   ChunkRecord,
   DocumentRecord,
-  EmbeddingPreview,
   EntityDetailRecord,
   EntityRecord,
   EventDetailRecord,
@@ -91,7 +93,9 @@ import {
   type SupportedLanguage,
 } from "./i18n";
 
-type WorkspaceView = "chat" | "documents" | "graph" | "mcp" | "settings";
+const ChainAtlasWorkspace = lazy(() => import("./components/ChainAtlasWorkspace"));
+
+type WorkspaceView = "chat" | "documents" | "graph" | "atlas" | "mcp" | "settings";
 type ResultView = "overview" | "chunks" | "events" | "entities" | "search";
 type ProjectAssetDataKind = "chunks" | "events" | "entities";
 type ProjectAssetDataLoadStatus = "idle" | "loading" | "loaded";
@@ -903,7 +907,8 @@ function AppShell() {
       );
       await syncModelLogs();
       const completedJobs = latestJobs.filter(
-        (job) => job.status === "COMPLETED" && job.documentId,
+        (job) => (job.status === "COMPLETED" || job.status === "FAILED") &&
+          job.sourceId === selectedProjectId && job.documentId,
       );
       for (const job of completedJobs) {
         if (refreshedUploadJobsRef.current.has(job.id)) {
@@ -1127,23 +1132,10 @@ function AppShell() {
     }
   }
 
-  async function renameDocument(document: DocumentRecord) {
-    const title = window
-      .prompt(
-        t("请输入新的文档名称", "Enter a new document name"),
-        document.title,
-      )
-      ?.trim();
-    if (!title || title === document.title) return;
-    try {
-      await api.updateDocument(document.id, { title });
-      await loadProjectWorkspace(document.sourceId);
-      if (selectedDocumentId === document.id) {
-        await loadDocumentWorkspace(document.id);
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
+  async function renameDocument(document: DocumentRecord, title: string) {
+    const { document: updated } = await api.updateDocument(document.id, { title });
+    setDocuments(current => current.map(item => item.id === updated.id ? { ...item, ...updated } : item));
+    setSelectedDocument(current => current?.id === updated.id ? { ...current, ...updated } : current);
   }
 
   async function archiveOrRestoreDocument(document: DocumentRecord) {
@@ -1999,13 +1991,14 @@ function AppShell() {
 
   async function openEntityDetail(
     entityId: string,
-    options?: { pushHistory?: boolean },
+    options?: { pushHistory?: boolean; matchCurrentProject?: boolean },
   ) {
     const previousDrawer = drawer;
     try {
       const detail = await api.getEntity(entityId);
-      const sameNameEntitySource =
-        projectEntities.length > 0 ? projectEntities : entities;
+      const sameNameEntitySource = options?.matchCurrentProject === false
+        ? []
+        : projectEntities.length > 0 ? projectEntities : entities;
       const sameNameEntityIds = collectSameNameKnowledgeAssetEntityIds(
         sameNameEntitySource,
         detail.entity,
@@ -2465,7 +2458,7 @@ function AppShell() {
                   setIsUploadQueueExpanded((current) => !current)
                 }
                 onSelectDocument={setSelectedDocumentId}
-                onRenameDocument={(document) => void renameDocument(document)}
+                onRenameDocument={renameDocument}
                 onArchiveOrRestoreDocument={(document) =>
                   void archiveOrRestoreDocument(document)
                 }
@@ -2509,6 +2502,13 @@ function AppShell() {
                 onOpenEvent={(eventId) => void openEventDetail(eventId)}
                 onOpenEntity={(entityId) => void openEntityDetail(entityId)}
               />
+            ) : workspaceView === "atlas" ? (
+              <Suspense fallback={<p className="p-5 text-sm text-muted-foreground" role="status">{t("正在加载产业链图谱", "Loading the supply chain atlas")}</p>}>
+                <ChainAtlasWorkspace
+                  project={selectedProject}
+                  onOpenEntity={(entityId) => void openEntityDetail(entityId, { matchCurrentProject: false })}
+                />
+              </Suspense>
             ) : workspaceView === "mcp" ? (
               <ProjectMcpWorkspace
                 project={selectedProject}
@@ -2693,7 +2693,7 @@ function ProjectRail(props: {
       >
         {props.isCollapsed ? (
           <div className="chem-sidebar-compact-content flex min-h-0 flex-1 flex-col items-center gap-2 px-2 py-4">
-            <ChemCloudMark className="h-10 w-10 shrink-0" />
+            <img src="/app-icon-thumb.png" alt="" className="h-11 w-11 shrink-0" />
             <Button
               type="button"
               variant="ghost"
@@ -2755,32 +2755,40 @@ function ProjectRail(props: {
           </div>
         ) : null}
         <div className="chem-sidebar-full-content flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="border-b border-border px-4 py-5">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-3">
-                <ChemCloudMark className="h-10 w-10" />
+          <div className="border-b border-border px-3 py-5">
+            <div className="flex items-start justify-between gap-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <img src="/app-icon-thumb.png" alt="" className="h-9 w-9 shrink-0" />
                 <div className="min-w-0">
-                  <div className="whitespace-nowrap text-base font-bold tracking-tight">
-                    ChemClaw
+                  <div className="text-[13px] font-bold tracking-tight">
+                    {t("化工产业链图谱", "Chemical Supply Chain Atlas")}
                   </div>
                   <div className="truncate text-[11px] text-muted-foreground">
-                    {t(
-                      "芯化和云 · 化工产业链智能体",
-                      "ChemCloud · Chemical industry agent",
-                    )}
+                    {t("芯化和云", "ChemCloud")}
                   </div>
                 </div>
               </div>
-              <Button
-                variant={props.isSettingsOpen ? "secondary" : "ghost"}
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                title={t("全局设置", "Global settings")}
-                aria-label={t("全局设置", "Global settings")}
-                onClick={props.onOpenSettings}
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  className="chem-sidebar-collapse-button"
+                  title={t("收起左侧栏", "Collapse sidebar")}
+                  aria-label={t("收起左侧栏", "Collapse sidebar")}
+                  onClick={props.onToggleCollapsed}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <Button
+                  variant={props.isSettingsOpen ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-7 w-7"
+                  title={t("全局设置", "Global settings")}
+                  aria-label={t("全局设置", "Global settings")}
+                  onClick={props.onOpenSettings}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -3017,24 +3025,13 @@ function ProjectRail(props: {
           </div>
         </div>
         {!props.isCollapsed ? (
-          <>
-            <button
-              type="button"
-              className="chem-sidebar-collapse-button"
-              title={t("收起左侧栏", "Collapse sidebar")}
-              aria-label={t("收起左侧栏", "Collapse sidebar")}
-              onClick={props.onToggleCollapsed}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div
-              className="chem-sidebar-resize-handle"
-              role="separator"
-              aria-orientation="vertical"
-              title={t("拖拽调整左侧栏宽度", "Drag to resize sidebar")}
-              onPointerDown={props.onResizeStart}
-            />
-          </>
+          <div
+            className="chem-sidebar-resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            title={t("拖拽调整左侧栏宽度", "Drag to resize sidebar")}
+            onPointerDown={props.onResizeStart}
+          />
         ) : null}
       </aside>
 
@@ -3199,10 +3196,11 @@ function MainWorkspaceTabs(props: {
     { value: "chat", label: t("智能问答", "Q&A"), icon: Sparkles },
     { value: "documents", label: t("知识资产", "Assets"), icon: Database },
     { value: "graph", label: t("知识超图", "Hypergraph"), icon: Network },
+    { value: "atlas", label: t("产业链图谱", "Chain atlas"), icon: ListTree },
     { value: "mcp", label: t("ChemClaw 接入", "ChemClaw"), icon: Plug },
   ];
   return (
-    <div className="chem-workspace-tabs grid w-full min-w-0 max-w-[560px] grid-cols-4 rounded-xl border border-border p-1 sm:w-auto sm:min-w-[440px]">
+    <div className="chem-workspace-tabs flex w-full min-w-0 max-w-[620px] overflow-x-auto rounded-xl border border-border p-1 sm:w-auto">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         return (
@@ -3210,9 +3208,10 @@ function MainWorkspaceTabs(props: {
             key={tab.value}
             type="button"
             className={cn(
-              "flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
+              "flex flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground sm:px-3",
               props.view === tab.value && "chem-tab-active text-foreground",
             )}
+            aria-current={props.view === tab.value ? "page" : undefined}
             onClick={() => props.onChange(tab.value)}
           >
             <Icon className="hidden h-3.5 w-3.5 sm:block" />
@@ -4310,7 +4309,7 @@ function ProjectDocumentsWorkspace(props: {
   ) => void;
   onToggleUploadQueue: () => void;
   onSelectDocument: (documentId: string) => void;
-  onRenameDocument: (document: DocumentRecord) => void;
+  onRenameDocument: (document: DocumentRecord, title: string) => Promise<void>;
   onArchiveOrRestoreDocument: (document: DocumentRecord) => void;
   onDeleteDocument: (document: DocumentRecord) => void;
   onSetResultView: (view: ResultView) => void;
@@ -4344,6 +4343,7 @@ function ProjectDocumentsWorkspace(props: {
   const { language, t } = useI18n();
   const [resultTitleQuery, setResultTitleQuery] = useState("");
   const [resultPage, setResultPage] = useState(1);
+  const [renameTarget, setRenameTarget] = useState<DocumentRecord | null>(null);
   const [manualImportOpen, setManualImportOpen] = useState(false);
   const [manualImportMode, setManualImportMode] = useState<"new" | "append">("new");
   const [manualImportContent, setManualImportContent] = useState("");
@@ -4947,7 +4947,7 @@ function ProjectDocumentsWorkspace(props: {
                     {document.id === props.selectedDocumentId ? (
                       <div className="flex flex-wrap gap-1 px-3 pb-2">
                         <MiniButton
-                          onClick={() => props.onRenameDocument(document)}
+                          onClick={() => setRenameTarget(document)}
                         >
                           {t("重命名", "Rename")}
                         </MiniButton>
@@ -5116,6 +5116,14 @@ function ProjectDocumentsWorkspace(props: {
         </div>
       )}
 
+      {renameTarget ? (
+        <RenameDocumentDialog
+          key={renameTarget.id}
+          document={renameTarget}
+          onRename={props.onRenameDocument}
+          onDismiss={() => setRenameTarget(null)}
+        />
+      ) : null}
       {manualImportOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
@@ -5138,8 +5146,8 @@ function ProjectDocumentsWorkspace(props: {
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {t(
-                  "默认自动识别简化 JSON v2、18 列 CSV、Markdown 表格，也兼容完整备份 JSON / CSV。大文件会作为后台任务导入，处理队列会显示进度；系统会分批生成 embedding 并写入数据库。简化格式不包含数据库 ID 和 embedding；重新导入时会重新生成这些字段。相同“切片编号”的多行会合并为一个事件和多个实体。",
-                  "The default is auto detect for simple JSON v2, 18-column CSV, Markdown tables, and full backup JSON / CSV. Large files are imported as background jobs with progress in the processing queue; embeddings and database writes are processed in batches. Simple files do not include database IDs or embeddings; those are regenerated on import. Rows with the same chunk ID are merged into one event with multiple entities.",
+                  "支持简化 JSON、V1/V2 的完整项目 JSON、CSV 和 Markdown。大型项目 JSON 可直接选择整包文件（最高 2 GiB），上传后在处理队列查看进度。粘贴、CSV 和 Markdown 支持 50 MiB。",
+                  "Import simple JSON, full V1/V2 project JSON, CSV, or Markdown. Select the full project JSON file (up to 2 GiB) and track the background job in the processing queue. Paste, CSV, and Markdown support up to 50 MiB.",
                 )}
               </p>
             </div>
@@ -5372,6 +5380,68 @@ function ProjectDocumentsWorkspace(props: {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function RenameDocumentDialog({ document, onRename, onDismiss }: {
+  document: DocumentRecord;
+  onRename: (document: DocumentRecord, title: string) => Promise<void>;
+  onDismiss: () => void;
+}) {
+  const { t } = useI18n();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [title, setTitle] = useState(document.title);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const trimmed = title.trim();
+  const canSave = !saving && Boolean(trimmed) && trimmed !== document.title;
+
+  useEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    return () => element?.close();
+  }, []);
+
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setError("");
+    try {
+      await onRename(document, trimmed);
+      onDismiss();
+    } catch (error) {
+      setError(getErrorMessage(error));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <dialog
+      ref={dialog}
+      className="w-full max-w-sm rounded-xl border border-border bg-background p-4 text-foreground shadow-xl backdrop:bg-black/30"
+      aria-labelledby="rename-document-title"
+      onCancel={event => { event.preventDefault(); if (!saving) onDismiss(); }}
+    >
+      <form onSubmit={event => { event.preventDefault(); void save(); }}>
+        <h2 id="rename-document-title" className="text-sm font-semibold">{t("重命名文档", "Rename document")}</h2>
+        <label className="mt-3 block text-xs font-medium text-muted-foreground" htmlFor="rename-document-input">
+          {t("文档名称", "Document name")}
+        </label>
+        <Input id="rename-document-input" className="mt-1" autoFocus value={title} disabled={saving}
+          onFocus={event => event.currentTarget.select()}
+          onChange={event => setTitle(event.target.value)} />
+        {error ? <p className="mt-2 text-xs text-red-600" role="alert">{error}</p> : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onDismiss} disabled={saving}>
+            {t("取消", "Cancel")}
+          </Button>
+          <Button type="submit" size="sm" disabled={!canSave}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {t("保存名称", "Save name")}
+          </Button>
+        </div>
+      </form>
+    </dialog>
   );
 }
 
@@ -7533,42 +7603,6 @@ function OverviewPanel(props: {
         <Metric label={t("事件", "Events")} value={props.events.length} />
         <Metric label={t("实体", "Entities")} value={props.entities.length} />
       </div>
-      <Card>
-        <CardContent className="space-y-2">
-          <div className="text-sm font-semibold">
-            {t("Embedding 状态", "Embedding status")}
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <Metric
-              label={t("切片向量", "Chunk vectors")}
-              value={
-                props.chunks.filter((chunk) => Boolean(chunk.embedding)).length
-              }
-            />
-            <Metric
-              label={t("事件向量", "Event vectors")}
-              value={
-                props.events.filter((event) =>
-                  Boolean(event.titleEmbedding || event.contentEmbedding),
-                ).length
-              }
-            />
-            <Metric
-              label={t("实体向量", "Entity vectors")}
-              value={
-                props.entities.filter((entity) => Boolean(entity.embedding))
-                  .length
-              }
-            />
-          </div>
-          <p className="text-xs leading-5 text-muted-foreground">
-            {t(
-              "列表卡片会显示维度和前 8 位样本，用来确认向量已经真实写入数据库。",
-              "List cards show dimensions and the first 8 sample values to confirm vectors were written to the database.",
-            )}
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -8174,10 +8208,6 @@ function ChunkCard(props: {
             <p className="line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
               <RichTextFragment text={chunk.content} />
             </p>
-            <EmbeddingPreviewBlock
-              title={t("切片 Embedding", "Chunk Embedding")}
-              preview={chunk.embedding}
-            />
             <div className="flex flex-wrap gap-2">
               <MiniButton onClick={startEdit}>{t("编辑", "Edit")}</MiniButton>
               <MiniButton
@@ -8293,16 +8323,6 @@ function EventCard(props: {
                   </button>
                 ))
               )}
-            </div>
-            <div className="grid min-w-0 gap-2">
-              <EmbeddingPreviewBlock
-                title={t("标题 Embedding", "Title Embedding")}
-                preview={event.titleEmbedding}
-              />
-              <EmbeddingPreviewBlock
-                title={t("内容 Embedding", "Content Embedding")}
-                preview={event.contentEmbedding}
-              />
             </div>
             <div className="flex flex-wrap gap-2">
               <MiniButton onClick={startEdit}>{t("编辑", "Edit")}</MiniButton>
@@ -8434,12 +8454,6 @@ function EntityCard(props: {
               )}
             </p>
           ) : null}
-          <div className="mt-2 min-w-0">
-            <EmbeddingPreviewBlock
-              title={t("实体 Embedding", "Entity Embedding")}
-              preview={entity.embedding}
-            />
-          </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <MiniButton onClick={() => props.onOpenEntity(entity.id)}>
               {t("查看", "View")}
@@ -10139,67 +10153,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {label}
       {children}
     </label>
-  );
-}
-
-function EmbeddingPreviewBlock({
-  title,
-  preview,
-}: {
-  title: string;
-  preview?: EmbeddingPreview | null;
-}) {
-  const { t } = useI18n();
-  const sample = preview?.sample ?? [];
-  const dimensions = preview?.dimensions;
-  const hasSample = sample.length > 0;
-  const badgeLabel =
-    preview === undefined
-      ? t("状态按需", "Status on demand")
-      : !preview
-        ? t("未生成", "Not generated")
-        : dimensions != null
-          ? t(`${dimensions} 维`, `${dimensions} dims`)
-          : t("向量已写入", "Vector stored");
-  return (
-    <div className="min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-muted/30 p-2 text-left">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">
-          {title}
-        </span>
-        <Badge className="shrink-0">
-          {badgeLabel}
-        </Badge>
-      </div>
-      {preview === undefined ? (
-        <div className="text-xs text-muted-foreground">
-          {t(
-            "此列表没有加载向量状态或数值样本；这不代表数据库中没有向量。",
-            "This list did not load vector status or numeric samples; that does not mean the database has no vector.",
-          )}
-        </div>
-      ) : preview && hasSample ? (
-        <code className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted-foreground">
-          [
-          {sample.map((value) => formatEmbeddingNumber(value)).join(", ")}
-          {dimensions != null && dimensions > sample.length ? ", ..." : ""}]
-        </code>
-      ) : preview ? (
-        <div className="text-xs text-muted-foreground">
-          {t(
-            "向量已写入数据库；为提升列表速度，数值样本按需加载。",
-            "The vector is stored; numeric samples load on demand to keep lists fast.",
-          )}
-        </div>
-      ) : (
-        <div className="text-xs text-muted-foreground">
-          {t(
-            "数据库中还没有这个向量。",
-            "This vector is not in the database yet.",
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -12236,10 +12189,6 @@ function formatToolStatus(
   if (status === "SUCCEEDED") return t("成功", "Succeeded");
   if (status === "FAILED") return t("失败", "Failed");
   return t("等待中", "Pending");
-}
-
-function formatEmbeddingNumber(value: number) {
-  return Number.isFinite(value) ? value.toFixed(5) : "0.00000";
 }
 
 function formatMessageContent(

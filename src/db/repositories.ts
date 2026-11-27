@@ -2337,6 +2337,55 @@ export async function getKnowledgeAssetsByChunkIds(input: {
   };
 }
 
+export async function matchChainAtlasEntities(input: {
+  names: string[];
+  tenantId: string;
+  projectId?: string;
+}) {
+  const names = [...new Set(input.names)];
+  if (names.length === 0) return [];
+  const result = await pool.query<{
+    term: string;
+    id: string;
+    name: string;
+    type: string;
+    source_id: string;
+    source_name: string;
+  }>(
+    `
+      select requested.term, matched.*
+      from unnest($1::text[], $2::text[]) as requested(term, normalized)
+      cross join lateral (
+        select ent.id, ent.name, ent.type, s.id as source_id, s.name as source_name
+        from entities ent
+        join sources s on s.id = ent.source_id
+        where ent.normalized_name in (requested.normalized, lower(requested.term))
+          and s.tenant_id = $3 and s.archived_at is null
+          and ($4::uuid is null or s.id = $4)
+          and exists (
+            select 1
+            from event_entities ee
+            join events e on e.id = ee.event_id
+            join documents d on d.id = e.document_id
+            where ee.entity_id = ent.id
+              and e.deleted_at is null and d.archived_at is null
+          )
+        order by lower(s.name), ent.name, ent.id
+        limit 12
+      ) matched
+    `,
+    [names, names.map(normalizeEntityName), input.tenantId, input.projectId ?? null]
+  );
+  return result.rows.map(row => ({
+    term: row.term,
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    sourceId: row.source_id,
+    sourceName: row.source_name
+  }));
+}
+
 export async function getEntityDetail(input: {
   entityId: string;
   tenantId: string;
