@@ -17,6 +17,7 @@ import { api } from "../lib/api";
 import {
   chainAtlas,
   chainRelations,
+  chemicalIdentityTerms,
   matchBelongsToChemical,
   normalizeAtlasSearch,
   type ChainNode,
@@ -47,6 +48,9 @@ export type AtlasKnowledgeOpenInput = {
   entityIds: string[];
   title: string;
   chemical?: Chemical;
+  terms?: string[];
+  cas?: string;
+  projectId?: string;
 };
 
 export default function ChainAtlasWorkspace({
@@ -193,29 +197,41 @@ export default function ChainAtlasWorkspace({
   }
 
   function knowledgeMatches(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
-    if (!item.chemical) return matches;
-    const filtered = matches.filter((match) =>
-      matchBelongsToChemical(match.name, item.chemical!),
+    if (!item.chemical) return [];
+    return matches.filter((match) =>
+      matchBelongsToChemical(match.name, item.chemical!, match.description),
     );
-    return filtered.length > 0 ? filtered : matches;
   }
 
   function openMatch(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
-    const confirmed = knowledgeMatches(item, matches);
-    if (item.chemical && confirmed.length > 0 && onOpenKnowledge) {
-      clearRowFeedback();
-      onOpenKnowledge({
-        entityIds: confirmed.map((match) => match.id),
-        title: item.chemical.name || item.label,
-        chemical: item.chemical,
-      });
+    if (item.chemical && onOpenKnowledge) {
+      const confirmed = knowledgeMatches(item, matches);
+      if (confirmed.length > 0) {
+        clearRowFeedback();
+        onOpenKnowledge({
+          entityIds: confirmed.map((match) => match.id),
+          title: item.chemical.name || item.label,
+          chemical: item.chemical,
+          terms: chemicalIdentityTerms(item.chemical),
+          cas: item.chemical.cas,
+          projectId,
+        });
+        return;
+      }
+      // Unconfirmed identity: never fall back to aggregating all matches.
+      if (matches.length === 1) {
+        clearRowFeedback();
+        onOpenEntity(matches[0].id);
+      } else if (matches.length > 1) {
+        setExpandedMatch((current) => (current === item.id ? undefined : item.id));
+      }
       return;
     }
-    if (confirmed.length === 1) {
+    if (matches.length === 1) {
       clearRowFeedback();
-      onOpenEntity(confirmed[0].id);
+      onOpenEntity(matches[0].id);
     } else {
-      setExpandedMatch(current => current === item.id ? undefined : item.id);
+      setExpandedMatch((current) => (current === item.id ? undefined : item.id));
     }
   }
 
@@ -241,7 +257,7 @@ export default function ChainAtlasWorkspace({
         aria-expanded={matches.length > 1 ? expandedMatch === item.id : undefined}
         aria-label={`${item.chemical ? t("查看知识", "View knowledge") : t("查看知识库记录", "View library records")} ${item.label}`}>
         <Database size={13} />
-        <span>{item.chemical
+        <span>{item.chemical && knowledgeMatches(item, matches).length > 0
           ? t("查看知识", "View knowledge")
           : matches.length === 1
             ? t("查看实体", "View entity")

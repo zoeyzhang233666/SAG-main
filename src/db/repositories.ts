@@ -2340,6 +2340,21 @@ export async function getKnowledgeAssetsByChunkIds(input: {
   };
 }
 
+const ATLAS_TREE_MATCH_LIMIT = 12;
+const KNOWLEDGE_ENTITY_PAGE_SIZE = 200;
+const KNOWLEDGE_BUNDLE_ENTITY_BATCH = 200;
+
+export type KnowledgeEntityRecord = EntityRecord & {
+  description?: string | null;
+  sourceName?: string | null;
+  eventCount: number;
+};
+
+export type KnowledgeBundleRecord = {
+  entities: KnowledgeEntityRecord[];
+  events: Array<EventRecord & { document?: DocumentRecord | null }>;
+};
+
 export async function matchChainAtlasEntities(input: {
   names: string[];
   tenantId: string;
@@ -2352,6 +2367,7 @@ export async function matchChainAtlasEntities(input: {
     id: string;
     name: string;
     type: string;
+    description: string | null;
     source_id: string;
     source_name: string;
   }>(
@@ -2359,7 +2375,13 @@ export async function matchChainAtlasEntities(input: {
       select requested.term, matched.*
       from unnest($1::text[], $2::text[]) as requested(term, normalized)
       cross join lateral (
-        select ent.id, ent.name, ent.type, s.id as source_id, s.name as source_name
+        select
+          ent.id,
+          ent.name,
+          ent.type,
+          ent.description,
+          s.id as source_id,
+          s.name as source_name
         from entities ent
         join sources s on s.id = ent.source_id
         where ent.normalized_name in (requested.normalized, lower(requested.term))
@@ -2374,30 +2396,95 @@ export async function matchChainAtlasEntities(input: {
               and e.deleted_at is null and d.archived_at is null
           )
         order by lower(s.name), ent.name, ent.id
-        limit 500
+        limit $5
       ) matched
     `,
-    [names, names.map(normalizeEntityName), input.tenantId, input.projectId ?? null]
+    [
+      names,
+      names.map(normalizeEntityName),
+      input.tenantId,
+      input.projectId ?? null,
+      ATLAS_TREE_MATCH_LIMIT
+    ]
   );
   return result.rows.map(row => ({
     term: row.term,
     id: row.id,
     name: row.name,
     type: row.type,
+    description: row.description == null ? null : String(row.description),
     sourceId: row.source_id,
     sourceName: row.source_name
   }));
 }
 
+async function listEntityIdsByIdentityPage(input: {
+  terms: string[];
+  cas?: string;
+  tenantId: string;
+  projectId?: string;
+  includeArchived?: boolean;
+  limit: number;
+  offset: number;
+}): Promise<{ ids: string[]; hasMore: boolean }> {
+  const terms = [...new Set(input.terms.map((term) => term.trim()).filter(Boolean))];
+  const normalized = terms.map(normalizeEntityName);
+  const cas = input.cas?.trim() || null;
+  if (terms.length === 0 && !cas) {
+    return { ids: [], hasMore: false };
+  }
+  const archiveSql = input.includeArchived ? "" : "and s.archived_at is null";
+  const result = await pool.query<{ id: string }>(
+    `
+      select ent.id
+      from entities ent
+      join sources s on s.id = ent.source_id
+      where s.tenant_id = $1
+        ${archiveSql}
+        and ($2::uuid is null or s.id = $2)
+        and (
+          ent.normalized_name = any($3::text[])
+          or lower(ent.name) = any($4::text[])
+          or (
+            $5::text is not null
+            and (
+              ent.normalized_name = lower($5)
+              or coalesce(ent.description, '') ilike ('%' || $5 || '%')
+            )
+          )
+        )
+        and exists (
+          select 1
+          from event_entities ee
+          join events e on e.id = ee.event_id
+          join documents d on d.id = e.document_id
+          where ee.entity_id = ent.id
+            and e.deleted_at is null
+            ${input.includeArchived ? "" : "and d.archived_at is null"}
+        )
+      order by ent.name, ent.type, ent.id
+      limit $6 offset $7
+    `,
+    [
+      input.tenantId,
+      input.projectId ?? null,
+      normalized,
+      terms.map((term) => term.toLowerCase()),
+      cas,
+      input.limit + 1,
+      input.offset
+    ]
+  );
+  const hasMore = result.rows.length > input.limit;
+  const ids = result.rows.slice(0, input.limit).map((row) => row.id);
+  return { ids, hasMore };
+}
 
-export async function getEntitiesKnowledgeBundle(input: {
+async function fetchEntitiesKnowledgeBundlePage(input: {
   entityIds: string[];
   tenantId: string;
   includeArchived?: boolean;
-}): Promise<{
-  entities: Array<EntityRecord & { description?: string | null; eventCount: number }>;
-  events: Array<EventRecord & { document?: DocumentRecord | null }>;
-}> {
+}): Promise<KnowledgeBundleRecord> {
   const entityIds = [...new Set(input.entityIds.filter(Boolean))];
   if (entityIds.length === 0) {
     return { entities: [], events: [] };
@@ -2415,6 +2502,7 @@ export async function getEntitiesKnowledgeBundle(input: {
         ent.name,
         ent.normalized_name,
         ent.description,
+        s.name as source_name,
         (
           select count(distinct ee.event_id)::int
           from event_entities ee
@@ -2471,6 +2559,7 @@ export async function getEntitiesKnowledgeBundle(input: {
     entities: entitiesResult.rows.map((row) => ({
       ...entityFromRow(row),
       description: row.description == null ? null : String(row.description),
+      sourceName: row.source_name == null ? null : String(row.source_name),
       eventCount: Number(row.event_count ?? 0)
     })),
     events: eventsResult.rows.map((row) => ({
@@ -2495,6 +2584,86 @@ export async function getEntitiesKnowledgeBundle(input: {
           })
     }))
   };
+}
+
+function mergeKnowledgeBundleRecords(
+  bundles: KnowledgeBundleRecord[]
+): KnowledgeBundleRecord {
+  const entities = new Map<string, KnowledgeEntityRecord>();
+  const events = new Map<string, EventRecord & { document?: DocumentRecord | null }>();
+  for (const bundle of bundles) {
+    for (const entity of bundle.entities) {
+      if (!entities.has(entity.id)) entities.set(entity.id, entity);
+    }
+    for (const event of bundle.events) {
+      if (!events.has(event.id)) events.set(event.id, event);
+    }
+  }
+  return {
+    entities: [...entities.values()].sort(
+      (left, right) =>
+        left.name.localeCompare(right.name) ||
+        left.type.localeCompare(right.type) ||
+        left.id.localeCompare(right.id)
+    ),
+    events: [...events.values()].sort(
+      (left, right) =>
+        (left.rank ?? 0) - (right.rank ?? 0) || left.id.localeCompare(right.id)
+    )
+  };
+}
+
+export async function getEntitiesKnowledgeBundle(input: {
+  entityIds: string[];
+  tenantId: string;
+  includeArchived?: boolean;
+}): Promise<KnowledgeBundleRecord> {
+  const entityIds = [...new Set(input.entityIds.filter(Boolean))];
+  if (entityIds.length === 0) {
+    return { entities: [], events: [] };
+  }
+  const bundles: KnowledgeBundleRecord[] = [];
+  for (let offset = 0; offset < entityIds.length; offset += KNOWLEDGE_BUNDLE_ENTITY_BATCH) {
+    const batch = entityIds.slice(offset, offset + KNOWLEDGE_BUNDLE_ENTITY_BATCH);
+    bundles.push(
+      await fetchEntitiesKnowledgeBundlePage({
+        entityIds: batch,
+        tenantId: input.tenantId,
+        includeArchived: input.includeArchived
+      })
+    );
+  }
+  return mergeKnowledgeBundleRecords(bundles);
+}
+
+export async function getChemicalKnowledgeBundle(input: {
+  terms: string[];
+  cas?: string;
+  tenantId: string;
+  projectId?: string;
+  includeArchived?: boolean;
+}): Promise<KnowledgeBundleRecord> {
+  const entityIds: string[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await listEntityIdsByIdentityPage({
+      terms: input.terms,
+      cas: input.cas,
+      tenantId: input.tenantId,
+      projectId: input.projectId,
+      includeArchived: input.includeArchived,
+      limit: KNOWLEDGE_ENTITY_PAGE_SIZE,
+      offset
+    });
+    entityIds.push(...page.ids);
+    if (!page.hasMore) break;
+    offset += KNOWLEDGE_ENTITY_PAGE_SIZE;
+  }
+  return getEntitiesKnowledgeBundle({
+    entityIds,
+    tenantId: input.tenantId,
+    includeArchived: input.includeArchived
+  });
 }
 
 export async function getEntityDetail(input: {

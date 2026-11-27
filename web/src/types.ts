@@ -72,6 +72,7 @@ export interface EntityRecord {
   name: string;
   normalizedName: string;
   description?: string | null;
+  sourceName?: string | null;
   eventCount?: number;
   score?: number;
   embedding?: EmbeddingPreview | null;
@@ -97,6 +98,7 @@ export interface ChainAtlasEntityMatch {
   id: string;
   name: string;
   type: string;
+  description?: string | null;
   sourceId: string;
   sourceName: string;
 }

@@ -52,9 +52,18 @@ import {
   normalizeEventCategory,
 } from "./lib/event-category";
 import {
+  chemicalIdentityTerms,
+  entityBelongsToChemical,
   resolveChemicalByName,
+  resolveEntityChemical,
   type Chemical,
 } from "./lib/chain-atlas";
+import {
+  chunkIds,
+  mergeKnowledgeBundles,
+  pickPrimaryKnowledgeEntity,
+  type KnowledgeEntityRecord,
+} from "./lib/chemical-knowledge";
 import { cn, formatDate, shortId } from "./lib/utils";
 import type {
   ChunkRecord,
@@ -2001,9 +2010,20 @@ function AppShell() {
     }
   }
 
+  async function loadKnowledgeBundleByEntityIds(entityIds: string[]) {
+    const bundles = await Promise.all(
+      chunkIds(entityIds).map((batch) => api.getEntitiesKnowledgeBundle(batch)),
+    );
+    return mergeKnowledgeBundles(bundles);
+  }
+
   async function openEntityDetail(
     entityId: string,
-    options?: { pushHistory?: boolean; matchCurrentProject?: boolean },
+    options?: {
+      pushHistory?: boolean;
+      matchCurrentProject?: boolean;
+      aggregate?: boolean;
+    },
   ) {
     const previousDrawer = drawer;
     try {
@@ -2014,24 +2034,41 @@ function AppShell() {
           : projectEntities.length > 0
             ? projectEntities
             : entities;
-      const sameNameEntityIds = collectSameNameKnowledgeAssetEntityIds(
-        sameNameEntitySource,
-        detail.entity,
-      );
-      const chemical = resolveChemicalByName(detail.entity.name);
+      const chemical = resolveEntityChemical(detail.entity);
+      const shouldAggregate = options?.aggregate !== false;
+      const confirmedEntityIds = shouldAggregate
+        ? collectConfirmedChemicalKnowledgeEntityIds(
+            sameNameEntitySource,
+            detail.entity,
+            chemical,
+          )
+        : [entityId];
       let nextDetail = detail;
       let sameNameDetails: EntityDetailRecord[] | undefined;
-      if (sameNameEntityIds.length > 1) {
-        const bundle = await api.getEntitiesKnowledgeBundle(sameNameEntityIds);
+      if (confirmedEntityIds.length > 1) {
+        const bundle = chemical
+          ? await api.getChemicalKnowledgeBundle({
+              terms: chemicalIdentityTerms(chemical),
+              cas: chemical.cas,
+              projectId:
+                options?.matchCurrentProject === false
+                  ? undefined
+                  : selectedProject?.id,
+            })
+          : await loadKnowledgeBundleByEntityIds(confirmedEntityIds);
         const primary =
-          bundle.entities.find((entity) => entity.id === entityId) ??
-          bundle.entities[0] ??
-          detail.entity;
+          pickPrimaryKnowledgeEntity(bundle.entities, entityId) ??
+          ({
+            ...detail.entity,
+            eventCount: detail.entity.eventCount,
+          } as KnowledgeEntityRecord);
         nextDetail = {
           ...detail,
           entity: {
+            ...detail.entity,
             ...primary,
-            eventCount: bundle.events.length,
+            // Keep this entity's own event count; never overwrite with aggregate totals.
+            eventCount: primary.eventCount,
           },
           events: bundle.events,
         };
@@ -2070,41 +2107,53 @@ function AppShell() {
     entityIds: string[];
     title: string;
     chemical?: Chemical;
+    terms?: string[];
+    cas?: string;
+    projectId?: string;
   }) {
     try {
-      const entityIds = [...new Set(input.entityIds.filter(Boolean))];
-      if (entityIds.length === 0) {
-        throw new Error(t("没有可打开的知识记录", "No knowledge records to open"));
-      }
-      const bundle = await api.getEntitiesKnowledgeBundle(entityIds);
+      const chemical =
+        input.chemical ??
+        resolveChemicalByName(input.title) ??
+        undefined;
+      const bundle = chemical
+        ? await api.getChemicalKnowledgeBundle({
+            terms: input.terms?.length
+              ? input.terms
+              : chemicalIdentityTerms(chemical),
+            cas: input.cas ?? chemical.cas,
+            projectId: input.projectId,
+          })
+        : await loadKnowledgeBundleByEntityIds(input.entityIds);
       if (bundle.entities.length === 0) {
         throw new Error(t("没有可打开的知识记录", "No knowledge records to open"));
       }
-      const primary = bundle.entities[0];
+      const primary =
+        pickPrimaryKnowledgeEntity(bundle.entities, input.entityIds[0]) ??
+        bundle.entities[0];
       const detail: EntityDetailRecord = {
         entity: {
           ...primary,
-          eventCount: bundle.events.length,
+          eventCount: primary.eventCount,
         },
         events: bundle.events,
       };
-      const sameNameDetails = bundle.entities.slice(1).map((entity) => ({
-        entity: {
-          ...entity,
-          eventCount: entity.eventCount,
-        },
-        events: [],
-      }));
+      const sameNameDetails = bundle.entities
+        .filter((entity) => entity.id !== primary.id)
+        .map((entity) => ({
+          entity: {
+            ...entity,
+            eventCount: entity.eventCount,
+          },
+          events: [],
+        }));
       setDrawerHistory([]);
       setDrawer({
         type: "entity",
         detail,
         sameNameDetails:
           sameNameDetails.length > 0 ? sameNameDetails : undefined,
-        chemical:
-          input.chemical ??
-          resolveChemicalByName(input.title) ??
-          resolveChemicalByName(primary.name),
+        chemical,
         aggregateMode: true,
       });
       focusGraphDrawerNode(primary.id);
@@ -2661,8 +2710,11 @@ function AppShell() {
           onOpenEvent={(eventId) =>
             void openEventDetail(eventId, { pushHistory: true })
           }
-          onOpenEntity={(entityId) =>
-            void openEntityDetail(entityId, { pushHistory: true })
+          onOpenEntity={(entityId, options) =>
+            void openEntityDetail(entityId, {
+              pushHistory: true,
+              ...options,
+            })
           }
         />
       ) : null}
@@ -9609,7 +9661,10 @@ function DetailDrawer(props: {
   onClose: () => void;
   onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
-  onOpenEntity: (entityId: string) => void;
+  onOpenEntity: (
+    entityId: string,
+    options?: { aggregate?: boolean; pushHistory?: boolean },
+  ) => void;
 }) {
   const { t } = useI18n();
   const drawer = props.drawer;
@@ -9643,7 +9698,7 @@ function DetailDrawer(props: {
                   drawer.type === "event"
                     ? drawer.detail.event.title
                     : drawer.type === "entity"
-                      ? drawer.detail.entity.name
+                      ? drawer.chemical?.name || drawer.detail.entity.name
                       : drawer.type === "chunk"
                         ? drawer.detail.citation.heading ||
                           t("切片详情", "Chunk details")
@@ -9691,6 +9746,9 @@ function DetailDrawer(props: {
               chemical={drawer.chemical}
               aggregateMode={drawer.aggregateMode}
               onOpenEvent={props.onOpenEvent}
+              onOpenEntity={(entityId) =>
+                void props.onOpenEntity(entityId, { aggregate: false, pushHistory: true })
+              }
             />
           ) : drawer.type === "chunk" ? (
             <ChunkDetailPanel
@@ -9777,12 +9835,14 @@ function EntityDetailPanel({
   chemical,
   aggregateMode,
   onOpenEvent,
+  onOpenEntity,
 }: {
   detail: EntityDetailRecord;
   sameNameDetails?: EntityDetailRecord[];
   chemical?: Chemical;
   aggregateMode?: boolean;
   onOpenEvent: (eventId: string) => void;
+  onOpenEntity: (entityId: string) => void;
 }) {
   const { t } = useI18n();
   const uncategorized = t("未分类", "Uncategorized");
@@ -9797,7 +9857,7 @@ function EntityDetailPanel({
     [detail, sameNameDetails],
   );
   const resolvedChemical =
-    chemical ?? resolveChemicalByName(detail.entity.name) ?? undefined;
+    chemical ?? resolveEntityChemical(detail.entity) ?? undefined;
   const aggregatedEvents = useMemo(() => {
     const events: EventRecord[] = [];
     const seen = new Set<string>();
@@ -9859,11 +9919,8 @@ function EntityDetailPanel({
     <div className="space-y-4">
       {showAggregateChrome ? (
         <div className="rounded-xl border border-border bg-muted/20 p-3">
-          <div className="text-base font-semibold">
-            {resolvedChemical?.name || detail.entity.name}
-          </div>
           {resolvedChemical ? (
-            <div className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+            <div className="space-y-1 text-xs leading-5 text-muted-foreground">
               {resolvedChemical.english ? (
                 <div>
                   {t("英文名", "English")}：{resolvedChemical.english}
@@ -9879,10 +9936,10 @@ function EntityDetailPanel({
               ) : null}
             </div>
           ) : (
-            <div className="mt-2 text-xs leading-5 text-muted-foreground">
+            <div className="text-xs leading-5 text-muted-foreground">
               {t(
-                "以下同名记录已汇总关联事件；类型差异仍保留在原始记录中。",
-                "Related events from same-name records are unified; type differences remain in the original records.",
+                "已确认同化学身份的记录已汇总；未确认身份不会合并。",
+                "Only confirmed chemical identities are aggregated; ambiguous records stay separate.",
               )}
             </div>
           )}
@@ -9993,8 +10050,7 @@ function EntityDetailPanel({
                   key={item.entity.id}
                   detail={item}
                   isCurrent={item.entity.id === detail.entity.id}
-                  onOpenEvent={onOpenEvent}
-                  hideEventPreview
+                  onOpenEntity={onOpenEntity}
                 />
               ))}
             </div>
@@ -10056,119 +10112,62 @@ function EventCategoryFilter(props: {
   }
 
   return (
-    <div className="mb-3 rounded-xl border border-border bg-muted/20 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold">
-            {t("事件分类", "Event categories")}
-          </div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {t(
-              "按当前实体的全部关联事件聚合。默认显示全部；多选时取所选分类的并集。",
-              "Aggregated from all related events for this entity. Default is all; multi-select uses the union of categories.",
-            )}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge>
-            {t(
-              `${props.options.length} 类`,
-              `${props.options.length} categories`,
-            )}
-          </Badge>
-          {props.selectedCategories.size > 0 ? (
-            <button
-              type="button"
-              className="rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-              onClick={props.onClear}
-            >
-              {t("全部", "All")}
-            </button>
-          ) : (
-            <Badge>{t("全部", "All")}</Badge>
+    <div className="mb-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          className={cn(
+            "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+            props.selectedCategories.size === 0
+              ? "border-primary/40 bg-primary/[0.12] text-foreground"
+              : "border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
           )}
-        </div>
-      </div>
-
-      {selectedOptions.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {selectedOptions.map((option) => (
+          onClick={props.onClear}
+        >
+          {t("全部", "All")}
+          <span className="ml-1 text-muted-foreground">
+            {props.options.reduce((sum, option) => sum + option.count, 0)}
+          </span>
+        </button>
+        {visibleOptions.map((option) => {
+          const checked = props.selectedCategories.has(option.category);
+          return (
             <button
               key={option.category}
               type="button"
-              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.08] px-2 py-0.5 text-[11px] text-foreground"
+              className={cn(
+                "inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                checked
+                  ? "border-primary/40 bg-primary/[0.12] text-foreground"
+                  : "border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
               onClick={() => props.onToggleCategory(option.category)}
-              title={t("移除筛选", "Remove filter")}
+              title={option.category}
             >
-              <span className="max-w-[10rem] truncate">{option.category}</span>
+              <span className="max-w-[7.5rem] truncate">{option.category}</span>
               <span className="text-muted-foreground">{option.count}</span>
-              <X size={12} aria-hidden="true" />
             </button>
-          ))}
-        </div>
-      ) : null}
-
-      {showSearch ? (
-        <div className="mt-2">
-          <Input
-            value={props.query}
-            onChange={(event) => props.onQueryChange(event.target.value)}
-            placeholder={t("搜索事件分类", "Search event categories")}
-          />
-        </div>
-      ) : null}
-
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        {visibleOptions.length === 0 ? (
-          <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
-            {t("没有匹配的事件分类", "No matching event categories")}
-          </div>
-        ) : (
-          visibleOptions.map((option) => {
-            const checked = props.selectedCategories.has(option.category);
-            return (
-              <label
-                key={option.category}
-                className={cn(
-                  "flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 py-2 text-xs hover:bg-accent",
-                  checked && "border-primary/30 bg-primary/[0.06]",
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => props.onToggleCategory(option.category)}
-                    className="h-3.5 w-3.5 shrink-0 rounded border-input"
-                  />
-                  <span className="truncate font-medium" title={option.category}>
-                    {option.category}
-                  </span>
-                </span>
-                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                  {option.count}
-                </span>
-              </label>
-            );
-          })
-        )}
-      </div>
-
-      {hiddenCount > 0 && !query ? (
-        <div className="mt-2">
+          );
+        })}
+        {hiddenCount > 0 && !query ? (
           <button
             type="button"
-            className="rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
             onClick={props.onToggleExpanded}
           >
             {props.expanded
-              ? t("收起分类", "Collapse categories")
-              : t(
-                  `展开其余 ${hiddenCount} 个分类`,
-                  `Show ${hiddenCount} more categories`,
-                )}
+              ? t("收起", "Collapse")
+              : t(`+${hiddenCount}`, `+${hiddenCount}`)}
           </button>
-        </div>
+        ) : null}
+      </div>
+      {showSearch ? (
+        <Input
+          value={props.query}
+          onChange={(event) => props.onQueryChange(event.target.value)}
+          placeholder={t("搜索分类", "Search categories")}
+          className="h-8 text-xs"
+        />
       ) : null}
     </div>
   );
@@ -10177,74 +10176,57 @@ function EventCategoryFilter(props: {
 function SameNameEntityDetailCard({
   detail,
   isCurrent,
-  onOpenEvent,
-  hideEventPreview = false,
+  onOpenEntity,
 }: {
   detail: EntityDetailRecord;
   isCurrent: boolean;
-  onOpenEvent: (eventId: string) => void;
-  hideEventPreview?: boolean;
+  onOpenEntity: (entityId: string) => void;
 }) {
   const { t } = useI18n();
-  const previewEvents = hideEventPreview ? [] : detail.events.slice(0, 5);
-  const remainingEventCount = hideEventPreview
-    ? 0
-    : Math.max(0, detail.events.length - previewEvents.length);
+  const eventCount = detail.entity.eventCount ?? detail.events.length;
   return (
     <Card>
       <CardContent className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-sm font-medium"><RichTextFragment text={detail.entity.type} /></div>
-            <div className="mt-0.5 break-words text-xs text-muted-foreground">
-              <RichTextFragment text={detail.entity.description || detail.entity.normalizedName} />
+            <div className="text-sm font-medium">
+              <RichTextFragment text={detail.entity.name} />
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              <RichTextFragment text={detail.entity.type} />
             </div>
           </div>
           {isCurrent ? <Badge>{t("当前", "Current")}</Badge> : null}
         </div>
+        <div className="text-xs leading-5 text-muted-foreground">
+          <RichTextFragment
+            text={
+              detail.entity.description ||
+              detail.entity.normalizedName ||
+              t("无描述", "No description")
+            }
+          />
+        </div>
         <div className="text-xs text-muted-foreground">
-          {t("记录 ID", "Record ID")}：{detail.entity.id}
+          {t("来源", "Source")}：
+          {detail.entity.sourceName ||
+            detail.source?.name ||
+            t("未知来源", "Unknown source")}
         </div>
         <div className="text-xs text-muted-foreground">
           {t(
-            `${detail.entity.eventCount ?? detail.events.length} 个关联事件`,
-            `${detail.entity.eventCount ?? detail.events.length} related events`,
+            `${eventCount} 个关联事件`,
+            `${eventCount} related events`,
           )}
         </div>
-        <div className="space-y-1">
-          {previewEvents.length === 0 ? (
-            <EmptyLine text={t("暂无关联事件。", "No related events.")} />
-          ) : (
-            previewEvents.map((event) => (
-              <button
-                key={event.id}
-                type="button"
-                className="w-full rounded border border-border bg-background px-2 py-1.5 text-left text-xs hover:bg-accent"
-                onClick={() => onOpenEvent(event.id)}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="line-clamp-2 min-w-0">
-                    <RichTextFragment text={event.title} />
-                  </span>
-                  <Badge className="shrink-0">
-                    {normalizeEventCategory(
-                      event.category,
-                      t("未分类", "Uncategorized"),
-                    )}
-                  </Badge>
-                </div>
-              </button>
-            ))
-          )}
-          {remainingEventCount > 0 ? (
-            <div className="px-2 text-xs text-muted-foreground">
-              {t(
-                `还有 ${remainingEventCount} 个事件`,
-                `${remainingEventCount} more events`,
-              )}
-            </div>
-          ) : null}
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onOpenEntity(detail.entity.id)}
+        >
+          {t("查看此原始记录", "View this record")}
+        </Button>
       </CardContent>
     </Card>
   );
@@ -11104,16 +11086,16 @@ function pickKnowledgeAssetEntityRepresentative(entities: EntityRecord[]) {
   })[0];
 }
 
-function collectSameNameKnowledgeAssetEntityIds(
+function collectConfirmedChemicalKnowledgeEntityIds(
   entities: EntityRecord[],
   target: EntityRecord,
+  chemical?: Chemical,
 ) {
-  const targetKey = getKnowledgeAssetEntityNameKey(target);
-  if (!targetKey) return [target.id];
+  if (!chemical) return [target.id];
   return uniqueKnowledgeAssetValues([
     target.id,
     ...entities
-      .filter((entity) => getKnowledgeAssetEntityNameKey(entity) === targetKey)
+      .filter((entity) => entityBelongsToChemical(entity, chemical))
       .map((entity) => entity.id),
   ]);
 }

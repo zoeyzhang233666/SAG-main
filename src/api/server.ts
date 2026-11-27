@@ -820,9 +820,21 @@ export function buildHttpServer() {
 
   app.post("/api/entities/knowledge-bundle", async (request) => {
     const body = z.object({
-      entityIds: z.array(z.guid()).min(1).max(500)
+      entityIds: z.array(z.guid()).min(1).max(5000)
     }).parse(request.body);
     return await webuiService.getEntitiesKnowledgeBundle(body.entityIds);
+  });
+
+  app.post("/api/entities/chemical-knowledge", async (request) => {
+    const body = z.object({
+      terms: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
+      cas: z.string().trim().min(1).max(32).optional(),
+      projectId: z.guid().optional()
+    }).refine(
+      (value) => value.terms.length > 0 || Boolean(value.cas),
+      { message: "terms or cas required" }
+    ).parse(request.body);
+    return await webuiService.getChemicalKnowledgeBundle(body);
   });
 
   app.get("/api/entities/:entityId", async (request, reply) => {

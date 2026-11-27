@@ -325,11 +325,37 @@ export const api = {
 
   async getEntitiesKnowledgeBundle(entityIds: string[]) {
     return request<{
-      entities: Array<EntityRecord & { description?: string | null; eventCount: number }>;
+      entities: Array<
+        EntityRecord & {
+          description?: string | null;
+          sourceName?: string | null;
+          eventCount: number;
+        }
+      >;
       events: EventRecord[];
     }>("/api/entities/knowledge-bundle", {
       method: "POST",
       body: JSON.stringify({ entityIds }),
+    });
+  },
+
+  async getChemicalKnowledgeBundle(input: {
+    terms: string[];
+    cas?: string;
+    projectId?: string;
+  }) {
+    return request<{
+      entities: Array<
+        EntityRecord & {
+          description?: string | null;
+          sourceName?: string | null;
+          eventCount: number;
+        }
+      >;
+      events: EventRecord[];
+    }>("/api/entities/chemical-knowledge", {
+      method: "POST",
+      body: JSON.stringify(input),
     });
   },
 
