@@ -13,7 +13,36 @@
     "concrete": { "label": "EPA · 混凝土原料及外加剂", "url": "https://www.epa.gov/sites/production/files/2020-10/documents/b11s12_0.pdf" },
     "sodiumIon": { "label": "DOE · 储能供应链评估", "url": "https://www.energy.gov/sites/default/files/2024-12/Energy%2520Storage%2520Supply%2520Chain%2520Report%2520-%2520final%5B1%5D.pdf" },
     "industrialGases": { "label": "Air Liquide · 空气分离工业气体", "url": "https://www.youtube.com/watch?v=t1S1Azb83rw" },
-    "sodaAsh": { "label": "EPA · 碳酸钠生产及用途", "url": "https://www.epa.gov/sites/default/files/2020-09/documents/8.12_sodium_carbonate.pdf" }
+    "sodaAsh": { "label": "EPA · 碳酸钠生产及用途", "url": "https://www.epa.gov/sites/default/files/2020-09/documents/8.12_sodium_carbonate.pdf" },
+    "pva": {"label": "EPA · 聚乙烯醇的聚合与水解路线", "url": "https://www.epa.gov/sites/default/files/2015-03/documents/polyguid.pdf"},
+    "mibk": {"label": "EPA · 甲基异丁基酮原料与用途", "url": "https://www.epa.gov/sites/default/files/2014-06/documents/4th.pdf"},
+    "refining": {"label": "EIA · 常压渣油与减压蒸馏", "url": "https://www.eia.gov/todayinEnergy/detail.php?id=9130"},
+    "refineryProcess": {"label": "EPA · 炼油物料与加工路线", "url": "https://www3.epa.gov/ttn/chief/ap42/ch05/final/c05s01_2015.pdf"},
+    "naphtha": {"label": "PubChem · 轻芳烃溶剂石脑油", "url": "https://pubchem.ncbi.nlm.nih.gov/compound/Solvent-naphtha-_petroleum_-light-arom"},
+    "graphite": {"label": "DOE · 天然与合成石墨负极路径", "url": "https://www.energy.gov/sites/default/files/2023-05/beto-12-project-peer-review-sdi-est-apr-2023-park.pdf"},
+    "mtbe": {"label": "EPA · 甲基叔丁基醚原料", "url": "https://archive.epa.gov/mtbe/web/html/faq.html"},
+    "butanone": {"label": "EPA · 2-丁酮工业原料", "url": "https://www.epa.gov/sites/default/files/2020-11/documents/methyl_ethyl.pdf"},
+    "maleic": {"label": "EPA · 苯系工业资料与顺酐原料变化", "url": "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=2000N3YS.TXT"},
+    "dieneRubber": {"label": "ExxonMobil · 三元乙丙橡胶资料", "url": "https://www.exxonmobilchemical.com/en/resources/product-data-sheets/epdm-rubber"},
+    "petroleumResin": {"label": "ExxonMobil · 石油增黏树脂分类", "url": "https://www.exxonmobilchemical.com/-/media/project/wep/exxonmobil-chemicals/chemicals/products/tackifiers/escorez_resins_product_safety_summarypdf.pdf"},
+    "acrylicMonomers": {"label": "BASF · 丙烯酸单体及 CAS", "url": "https://chemicals.basf.com/global/en/Petrochemicals/acrylic-monomers/Products_Acrylic_Monomers"},
+    "oxoAlcohols": {"label": "BASF · 羰基合成醇与丙烯酸酯", "url": "https://www.basf.com/us/en/media/market-news-/2026/BASF-announces-price-increase-for-Oxo-C4-Alcohols-and-Acrylic-Monomers"},
+    "acrylamide": {"label": "EPA · 丙烯酰胺供应链", "url": "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=P1016ZAC.txt"},
+    "benzene": {"label": "EPA · 苯下游工业物料链", "url": "https://archive.epa.gov/sectors/web/pdf/organic-2.pdf"},
+    "adipic": {"label": "EPA · 己二酸与尼龙 66 路线", "url": "https://www.epa.gov/sites/default/files/2020-10/documents/b06s02.pdf"},
+    "edc": {"label": "EPA · 二氯乙烷和氯乙烯", "url": "https://www.epa.gov/sites/default/files/2020-11/documents/ethylene_dichloride.pdf"},
+    "pvc": {"label": "EPA · PVC 聚合路线", "url": "https://www.epa.gov/stationary-sources-air-pollution/polyvinyl-chloride-and-copolymers-production-national-emission"},
+    "polyester": {"label": "EPO · 聚酯直接酯化与酯交换", "url": "https://patents.google.com/patent/EP0399799A2/en"},
+    "formaldehyde": {"label": "EPA · 甲醛衍生物与氨基树脂", "url": "https://www.epa.gov/sites/default/files/2020-11/documents/formaldehyde.pdf"},
+    "coalLiquefaction": {"label": "NETL · 煤直接与间接液化", "url": "https://www.netl.doe.gov/sites/default/files/2021-03/OVERVIEW%20OF%20COAL%20TO%20LIQUDS%20-%20A%20HISTORICAL%20PERSPECTIVE.pdf"},
+    "titanium": {"label": "EPA · 硫酸法与氯化法钛白粉", "url": "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=P1003ZHT.TXT"},
+    "sulfur": {"label": "USGS · 回收硫磺及副产硫酸", "url": "https://pubs.usgs.gov/periodicals/mcs2025/mcs2025_ver.1.1.pdf"},
+    "nickel": {"label": "IEA · 镍矿、镍中间品及硫酸镍", "url": "https://www.iea.org/files/ee01701d-1d5c-4ba8-9df6-abeeac9de99a/GlobalCriticalMineralsOutlook2024.pdf"},
+    "fertilizers": {"label": "EPA · 磷肥与磷酸工业路径", "url": "https://www.epa.gov/sites/default/files/2020-07/documents/phosphoric-acid-phosphatic-fertilizers_ip_07-1993.pdf"},
+    "nitric": {"label": "EPA · 氮肥与硝酸原料", "url": "https://www.epa.gov/sites/default/files/2020-08/documents/ammoniaemissions.pdf"},
+    "refrigerants": {"label": "Chemours · R-410A 组分资料", "url": "https://www.chemours.com/en/-/media/files/freon/freon-410a-407c-push-bulletin.pdf"},
+    "silica": {"label": "Evonik · 气相及沉淀二氧化硅", "url": "https://products.evonik.com/assets/49/55/TB_63_AEROSIL_Fumed_Silica_and_SIPERNAT_in_Sealants_EN_EN_244955.pdf"},
+    "photovoltaic": {"label": "DOE · 晶硅光伏制造供应链", "url": "https://www.energy.gov/cmei/systems/solar-photovoltaics-manufacturing-basics"}
   },
   "source": [
     {
@@ -86,11 +115,6 @@
       "children": ["合成氨用氢", "炼油加氢用氢"]
     },
     {
-      "under": "S-04-02", "path": ["炭黑 Carbon Black"],
-      "reference": "carbonBlack",
-      "note": "原骨架按填料保留此索引。工业炭黑原料路径见 S-01 的芳香烃油与炭黑。"
-    },
-    {
       "under": "S-04-01", "path": ["锂矿", "碳酸锂"],
       "reference": "batteries",
       "children": ["磷酸铁锂", "锰酸锂"]
@@ -109,11 +133,6 @@
       "under": "S-04-04", "path": ["磷矿石", "湿法磷酸"],
       "reference": "batteries",
       "children": [{ "label": "净化湿法磷酸", "children": [{ "label": "磷酸铁", "children": ["磷酸铁锂"] }] }]
-    },
-    {
-      "under": "S-05-01", "path": ["空气 → 深冷分离/PSA", "氦气 He"],
-      "reference": "helium",
-      "note": "空气含有微量氦。商业供应主要来自含氦天然气，见 S-02。"
     },
     {
       "under": "S-05-01", "path": ["空气 → 深冷分离/PSA"],
@@ -181,6 +200,603 @@
       "under": "S-08-03", "path": ["盐湖卤水", "盐湖提锂", "碳酸锂"],
       "reference": "batteries",
       "children": ["磷酸铁锂", "钴酸锂", "锰酸锂"]
+    },
+    {
+      "under": "S-01-01",
+      "reference": "refining",
+      "label": "炼油分离、转化与产品",
+      "note": "炼厂产品目录按商品品类归类。原油加工主链单列实际物料流向。"
+    },
+    {
+      "under": "S-01-01", "path": ["原油 Crude Oil", "石脑油 Naphtha"],
+      "reference": "naphtha",
+      "label": "石脑油",
+      "note": "石脑油按馏分和用途归类。CAS 64742-95-6 对应轻芳烃溶剂石脑油。"
+    },
+    {
+      "under": "S-01-01", "path": ["原油 Crude Oil", "催化油浆/减压渣油"],
+      "reference": "refineryProcess",
+      "label": "重质油品",
+      "note": "减压渣油来自减压蒸馏塔底，催化油浆来自催化裂化。两种物流分开列示。",
+      "children": [
+        {"label": "减压渣油", "relation": "grade"},
+        {"label": "催化油浆", "relation": "grade"}
+      ]
+    },
+    {
+      "under": "S-01-01", "path": ["原油 Crude Oil"],
+      "reference": "refineryProcess",
+      "label": "炼厂产品目录（按品类）"
+    },
+    {
+      "under": "S-01-01",
+      "reference": "refining",
+      "children": [
+        {"label": "原油", "relation": "feedstock", "children": [
+          {"label": "常压蒸馏", "children": [
+            {"label": "石脑油", "relation": "product", "children": [
+              {"label": "蒸汽裂解进料", "relation": "use"},
+              {"label": "催化重整进料", "relation": "use"}
+            ]},
+            {"label": "煤油馏分", "relation": "product", "children": [
+              {"label": "航空煤油调和组分", "relation": "use"}
+            ]},
+            {"label": "直馏柴油馏分", "relation": "product", "children": [
+              {"label": "柴油加氢精制进料", "relation": "use"}
+            ]},
+            {"label": "常压渣油", "relation": "product", "children": [
+              {"label": "减压蒸馏", "children": [
+                {"label": "减压瓦斯油", "relation": "product", "children": [
+                  {"label": "催化裂化", "children": [
+                    {"label": "催化裂化汽油", "relation": "product"},
+                    {"label": "轻循环油", "relation": "product"},
+                    {"label": "催化油浆", "relation": "byproduct"}
+                  ]},
+                  {"label": "加氢裂化进料", "relation": "use"},
+                  {"label": "润滑油基础油进料", "relation": "use"}
+                ]},
+                {"label": "减压渣油", "relation": "product", "children": [
+                  {"label": "延迟焦化", "children": [
+                    {"label": "焦化气", "relation": "byproduct"},
+                    {"label": "焦化石脑油", "relation": "product"},
+                    {"label": "焦化瓦斯油", "relation": "product"},
+                    {"label": "石油焦", "relation": "product"}
+                  ]},
+                  {"label": "适用原料制石油沥青", "relation": "use"}
+                ]}
+              ]}
+            ]}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-01", "path": ["炼厂产品目录", "石油焦系列", "煅烧石油焦"],
+      "reference": "graphite",
+      "children": [
+        {"label": "预焙阳极用煅烧焦", "relation": "use"},
+        {"label": "人造石墨用焦原料", "relation": "use", "notes": ["石墨负极使用符合规格的焦原料，针状焦和其他合格石油焦为可选前驱体。"]}
+      ]
+    },
+    {
+      "under": "S-01-01", "path": ["原油", "常压蒸馏", "常压渣油", "减压蒸馏", "减压瓦斯油", "催化裂化", "催化油浆"],
+      "reference": "graphite",
+      "children": [
+        {"label": "低杂质芳香族进料", "relation": "intermediate", "notes": ["适用催化油浆可经净化成为油系针状焦进料，原料需满足专用品质要求。"], "children": [
+          {"label": "油系针状焦", "relation": "product", "children": [
+            {"label": "石墨电极", "relation": "use"},
+            {"label": "人造石墨负极材料", "relation": "use"}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene"],
+      "reference": "benzene",
+      "children": [
+        {"label": "乙苯", "relation": "intermediate", "notes": ["乙烯与苯先形成乙苯，乙苯是苯乙烯产业链的中间体。"]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "苯乙烯 Styrene"],
+      "reference": "benzene",
+      "relation": "product",
+      "moveTo": {"under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "乙苯"]},
+      "children": [
+        {"label": "苯乙烯-丙烯腈共聚物", "relation": "product"},
+        {"label": "丙烯腈-丁二烯-苯乙烯共聚物", "relation": "product"},
+        {"label": "丁苯橡胶", "relation": "product"},
+        {"label": "苯乙烯-丁二烯-苯乙烯嵌段共聚物", "relation": "product"}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "乙苯", "苯乙烯", "聚苯乙烯 PS"],
+      "reference": "benzene",
+      "children": [
+        {"label": "可发性聚苯乙烯", "relation": "grade"}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "氯乙烯 VCM"],
+      "reference": "edc",
+      "label": "1,2-二氯乙烷",
+      "relation": "intermediate",
+      "children": [
+        {"label": "氯乙烯", "relation": "product", "children": [
+          {"label": "聚氯乙烯", "relation": "product", "children": [
+            {"label": "悬浮法聚氯乙烯树脂", "relation": "grade"},
+            {"label": "聚氯乙烯糊树脂", "relation": "grade"}
+          ]},
+          {"label": "氯化氢", "relation": "byproduct", "notes": ["平衡乙烯法中可回用于氧氯化制二氯乙烷。"]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "乙醛 Acetaldehyde"],
+      "reference": "petrochemicals",
+      "label": "乙醛",
+      "relation": "intermediate",
+      "note": "乙醛氧化可制乙酸。乙酸乙烯酯的常用乙烯路线使用乙烯与乙酸。",
+      "children": [
+        {"label": "乙酸", "relation": "product"}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "乙酸乙烯酯", "聚乙烯醇"],
+      "reference": "pva",
+      "relation": "product",
+      "moveTo": {"under": "S-01-02", "path": ["裂解原料", "乙烯 Ethylene", "乙酸乙烯酯", "聚乙酸乙烯酯"]},
+      "note": "乙酸乙烯酯先形成聚乙酸乙烯酯，再经水解或醇解得到聚乙烯醇。"
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丙烯 Propylene", "异丙苯 Cumene", "丙酮 Acetone"],
+      "reference": "mibk",
+      "relation": "byproduct",
+      "children": [
+        {"label": "4-甲基-2-戊酮", "relation": "product", "children": [
+          {"label": "工业涂料溶剂", "relation": "use"},
+          {"label": "润滑油脱蜡用溶剂", "relation": "use"}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丙烯 Propylene"],
+      "reference": "oxoAlcohols",
+      "children": [
+        {"label": "羰基合成醛", "children": [
+          {"label": "正丁醛", "relation": "intermediate", "children": [
+            {"label": "正丁醇", "relation": "product", "children": [
+              {"label": "丙烯酸正丁酯", "relation": "use"},
+              {"label": "乙酸丁酯", "relation": "use"}
+            ]},
+            {"label": "2-乙基己醇", "relation": "product", "children": [
+              {"label": "丙烯酸-2-乙基己酯", "relation": "use"},
+              {"label": "对苯二甲酸双(2-乙基己)酯", "relation": "use"}
+            ]}
+          ]},
+          {"label": "异丁醛", "relation": "intermediate", "children": [
+            {"label": "异丁醇", "relation": "product"}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丙烯 Propylene", "丙烯酸 Acrylic Acid", "丙烯酸酯"],
+      "reference": "acrylicMonomers",
+      "label": "丙烯酸酯类",
+      "children": [
+        {"label": "丙烯酸甲酯", "relation": "product"},
+        {"label": "丙烯酸乙酯", "relation": "product"},
+        {"label": "丙烯酸正丁酯", "relation": "product"},
+        {"label": "丙烯酸-2-乙基己酯", "relation": "product"}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丙烯 Propylene", "丙烯酰胺 AM"],
+      "reference": "acrylamide",
+      "remove": true
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丙烯 Propylene", "丙烯腈 AN"],
+      "reference": "acrylamide",
+      "children": [
+        {"label": "丙烯酰胺", "relation": "product", "children": [
+          {"label": "聚丙烯酰胺", "relation": "product", "children": [
+            {"label": "水处理絮凝剂", "relation": "use"},
+            {"label": "污泥脱水助剂", "relation": "use"}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丁二烯 1,3-Butadiene", "三元乙丙橡胶 EPDM"],
+      "reference": "dieneRubber",
+      "remove": true
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "丙烯 Propylene"],
+      "reference": "dieneRubber",
+      "children": [
+        {"label": "乙丙橡胶", "children": [
+          {"label": "二元乙丙橡胶", "relation": "product", "notes": ["二元共聚单体为乙烯、丙烯。"]},
+          {"label": "三元乙丙橡胶", "relation": "product", "notes": ["除乙烯和丙烯外，第三单体为非共轭二烯，例如乙叉降冰片烯。"], "children": [
+            {"label": "汽车密封条", "relation": "use"},
+            {"label": "电缆护套", "relation": "use"}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "混合C4", "MTBE"],
+      "reference": "mtbe",
+      "remove": true
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "混合C4", "异丁烯"],
+      "reference": "mtbe",
+      "label": "异丁烯",
+      "relation": "intermediate",
+      "children": [
+        {"label": "甲基叔丁基醚", "relation": "product", "notes": ["由异丁烯和甲醇制得。汽油使用取决于当地市场与要求。"], "children": [
+          {"label": "汽油调和组分", "relation": "use"}
+        ]},
+        {"label": "丁基橡胶", "relation": "product"},
+        {"label": "甲基丙烯酸", "relation": "product", "notes": ["异丁烯氧化是可选原料路线。"]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "混合C4", "丁烯-1"],
+      "reference": "butanone",
+      "label": "1-丁烯",
+      "children": [
+        {"label": "聚乙烯共聚单体", "relation": "use"}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "混合C4"],
+      "reference": "butanone",
+      "children": [
+        {"label": "醚后碳四", "relation": "intermediate", "notes": ["醚化后剩余的混合碳四物流，组成随上游装置变化。"]},
+        {"label": "正丁烯馏分", "relation": "intermediate", "children": [
+          {"label": "2-丁醇", "relation": "intermediate", "children": [
+            {"label": "2-丁酮", "relation": "product", "children": [
+              {"label": "涂料溶剂", "relation": "use"},
+              {"label": "胶黏剂溶剂", "relation": "use"}
+            ]}
+          ]}
+        ]},
+        {"label": "异丁烷", "relation": "feedstock", "children": [
+          {"label": "烷基化油", "relation": "product", "notes": ["烷基化油来自异丁烷与低碳烯烃，作为汽油调和组分。"]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "混合C5", "环戊二烯"],
+      "reference": "petroleumResin",
+      "label": "环戊二烯",
+      "relation": "intermediate",
+      "children": [
+        {"label": "双环戊二烯", "relation": "product", "children": [
+          {"label": "双环戊二烯石油树脂", "relation": "product"},
+          {"label": "改性不饱和聚酯树脂", "relation": "use"}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02", "path": ["裂解原料", "混合C5"],
+      "reference": "petroleumResin",
+      "children": [
+        {"label": "间戊二烯富集馏分", "relation": "intermediate", "children": [
+          {"label": "碳五石油树脂", "relation": "product", "children": [
+            {"label": "热熔胶增黏剂", "relation": "use"}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-02",
+      "reference": "petroleumResin",
+      "children": [
+        {"label": "裂解碳九芳烃馏分", "relation": "byproduct", "children": [
+          {"label": "碳九石油树脂", "relation": "product", "children": [
+            {"label": "涂料和胶黏剂配料", "relation": "use"}
+          ]},
+          {"label": "碳五加碳九共聚石油树脂", "relation": "product", "notes": ["共聚类原料同时含适用的碳五组分。"]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-03", "path": ["重整原料", "苯 Benzene", "环己烷"],
+      "reference": "adipic",
+      "label": "环己烷",
+      "children": [
+        {"label": "环己醇和环己酮混合物", "relation": "intermediate", "children": [
+          {"label": "己二酸", "relation": "product", "children": [
+            {"label": "聚酰胺66", "relation": "use", "notes": ["聚酰胺66还需要己二胺。"]}
+          ]}
+        ]},
+        {"label": "环己酮", "relation": "intermediate", "children": [
+          {"label": "己内酰胺", "relation": "product", "children": [
+            {"label": "聚酰胺6", "relation": "product"}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-01-03", "path": ["重整原料", "苯 Benzene", "顺丁烯二酸酐"],
+      "reference": "maleic",
+      "label": "顺丁烯二酸酐（苯氧化法）",
+      "relation": "historical",
+      "note": "苯氧化属于早期工业路线。正丁烷氧化路线归入天然气凝液及碳四加工。"
+    },
+    {
+      "under": "S-01-03", "path": ["重整原料", "苯 Benzene", "苯酚（异丙苯法"],
+      "reference": "benzene",
+      "label": "异丙苯",
+      "relation": "intermediate",
+      "children": [
+        {"label": "苯酚", "relation": "product", "children": [
+          {"label": "双酚A", "relation": "product", "children": [
+            {"label": "聚碳酸酯", "relation": "use"},
+            {"label": "环氧树脂", "relation": "use"}
+          ]},
+          {"label": "酚醛树脂", "relation": "use"}
+        ]},
+        {"label": "丙酮", "relation": "byproduct"}
+      ]
+    },
+    {
+      "under": "S-01-03", "path": ["重整原料", "苯 Benzene"],
+      "reference": "benzene",
+      "children": [
+        {"label": "乙苯", "relation": "intermediate", "children": [
+          {"label": "苯乙烯", "relation": "product", "notes": ["乙苯环节还需要来自烯烃链的乙烯。"]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-02-03", "path": ["丁烷 Butane"],
+      "reference": "maleic",
+      "label": "丁烷组分",
+      "note": "按正丁烷和异丁烷分别识别原料路径。",
+      "children": [
+        {"label": "正丁烷", "relation": "feedstock", "children": [
+          {"label": "顺丁烯二酸酐", "relation": "product", "children": [
+            {"label": "不饱和聚酯树脂", "relation": "use"},
+            {"label": "富马酸", "relation": "product"}
+          ]}
+        ]},
+        {"label": "异丁烷", "relation": "feedstock", "children": [
+          {"label": "异丁烯", "relation": "intermediate", "children": [
+            {"label": "甲基叔丁基醚", "relation": "product", "notes": ["异丁烯与甲醇是制醚原料。"]}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-02-01", "path": ["天然气（CH₄）", "甲醇 Methanol", "MTBE/MTA"],
+      "reference": "mtbe",
+      "label": "甲基叔丁基醚",
+      "relation": "product",
+      "note": "此路线共原料为异丁烯。"
+    },
+    {
+      "under": "S-02-01", "path": ["天然气（CH₄）", "甲醇 Methanol", "二甲基醚"],
+      "reference": "petrochemicals",
+      "label": "二甲醚",
+      "relation": "product",
+      "children": [
+        {"label": "气雾剂推进剂", "relation": "use"},
+        {"label": "燃料用二甲醚", "relation": "grade"}
+      ]
+    },
+    {
+      "under": "S-02-01", "path": ["天然气（CH₄）", "甲醇 Methanol", "甲醛 Formaldehyde", "三聚氰胺树脂"],
+      "reference": "formaldehyde",
+      "label": "三聚氰胺甲醛树脂",
+      "relation": "product",
+      "note": "MF 由三聚氰胺和甲醛形成；含尿素的共缩合树脂属于 MUF。"
+    },
+    {
+      "under": "S-02-01", "path": ["天然气（CH₄）", "甲醇 Methanol", "甲醛 Formaldehyde"],
+      "reference": "formaldehyde",
+      "children": [
+        {"label": "六亚甲基四胺", "relation": "product"},
+        {"label": "多聚甲醛", "relation": "product"}
+      ]
+    },
+    {
+      "under": "S-02-01", "path": ["天然气（CH₄）", "甲醇 Methanol", "甲醇制烯烃"],
+      "reference": "coalLiquefaction",
+      "children": [
+        {"label": "乙烯", "relation": "product"},
+        {"label": "丙烯", "relation": "product"}
+      ]
+    },
+    {
+      "under": "S-03-01", "path": ["煤炭 → 煤气化", "→ 煤制油"],
+      "reference": "coalLiquefaction",
+      "label": "煤间接液化（费托合成）",
+      "note": "原料先经煤气化得到合成气，然后进入费托合成和产品升级。"
+    },
+    {
+      "under": "S-03",
+      "reference": "coalLiquefaction",
+      "children": [
+        {"label": "煤直接液化", "notes": ["煤直接进入液化路线，主物料流无需先转化成合成气。"], "children": [
+          {"label": "煤液化油", "relation": "intermediate", "children": [
+            {"label": "煤制石脑油", "relation": "product"},
+            {"label": "煤制柴油", "relation": "product"}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-03-02", "path": ["煤炭 → 炼焦", "煤焦油", "沥青 Pitch"],
+      "reference": "graphite",
+      "label": "煤焦油沥青",
+      "relation": "product",
+      "children": [
+        {"label": "煤系针状焦", "relation": "product", "children": [
+          {"label": "石墨电极", "relation": "use"},
+          {"label": "人造石墨负极材料", "relation": "use"}
+        ]},
+        {"label": "碳材料包覆沥青", "relation": "use"}
+      ]
+    },
+    {
+      "under": "S-04-01", "path": ["钛矿", "二氧化钛 Ti", "硫酸法钛白"],
+      "reference": "titanium",
+      "label": "硫酸法钛白粉",
+      "note": "钛铁矿或适用钛渣与硫酸进入这条路线。"
+    },
+    {
+      "under": "S-04-01", "path": ["钛矿", "二氧化钛 Ti", "氯化法钛白"],
+      "reference": "titanium",
+      "label": "氯化法钛白粉",
+      "note": "金红石或其他适用的高钛原料，经四氯化钛中间体进入氯化法。"
+    },
+    {
+      "under": "S-04-03",
+      "reference": "sulfur",
+      "children": [
+        {"label": "回收硫磺", "children": [
+          {"label": "炼厂脱硫回收硫磺", "relation": "byproduct"},
+          {"label": "含硫天然气净化回收硫磺", "relation": "byproduct"}
+        ]},
+        {"label": "有色冶炼烟气制硫酸", "notes": ["冶炼烟气中的含硫组分可直接进入制酸路线。"], "children": [
+          {"label": "硫酸", "relation": "byproduct"}
+        ]}
+      ]
+    },
+    {
+      "under": "S-04-01", "path": ["镍矿"],
+      "reference": "nickel",
+      "children": [
+        {"label": "硫化镍矿", "relation": "feedstock", "children": [
+          {"label": "硫化镍精矿", "relation": "intermediate", "children": [
+            {"label": "高冰镍", "relation": "intermediate", "children": [
+              {"label": "硫酸镍", "relation": "product"},
+              {"label": "精炼镍", "relation": "product"}
+            ]}
+          ]}
+        ]},
+        {"label": "红土镍矿", "relation": "feedstock", "children": [
+          {"label": "混合氢氧化物沉淀", "relation": "intermediate", "notes": ["MHP 是含镍、钴的混合中间品。"], "children": [
+            {"label": "硫酸镍", "relation": "product"}
+          ]},
+          {"label": "镍铁和镍生铁", "relation": "intermediate", "children": [
+            {"label": "不锈钢用镍", "relation": "use"},
+            {"label": "高冰镍", "relation": "intermediate", "children": [
+              {"label": "硫酸镍", "relation": "product"}
+            ]}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "S-04-02", "path": ["石英/硅砂", "金属硅"],
+      "reference": "photovoltaic",
+      "label": "工业硅",
+      "relation": "intermediate",
+      "note": "工业硅是晶硅光伏和有机硅工业的共同上游原料。"
+    },
+    {
+      "under": "S-04-02", "path": ["石英/硅砂", "工业硅", "多晶硅"],
+      "reference": "photovoltaic",
+      "label": "多晶硅",
+      "relation": "product",
+      "note": "工业硅可经氯硅烷或硅烷等中间体提纯。硅片属于后续切片产品。"
+    },
+    {
+      "under": "S-04-02", "path": ["石英/硅砂", "工业硅", "多晶硅", "多晶硅块/多晶硅片"],
+      "reference": "photovoltaic",
+      "label": "多晶硅料（块状或颗粒状）",
+      "relation": "grade"
+    },
+    {
+      "under": "S-04-02", "path": ["石英/硅砂", "工业硅", "多晶硅", "单晶硅棒/单晶硅片"],
+      "reference": "photovoltaic",
+      "label": "单晶硅棒",
+      "relation": "intermediate",
+      "children": [
+        {"label": "硅片", "relation": "product", "children": [
+          {"label": "晶硅电池片", "relation": "use"}
+        ]}
+      ]
+    },
+    {
+      "under": "S-04-02", "path": ["炭黑 Carbon Black", "白炭黑"],
+      "reference": "silica",
+      "remove": true
+    },
+    {
+      "under": "S-04-02", "path": ["炭黑 Carbon Black"],
+      "reference": "carbonBlack",
+      "moveTo": {"under": "S-01", "path": ["芳香烃油与炭黑"]}
+    },
+    {
+      "under": "S-04-02", "path": ["石英/硅砂", "二氧化硅 SiO₂"],
+      "reference": "silica",
+      "label": "二氧化硅",
+      "children": [
+        {"label": "沉淀二氧化硅", "relation": "grade", "notes": ["工业湿法可用硅酸钠溶液。"]},
+        {"label": "气相二氧化硅", "relation": "grade", "notes": ["四氯化硅是常见原料之一。"]}
+      ]
+    },
+    {
+      "under": "S-05-01", "path": ["空气 → 深冷分离/PSA", "氦气 He"],
+      "reference": "helium",
+      "remove": true
+    },
+    {
+      "under": "S-02-01", "path": ["天然气（CH₄）"],
+      "reference": "water",
+      "children": [
+        {"label": "工艺气回收二氧化碳", "notes": ["含碳原料的制氢及合成氨上游净化是二氧化碳回收场景。"]}
+      ]
+    },
+    {
+      "under": "S-05-02", "path": ["氮气 N₂", "二氧化碳 CO₂"],
+      "reference": "water",
+      "label": "二氧化碳",
+      "relation": "byproduct",
+      "moveTo": {"under": "S-02-01", "path": ["天然气（CH₄）", "工艺气回收二氧化碳"]}
+    },
+    {
+      "under": "S-05-02", "path": ["氮气 N₂", "硝酸 HNO₃"],
+      "reference": "nitric",
+      "label": "硝酸",
+      "relation": "product",
+      "moveTo": {"under": "S-05-02", "path": ["氮气 N₂", "合成氨 NH₃"]},
+      "note": "工业氨氧化路线以氨为含氮原料。"
+    },
+    {
+      "under": "S-04-04", "path": ["磷矿石", "湿法磷酸"],
+      "reference": "fertilizers",
+      "children": [
+        {"label": "磷酸二氢铵", "relation": "product"},
+        {"label": "磷酸氢二铵", "relation": "product"},
+        {"label": "重过磷酸钙", "relation": "product"},
+        {"label": "磷石膏", "relation": "byproduct", "notes": ["同一湿法制酸过程的副产物。"]}
+      ]
+    },
+    {
+      "under": "S-01-09", "path": ["萤石(CaF₂)", "含氟制冷剂", "HFCs"],
+      "reference": "refrigerants",
+      "label": "氢氟烃单组分制冷剂",
+      "children": [
+        {"label": "二氟甲烷", "relation": "grade"},
+        {"label": "五氟乙烷", "relation": "grade"},
+        {"label": "1,1,1,2-四氟乙烷", "relation": "grade"}
+      ]
+    },
+    {
+      "under": "S-01-09", "path": ["萤石(CaF₂)", "含氟制冷剂"],
+      "reference": "refrigerants",
+      "children": [
+        {"label": "R-410A 混合制冷剂", "relation": "grade", "notes": ["由 R-32（二氟甲烷）与 R-125（五氟乙烷）组成。"]}
+      ]
     }
   ],
   "applications": [
@@ -270,6 +886,218 @@
     {"under": "A-38-3841-03", "path": ["溶剂", "EMC"], "reference": "electrolytes", "displayName": "碳酸甲乙酯"},
     {"under": "A-38-3841-03", "path": ["溶剂", "DEC"], "reference": "electrolytes", "displayName": "碳酸二乙酯"},
     {"under": "A-38-3841-03", "path": ["添加剂", "VC"], "reference": "electrolytes", "displayName": "碳酸亚乙烯酯"},
-    {"under": "A-38-3841-03", "path": ["添加剂", "FEC"], "reference": "electrolytes", "displayName": "氟代碳酸乙烯酯"}
+    {"under": "A-38-3841-03", "path": ["添加剂", "FEC"], "reference": "electrolytes", "displayName": "氟代碳酸乙烯酯"},
+    {
+      "under": "A-25-2511-01",
+      "reference": "refining",
+      "children": [
+        {"label": "原油", "relation": "feedstock"},
+        {"label": "常压渣油", "relation": "feedstock", "notes": ["常压蒸馏的塔底物流，是后续减压蒸馏的进料。"]}
+      ]
+    },
+    {
+      "under": "A-25-2511-02",
+      "reference": "refineryProcess",
+      "children": [
+        {"label": "减压瓦斯油", "relation": "feedstock"},
+        {"label": "适用焦化瓦斯油", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-25-2511-06",
+      "reference": "refineryProcess",
+      "children": [
+        {"label": "减压渣油", "relation": "feedstock"},
+        {"label": "其他重质残渣油", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-25-2511-07",
+      "reference": "refineryProcess",
+      "children": [
+        {"label": "异丁烷", "relation": "feedstock"},
+        {"label": "低碳烯烃", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-26-2651-03", "path": ["乙烯氧氯化"],
+      "reference": "pvc",
+      "label": "悬浮聚合",
+      "note": "悬浮聚合使用氯乙烯单体，单体可由乙烯法或电石乙炔路线提供。"
+    },
+    {
+      "under": "A-26-2651-03", "path": ["乳液聚合"],
+      "reference": "pvc",
+      "label": "乳液和微悬浮类工艺",
+      "children": [
+        {"label": "聚氯乙烯糊树脂", "relation": "grade"}
+      ]
+    },
+    {
+      "under": "A-26-2651-03",
+      "reference": "edc",
+      "children": [
+        {"label": "氯乙烯", "relation": "feedstock", "children": [
+          {"label": "乙烯法氯乙烯", "children": [
+            {"label": "1,2-二氯乙烷", "relation": "intermediate", "children": [
+              {"label": "乙烯", "relation": "feedstock"}
+            ]}
+          ]},
+          {"label": "乙炔法氯乙烯", "children": [
+            {"label": "乙炔", "relation": "feedstock", "children": [
+              {"label": "碳化钙", "relation": "feedstock"}
+            ]}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "A-26-2651-07", "path": ["PTA+EG"],
+      "reference": "polyester",
+      "label": "对苯二甲酸二甲酯酯交换后缩聚",
+      "children": [
+        {"label": "对苯二甲酸二甲酯", "relation": "feedstock"},
+        {"label": "乙二醇", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-26-2651-07", "path": ["直接酯化缩聚"],
+      "reference": "polyester",
+      "label": "对苯二甲酸直接酯化后缩聚",
+      "children": [
+        {"label": "对苯二甲酸", "relation": "feedstock"},
+        {"label": "乙二醇", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-26-2652-05", "path": ["茂金属催化剂"],
+      "reference": "dieneRubber",
+      "label": "乙丙橡胶聚合",
+      "children": [
+        {"label": "二元乙丙橡胶", "relation": "grade", "children": [
+          {"label": "乙烯", "relation": "feedstock"},
+          {"label": "丙烯", "relation": "feedstock"}
+        ]},
+        {"label": "三元乙丙橡胶", "relation": "grade", "children": [
+          {"label": "乙烯", "relation": "feedstock"},
+          {"label": "丙烯", "relation": "feedstock"},
+          {"label": "乙叉降冰片烯", "relation": "feedstock"}
+        ]}
+      ]
+    },
+    {
+      "under": "A-26-2651-10", "path": ["丙烯酸酯乳液"],
+      "reference": "acrylicMonomers",
+      "children": [
+        {"label": "丙烯酸", "relation": "feedstock"},
+        {"label": "丙烯酸甲酯", "relation": "feedstock"},
+        {"label": "丙烯酸乙酯", "relation": "feedstock"},
+        {"label": "丙烯酸正丁酯", "relation": "feedstock"},
+        {"label": "丙烯酸-2-乙基己酯", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-26-2662-01", "path": ["聚丙烯酰胺"],
+      "reference": "acrylamide",
+      "children": [
+        {"label": "丙烯酰胺", "relation": "feedstock", "children": [
+          {"label": "丙烯腈", "relation": "feedstock"}
+        ]}
+      ]
+    },
+    {
+      "under": "A-26-2622-03", "path": ["磷酸+氨中和"],
+      "reference": "fertilizers",
+      "label": "磷酸二氢铵",
+      "relation": "grade",
+      "children": [
+        {"label": "磷酸", "relation": "feedstock"},
+        {"label": "氨", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-26-2622-03", "path": ["DAP"],
+      "reference": "fertilizers",
+      "label": "磷酸氢二铵",
+      "relation": "grade",
+      "children": [
+        {"label": "磷酸", "relation": "feedstock"},
+        {"label": "氨", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-32-3213",
+      "reference": "nickel",
+      "children": [
+        {"label": "硫化镍精矿", "relation": "feedstock"},
+        {"label": "红土镍矿", "relation": "feedstock"},
+        {"label": "混合氢氧化物沉淀", "relation": "intermediate"},
+        {"label": "高冰镍", "relation": "intermediate"},
+        {"label": "精炼镍", "relation": "product"},
+        {"label": "硫酸镍", "relation": "product", "notes": ["多种矿物和冶炼中间料可进入硫酸镍路线。"]}
+      ]
+    },
+    {
+      "under": "A-38-3841-02", "path": ["石墨 ←"],
+      "reference": "graphite",
+      "label": "石墨负极材料",
+      "children": [
+        {"label": "天然石墨负极材料", "relation": "grade", "children": [
+          {"label": "天然鳞片石墨", "relation": "feedstock"},
+          {"label": "球形石墨", "relation": "intermediate"}
+        ]},
+        {"label": "人造石墨负极材料", "relation": "grade", "children": [
+          {"label": "煅烧石油焦", "relation": "feedstock"},
+          {"label": "针状焦", "relation": "feedstock"},
+          {"label": "包覆沥青", "relation": "feedstock"}
+        ]}
+      ]
+    },
+    {
+      "under": "A-29-2911-01", "path": ["炭黑/白炭黑"],
+      "reference": "silica",
+      "label": "补强填料",
+      "children": [
+        {"label": "炭黑", "relation": "feedstock"},
+        {"label": "沉淀二氧化硅", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-29-2911-02", "path": ["炭黑/白炭黑"],
+      "reference": "silica",
+      "label": "补强填料",
+      "children": [
+        {"label": "炭黑", "relation": "feedstock"},
+        {"label": "沉淀二氧化硅", "relation": "feedstock"}
+      ]
+    },
+    {
+      "under": "A-38-3825", "path": ["多晶硅 ←"],
+      "reference": "photovoltaic",
+      "label": "晶硅光伏用硅料",
+      "children": [
+        {"label": "电池片用硅片", "relation": "feedstock", "children": [
+          {"label": "单晶硅棒", "relation": "intermediate", "children": [
+            {"label": "多晶硅", "relation": "feedstock", "children": [
+              {"label": "工业硅", "relation": "feedstock", "children": [
+                {"label": "高品位石英", "relation": "feedstock"}
+              ]}
+            ]}
+          ]}
+        ]}
+      ]
+    },
+    {
+      "under": "A-38-3825",
+      "reference": "photovoltaic",
+      "children": [
+        {"label": "光伏组件封装", "children": [
+          {"label": "光伏玻璃", "relation": "feedstock"},
+          {"label": "乙烯-乙酸乙烯酯共聚物胶膜", "relation": "feedstock"},
+          {"label": "聚烯烃弹性体胶膜", "relation": "feedstock"},
+          {"label": "铝合金边框", "relation": "feedstock"}
+        ]}
+      ]
+    }
   ]
 }

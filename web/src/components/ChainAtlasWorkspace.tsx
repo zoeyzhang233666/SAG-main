@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n";
 import { api } from "../lib/api";
-import { chainAtlas, normalizeAtlasSearch, type ChainNode, type ChainTrack } from "../lib/chain-atlas";
+import { chainAtlas, chainRelations, normalizeAtlasSearch, type ChainNode, type ChainTrack } from "../lib/chain-atlas";
 import type { ChainAtlasEntityMatch, SourceRecord } from "../types";
 import "./chain-atlas.css";
 
@@ -219,6 +219,7 @@ export default function ChainAtlasWorkspace({
     const showChoices = expandedMatch === item.id && matches.length > 1;
     const actionable = searchResult || item.children.length > 0 || item.terms.length > 0;
     const label = <span className="chain-atlas-node-label">{item.label}</span>;
+    const relation = item.relation ? chainRelations[item.relation] : undefined;
     return (
       <li key={item.id} data-chain-node={item.id} className="chain-atlas-node">
         <div className="chain-atlas-row" data-focused={selection.focusedId === item.id} data-branch={item.children.length > 0} data-root={item.parents.length === 0}>
@@ -247,6 +248,7 @@ export default function ChainAtlasWorkspace({
                   {label}
                 </button>
               ) : label}
+              {relation ? <span className="chain-atlas-relation" data-relation={item.relation}>{t(...relation)}</span> : null}
             </div>
             {item.chemical ? (
               <div className="chain-atlas-chemical">

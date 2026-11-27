@@ -1,9 +1,19 @@
-import source from "../data/chain-source.json";
-import applications from "../data/chain-applications.json";
-import chemicalData from "../data/chain-chemicals.json";
-import supplements from "../data/chain-supplements.json";
+import source from "../data/chain-source.json" with { type: "json" };
+import applications from "../data/chain-applications.json" with { type: "json" };
+import chemicalData from "../data/chain-chemicals.json" with { type: "json" };
+import supplements from "../data/chain-supplements.json" with { type: "json" };
 
 export type ChainTrack = "source" | "applications";
+
+export const chainRelations: Record<string, readonly [string, string]> = {
+  feedstock: ["原料", "Feedstock"],
+  intermediate: ["中间体", "Intermediate"],
+  product: ["产品", "Product"],
+  byproduct: ["副产物", "By-product"],
+  use: ["用途", "Use"],
+  grade: ["品类", "Grade"],
+  historical: ["历史路线", "Historical route"]
+};
 
 interface Chemical {
   name: string;
@@ -24,18 +34,27 @@ interface AtlasNode {
   notes?: string[];
   children?: AtlasNode[];
   displayName?: string;
+  relation?: string;
   reference?: AtlasReference;
 }
 
 type SupplementalNode = string | {
   label: string;
+  relation?: string;
   notes?: string[];
   children?: SupplementalNode[];
 };
 
-interface Supplement {
+interface AtlasPath {
   under: string;
   path?: string[];
+}
+
+interface Supplement extends AtlasPath {
+  moveTo?: AtlasPath;
+  label?: string;
+  remove?: boolean;
+  relation?: string;
   note?: string;
   displayName?: string;
   children?: SupplementalNode[];
@@ -53,7 +72,7 @@ export interface ChainNode extends Omit<AtlasNode, "children" | "displayName"> {
   context?: string;
 }
 
-const AMBIGUOUS_TERMS = new Set(["AA", "AM", "AS", "COC", "CR", "DMC", "EC", "EO", "MA", "PAC", "PC", "PI", "POP", "PO", "TPO", "VC"]);
+const AMBIGUOUS_TERMS = new Set(["AA", "AM", "AS", "BA", "COC", "CR", "DMC", "DME", "EA", "EC", "EDC", "EO", "IPA", "MA", "PAC", "PC", "PI", "POP", "PO", "TPO", "VC"]);
 
 export function normalizeAtlasSearch(value: string) {
   return value.normalize("NFKC")
@@ -151,27 +170,54 @@ function appendChildren(parent: AtlasNode, children: AtlasNode[]) {
   for (const child of children) {
     const existing = parent.children?.find(item => nameOf(item) === nameOf(child));
     if (!existing) (parent.children ??= []).push(child);
-    else if (child.children?.length) appendChildren(existing, child.children);
+    else {
+      if (child.relation) existing.relation ??= child.relation;
+      if (child.notes) existing.notes = [...(existing.notes ?? []), ...child.notes];
+      existing.reference ??= child.reference;
+      if (child.children?.length) appendChildren(existing, child.children);
+    }
   }
 }
 
 function applySupplements(original: AtlasNode[], changes: Supplement[]) {
   const roots = structuredClone(original);
   const nodes = directoryNodes(roots);
-  for (const change of changes) {
-    let parent = nodes.find(node => node.code === change.under);
-    for (const prefix of change.path ?? []) {
+  function locate(target: AtlasPath) {
+    let node = nodes.find(item => item.code === target.under);
+    let parent: AtlasNode | undefined;
+    for (const prefix of target.path ?? []) {
+      parent = node;
       const matches: AtlasNode[] = parent?.children?.filter(child => child.label.startsWith(prefix)) ?? [];
-      if (matches.length !== 1) throw new Error(`Ambiguous atlas path ${change.under} / ${prefix}: ${matches.length} matches`);
-      parent = matches[0];
+      if (matches.length !== 1) throw new Error(`Ambiguous atlas path ${target.under} / ${prefix}: ${matches.length} matches`);
+      node = matches[0];
     }
-    if (!parent) throw new Error(`Unknown atlas code ${change.under}`);
+    if (!node) throw new Error(`Unknown atlas code ${target.under}`);
+    return { node, parent };
+  }
+
+  for (const change of changes) {
+    const { node, parent } = locate(change);
     const reference = (supplements.references as Record<string, AtlasReference>)[change.reference];
     if (!reference) throw new Error(`Unknown atlas reference ${change.reference}`);
-    if (change.children) appendChildren(parent, change.children.map(node => supplementalNode(node, reference)));
-    if (change.note) parent.notes = [...(parent.notes ?? []), change.note];
-    if (change.displayName) parent.displayName = change.displayName;
-    if (change.note || change.displayName) parent.reference = reference;
+    if (change.remove) {
+      if (!parent?.children || node.children?.length) throw new Error(`Only leaf atlas nodes may be removed: ${node.label}`);
+      parent.children = parent.children.filter(child => child !== node);
+      continue;
+    }
+    if (change.children) appendChildren(node, change.children.map(child => supplementalNode(child, reference)));
+    if (change.note) node.notes = [...(node.notes ?? []), change.note];
+    if (change.displayName) node.displayName = change.displayName;
+    if (change.label) node.label = change.label;
+    if (change.relation) node.relation = change.relation;
+    if (change.note || change.displayName || change.label || change.relation || change.moveTo) node.reference = reference;
+    if (change.moveTo) {
+      const destination = locate(change.moveTo).node;
+      if (!parent?.children || directoryNodes([node]).includes(destination)) {
+        throw new Error(`Invalid atlas move: ${node.label}`);
+      }
+      parent.children = parent.children.filter(child => child !== node);
+      appendChildren(destination, [node]);
+    }
   }
   return roots;
 }
@@ -179,6 +225,9 @@ function applySupplements(original: AtlasNode[], changes: Supplement[]) {
 function indexTree(input: { version: string; roots: AtlasNode[] }, changes: Supplement[]) {
   const entries: ChainNode[] = [];
   function visit(node: AtlasNode, id: string, parents: ChainNode[]): ChainNode {
+    if (node.relation && !Object.hasOwn(chainRelations, node.relation)) {
+      throw new Error(`Unknown atlas relation ${node.relation}`);
+    }
     const chemical = chemicalFor(node) ?? undefined;
     const clean = cleanLabel(node.label);
     const label = chemical?.name ?? clean;

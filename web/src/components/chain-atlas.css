@@ -560,3 +560,17 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+.chain-atlas-relation {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--hairline);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: .68rem;
+  line-height: 1.4;
+}
+
+.chain-atlas-relation[data-relation="historical"] {
+  background: var(--surface-inset);
+}

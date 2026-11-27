@@ -530,7 +530,6 @@
   {
     "name": "盐酸",
     "english": "Hydrochloric acid",
-    "cas": "7647-01-0",
     "formula": "HCl",
     "aliases": [
       "氢氯酸"
@@ -690,10 +689,7 @@
     "name": "氮气",
     "english": "Nitrogen",
     "cas": "7727-37-9",
-    "formula": "N2",
-    "aliases": [
-      "液氮"
-    ]
+    "formula": "N2"
   },
   {
     "name": "氧气",
@@ -720,8 +716,7 @@
     "cas": "124-38-9",
     "formula": "CO2",
     "aliases": [
-      "液态二氧化碳",
-      "干冰"
+      "液态二氧化碳"
     ]
   },
   {
@@ -1198,5 +1193,56 @@
     "english": "Isosorbide",
     "cas": "652-67-5",
     "formula": "C6H10O4"
-  }
+  },
+  {"name": "石脑油", "english": "Naphtha"},
+  {"name": "乙醛", "english": "Acetaldehyde", "cas": "75-07-0", "formula": "C2H4O"},
+  {"name": "碳化钙", "english": "Calcium carbide", "cas": "75-20-7", "formula": "CaC2", "aliases": ["电石"]},
+  {"name": "氯化氢", "english": "Hydrogen chloride", "cas": "7647-01-0", "formula": "HCl", "aliases": ["氯化氢气体"]},
+  {"name": "二甲醚", "english": "Dimethyl ether", "cas": "115-10-6", "formula": "C2H6O", "aliases": ["二甲基醚", "DME"]},
+  {"name": "甲基叔丁基醚", "english": "Methyl tert-butyl ether", "cas": "1634-04-4", "formula": "C5H12O", "aliases": ["甲基第三丁基醚", "MTBE"]},
+  {"name": "1-丁烯", "english": "1-Butene", "cas": "106-98-9", "formula": "C4H8", "aliases": ["丁烯-1", "正丁烯-1"]},
+  {"name": "异丁烯", "english": "Isobutylene", "cas": "115-11-7", "formula": "C4H8", "aliases": ["2-甲基丙烯", "Isobutene"]},
+  {"name": "2-丁酮", "english": "2-Butanone", "cas": "78-93-3", "formula": "C4H8O", "aliases": ["丁酮", "甲乙酮", "甲基乙基酮", "MEK"]},
+  {"name": "2-丁醇", "english": "2-Butanol", "cas": "78-92-2", "formula": "C4H10O", "aliases": ["仲丁醇", "sec-Butanol"]},
+  {"name": "正丁醇", "english": "1-Butanol", "cas": "71-36-3", "formula": "C4H10O", "aliases": ["1-丁醇", "n-Butanol"]},
+  {"name": "异丁醇", "english": "Isobutanol", "cas": "78-83-1", "formula": "C4H10O", "aliases": ["2-甲基-1-丙醇"]},
+  {"name": "正丁醛", "english": "Butanal", "cas": "123-72-8", "formula": "C4H8O", "aliases": ["丁烷醛"]},
+  {"name": "异丁醛", "english": "Isobutanal", "cas": "78-84-2", "formula": "C4H8O", "aliases": ["2-甲基丙醛"]},
+  {"name": "2-乙基己醇", "english": "2-Ethylhexanol", "cas": "104-76-7", "formula": "C8H18O", "aliases": ["2-乙基-1-己醇", "2-乙基己-1-醇"]},
+  {"name": "丙烯酸甲酯", "english": "Methyl acrylate", "cas": "96-33-3", "formula": "C4H6O2", "aliases": ["MA"]},
+  {"name": "丙烯酸乙酯", "english": "Ethyl acrylate", "cas": "140-88-5", "formula": "C5H8O2", "aliases": ["EA"]},
+  {"name": "丙烯酸正丁酯", "english": "n-Butyl acrylate", "cas": "141-32-2", "formula": "C7H12O2", "aliases": ["丙烯酸丁酯", "BA"]},
+  {"name": "丙烯酸-2-乙基己酯", "english": "2-Ethylhexyl acrylate", "cas": "103-11-7", "formula": "C11H20O2", "aliases": ["丙烯酸2-乙基己酯", "丙烯酸异辛酯", "2-EHA"]},
+  {"name": "甲基丙烯酸", "english": "Methacrylic acid", "cas": "79-41-4", "formula": "C4H6O2"},
+  {"name": "丙烯酰胺", "english": "Acrylamide", "cas": "79-06-1", "formula": "C3H5NO", "aliases": ["AM"]},
+  {"name": "环戊二烯", "english": "Cyclopentadiene", "cas": "542-92-7", "formula": "C5H6", "aliases": ["CPD"]},
+  {"name": "双环戊二烯", "english": "Dicyclopentadiene", "cas": "77-73-6", "formula": "C10H12", "aliases": ["DCPD"]},
+  {"name": "富马酸", "english": "Fumaric acid", "cas": "110-17-8", "formula": "C4H4O4", "aliases": ["反丁烯二酸"]},
+  {"name": "四氯化钛", "english": "Titanium tetrachloride", "cas": "7550-45-0", "formula": "TiCl4"},
+  {"name": "四氯化硅", "english": "Silicon tetrachloride", "cas": "10026-04-7", "formula": "SiCl4", "aliases": ["四氯硅烷"]},
+  {"name": "三氯氢硅", "english": "Trichlorosilane", "cas": "10025-78-2", "formula": "SiHCl3", "aliases": ["三氯硅烷"]},
+  {"name": "二氧化硅", "english": "Silicon dioxide", "cas": "7631-86-9", "formula": "SiO2"},
+  {"name": "沉淀二氧化硅", "english": "Precipitated silica", "aliases": ["沉淀法白炭黑", "沉淀法二氧化硅"]},
+  {"name": "气相二氧化硅", "english": "Fumed silica", "aliases": ["气相白炭黑", "气相法二氧化硅"]},
+  {"name": "对苯二甲酸二甲酯", "english": "Dimethyl terephthalate", "cas": "120-61-6", "formula": "C10H10O4", "aliases": ["DMT"]},
+  {"name": "三聚氰胺甲醛树脂", "english": "Melamine-formaldehyde resin", "cas": "9003-08-1", "aliases": ["三聚氰胺树脂"]},
+  {"name": "六亚甲基四胺", "english": "Hexamethylenetetramine", "cas": "100-97-0", "formula": "C6H12N4", "aliases": ["乌洛托品", "Methenamine"]},
+  {"name": "多聚甲醛", "english": "Paraformaldehyde", "cas": "30525-89-4"},
+  {"name": "二元乙丙橡胶", "english": "Ethylene-propylene copolymer", "aliases": ["EPM"]},
+  {"name": "乙叉降冰片烯", "english": "Ethylidene norbornene", "cas": "16219-75-3", "formula": "C9H12", "aliases": ["5-亚乙基-2-降冰片烯", "ENB"]},
+  {"name": "苯乙烯-丁二烯-苯乙烯嵌段共聚物", "english": "Styrene-butadiene-styrene block copolymer", "aliases": ["SBS"]},
+  {"name": "可发性聚苯乙烯", "english": "Expandable polystyrene", "aliases": ["EPS树脂"]},
+  {"name": "磷酸二氢铵", "english": "Ammonium dihydrogen phosphate", "cas": "7722-76-1", "formula": "NH4H2PO4", "aliases": ["磷酸一铵", "Monoammonium phosphate"]},
+  {"name": "磷酸氢二铵", "english": "Diammonium hydrogen phosphate", "cas": "7783-28-0", "formula": "(NH4)2HPO4", "aliases": ["磷酸二铵", "Diammonium phosphate"]},
+  {"name": "二氟甲烷", "english": "Difluoromethane", "cas": "75-10-5", "formula": "CH2F2", "aliases": ["R-32", "R32", "HFC-32"]},
+  {"name": "五氟乙烷", "english": "Pentafluoroethane", "cas": "354-33-6", "formula": "C2HF5", "aliases": ["R-125", "R125", "HFC-125"]},
+  {"name": "1,1,1,2-四氟乙烷", "english": "1,1,1,2-Tetrafluoroethane", "cas": "811-97-2", "formula": "C2H2F4", "aliases": ["R-134a", "R134a", "HFC-134a"]},
+  {"name": "R-410A 混合制冷剂", "english": "R-410A refrigerant blend", "aliases": ["R-410A", "R410A"]},
+  {"name": "多晶硅", "english": "Polysilicon", "aliases": ["Polycrystalline silicon"]},
+  {"name": "石油焦", "english": "Petroleum coke", "aliases": ["Petcoke"]},
+  {"name": "针状焦", "english": "Needle coke"},
+  {"name":"4-甲基-2-戊酮","english":"Methyl isobutyl ketone","cas":"108-10-1","formula":"C6H12O","aliases":["甲基异丁基酮","MIBK"]},
+  {"name": "干冰", "english": "Solid carbon dioxide", "formula": "CO2", "aliases": ["固态二氧化碳", "固体二氧化碳"]},
+  {"name": "液氮", "english": "Liquid nitrogen", "formula": "N2", "aliases": ["液态氮"]},
+  {"name": "硫磺", "english": "Elemental sulfur", "cas": "7704-34-9", "aliases": ["单质硫"]}
 ]
