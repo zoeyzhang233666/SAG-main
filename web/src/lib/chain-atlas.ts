@@ -11,6 +11,7 @@ export const chainRelations: Record<string, readonly [string, string]> = {
   product: ["产品", "Product"],
   byproduct: ["副产物", "By-product"],
   use: ["用途", "Use"],
+  auxiliary: ["助剂", "Additive"],
   grade: ["品类", "Grade"],
   historical: ["历史路线", "Historical route"]
 };
@@ -23,25 +24,17 @@ interface Chemical {
   aliases?: string[];
 }
 
-interface AtlasReference {
-  label: string;
-  url: string;
-}
-
 interface AtlasNode {
   label: string;
   code?: string;
-  notes?: string[];
   children?: AtlasNode[];
   displayName?: string;
   relation?: string;
-  reference?: AtlasReference;
 }
 
 type SupplementalNode = string | {
   label: string;
   relation?: string;
-  notes?: string[];
   children?: SupplementalNode[];
 };
 
@@ -55,13 +48,11 @@ interface Supplement extends AtlasPath {
   label?: string;
   remove?: boolean;
   relation?: string;
-  note?: string;
   displayName?: string;
   children?: SupplementalNode[];
-  reference: string;
 }
 
-export interface ChainNode extends Omit<AtlasNode, "children" | "displayName"> {
+export interface ChainNode extends Pick<AtlasNode, "label" | "code" | "relation"> {
   id: string;
   children: ChainNode[];
   size: number;
@@ -69,7 +60,6 @@ export interface ChainNode extends Omit<AtlasNode, "children" | "displayName"> {
   searchText: string;
   parents: ChainNode[];
   chemical?: Chemical;
-  context?: string;
 }
 
 const AMBIGUOUS_TERMS = new Set(["AA", "AM", "AS", "BA", "COC", "CR", "DMC", "DME", "EA", "EC", "EDC", "EO", "IPA", "MA", "PAC", "PC", "PI", "POP", "PO", "TPO", "VC"]);
@@ -160,9 +150,14 @@ function directoryNodes(roots: AtlasNode[]): AtlasNode[] {
   return roots.flatMap(node => [node, ...directoryNodes(node.children ?? [])]);
 }
 
-function supplementalNode(node: SupplementalNode, reference: AtlasReference): AtlasNode {
-  if (typeof node === "string") return { label: node, reference };
-  return { ...node, reference, children: node.children?.map(child => supplementalNode(child, reference)) };
+function supplementalNode(node: SupplementalNode): AtlasNode {
+  if (typeof node === "string") return { label: node };
+  return { label: node.label, relation: node.relation, children: node.children?.map(supplementalNode) };
+}
+
+function hasAtlasContent(node: AtlasNode) {
+  const label = cleanLabel(node.label).normalize("NFKC");
+  return label !== "(不涉及化学品)" && label !== "消耗少";
 }
 
 function appendChildren(parent: AtlasNode, children: AtlasNode[]) {
@@ -172,8 +167,6 @@ function appendChildren(parent: AtlasNode, children: AtlasNode[]) {
     if (!existing) (parent.children ??= []).push(child);
     else {
       if (child.relation) existing.relation ??= child.relation;
-      if (child.notes) existing.notes = [...(existing.notes ?? []), ...child.notes];
-      existing.reference ??= child.reference;
       if (child.children?.length) appendChildren(existing, child.children);
     }
   }
@@ -197,19 +190,15 @@ function applySupplements(original: AtlasNode[], changes: Supplement[]) {
 
   for (const change of changes) {
     const { node, parent } = locate(change);
-    const reference = (supplements.references as Record<string, AtlasReference>)[change.reference];
-    if (!reference) throw new Error(`Unknown atlas reference ${change.reference}`);
     if (change.remove) {
       if (!parent?.children || node.children?.length) throw new Error(`Only leaf atlas nodes may be removed: ${node.label}`);
       parent.children = parent.children.filter(child => child !== node);
       continue;
     }
-    if (change.children) appendChildren(node, change.children.map(child => supplementalNode(child, reference)));
-    if (change.note) node.notes = [...(node.notes ?? []), change.note];
+    if (change.children) appendChildren(node, change.children.map(supplementalNode));
     if (change.displayName) node.displayName = change.displayName;
     if (change.label) node.label = change.label;
     if (change.relation) node.relation = change.relation;
-    if (change.note || change.displayName || change.label || change.relation || change.moveTo) node.reference = reference;
     if (change.moveTo) {
       const destination = locate(change.moveTo).node;
       if (!parent?.children || directoryNodes([node]).includes(destination)) {
@@ -234,14 +223,11 @@ function indexTree(input: { version: string; roots: AtlasNode[] }, changes: Supp
     const names = chemical ? chemicalNames(chemical) : [];
     const baseTerms = chemical ? [] : entityTerms(clean, node.code);
     const terms = [...new Set([...names, ...(chemical?.cas ? [chemical.cas] : []), ...baseTerms])];
-    // Retain route, grade and class qualifiers from the source tree.
-    const contextual = /[→←↔(（/]/u.test(clean) || node.displayName || node.code?.startsWith("A-");
-    const context = chemical && contextual && label !== clean ? clean : undefined;
     const result: ChainNode = {
-      ...node,
       label,
+      code: node.code,
+      relation: node.relation,
       chemical,
-      context,
       id,
       parents,
       size: 1,
@@ -251,8 +237,8 @@ function indexTree(input: { version: string; roots: AtlasNode[] }, changes: Supp
         ...(chemical?.aliases ?? [])].filter(Boolean).map(value => normalizeAtlasSearch(value!)).join("\n")
     };
     entries.push(result);
-    result.children = (node.children ?? []).map((child, index) =>
-      visit(child, `${id}.${index}`, [...parents, result])
+    result.children = (node.children ?? []).flatMap((child, index) =>
+      hasAtlasContent(child) ? [visit(child, `${id}.${index}`, [...parents, result])] : []
     );
     result.size += result.children.reduce((sum, child) => sum + child.size, 0);
     return result;

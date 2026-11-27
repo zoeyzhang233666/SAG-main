@@ -53,12 +53,12 @@ export default function ChainAtlasWorkspace({
   const [scope, setScope] = useState<"library" | "project">("library");
   const projectId = scope === "project" && !project?.archivedAt ? project?.id : undefined;
   const [expandedMatch, setExpandedMatch] = useState<string>();
-  const [unmatched, setUnmatched] = useState<string>();
   const [retry, setRetry] = useState(0);
   const content = useRef<HTMLDivElement>(null);
   const atlas = chainAtlas[track];
   const selection = selections[track];
   const root = atlas.roots.find(item => item.id === selection.rootId);
+  const branches = useMemo(() => atlas.entries.filter(node => node.children.length), [atlas]);
 
   const results = useMemo(() => {
     if (!searchTerm) return [];
@@ -75,38 +75,39 @@ export default function ChainAtlasWorkspace({
     () => [...new Set(nodes.flatMap(node => node.terms))],
     [nodes],
   );
-  const lookupKey = JSON.stringify([projectId, terms]);
-  const [lookup, setLookup] = useState<{ key: string; rows: ChainAtlasEntityMatch[]; error?: boolean }>({ key: "", rows: [] });
+  const cache = useRef({ projectId, terms: new Map<string, ChainAtlasEntityMatch[]>() });
+  const [lookup, setLookup] = useState<{
+    projectId?: string;
+    terms: Map<string, ChainAtlasEntityMatch[]>;
+    error?: boolean;
+  }>({ projectId, terms: new Map() });
 
   useEffect(() => {
-    if (!terms.length) return;
+    if (cache.current.projectId !== projectId) cache.current = { projectId, terms: new Map() };
+    const found = cache.current.terms;
+    const pending = terms.filter(term => !found.has(term));
     const controller = new AbortController();
     async function resolveMatches() {
-      const rows: ChainAtlasEntityMatch[] = [];
-      for (let offset = 0; offset < terms.length; offset += MATCH_BATCH_SIZE) {
-        const result = await api.matchChainAtlasEntities(terms.slice(offset, offset + MATCH_BATCH_SIZE), projectId, controller.signal);
-        rows.push(...result.matches);
+      for (let offset = 0; offset < pending.length; offset += MATCH_BATCH_SIZE) {
+        const requested = pending.slice(offset, offset + MATCH_BATCH_SIZE);
+        const result = await api.matchChainAtlasEntities(requested, projectId, controller.signal);
+        if (controller.signal.aborted) return;
+        for (const term of requested) found.set(term, []);
+        for (const match of result.matches) found.get(match.term)?.push(match);
+        // Update the first rows promptly and batch subsequent updates when the whole tree is open.
+        if (offset === 0 || offset % (4 * MATCH_BATCH_SIZE) === 0) {
+          setLookup({ projectId, terms: new Map(found) });
+        }
       }
-      if (!controller.signal.aborted) setLookup({ key: lookupKey, rows });
+      if (!controller.signal.aborted) setLookup({ projectId, terms: new Map(found) });
     }
     resolveMatches().catch(() => {
-      if (!controller.signal.aborted) setLookup({ key: lookupKey, rows: [], error: true });
+      if (!controller.signal.aborted) setLookup({ projectId, terms: new Map(found), error: true });
     });
     return () => controller.abort();
-  }, [lookupKey, projectId, retry, terms]);
+  }, [projectId, retry, terms]);
 
-  const byTerm = useMemo(() => {
-    const map = new Map<string, ChainAtlasEntityMatch[]>();
-    if (lookup.key !== lookupKey) return map;
-    for (const match of lookup.rows) {
-      const current = map.get(match.term);
-      if (current) current.push(match);
-      else map.set(match.term, [match]);
-    }
-    return map;
-  }, [lookup, lookupKey]);
-  const loading = terms.length > 0 && lookup.key !== lookupKey;
-  const failed = lookup.key === lookupKey && lookup.error;
+  const failed = lookup.projectId === projectId && lookup.error;
 
   function updateSelection(updater: (current: TreeSelection) => TreeSelection) {
     setSelections(current => ({ ...current, [track]: updater(current[track]) }));
@@ -114,7 +115,6 @@ export default function ChainAtlasWorkspace({
 
   function clearRowFeedback() {
     setExpandedMatch(undefined);
-    setUnmatched(undefined);
   }
 
   function chooseTrack(value: ChainTrack) {
@@ -155,32 +155,34 @@ export default function ChainAtlasWorkspace({
 
   useEffect(() => {
     if (query || searchTerm || !selection.focusedId) return;
-    content.current?.querySelector(`[data-chain-node="${selection.focusedId}"]`)
+    content.current?.querySelector(`[data-chain-node="${selection.focusedId}"] > .chain-atlas-row`)
       ?.scrollIntoView({ block: "nearest" });
   }, [query, searchTerm, selection.focusedId]);
 
+  function setAllExpanded(open: boolean) {
+    updateSelection(() => open
+      ? { expanded: new Set(branches.map(item => item.id)) }
+      : collapsedSelection());
+    clearRowFeedback();
+    content.current?.scrollTo(0, 0);
+  }
+
   function matchesFor(item: ChainNode) {
+    if (lookup.projectId !== projectId) return [];
     const matches = new Map<string, ChainAtlasEntityMatch>();
     for (const term of item.terms) {
-      for (const match of byTerm.get(term) ?? []) matches.set(match.id, match);
+      for (const match of lookup.terms.get(term) ?? []) matches.set(match.id, match);
     }
     return [...matches.values()];
   }
 
-  function chooseNode(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
+  function openMatch(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
     if (matches.length === 1) {
       clearRowFeedback();
       onOpenEntity(matches[0].id);
-      return;
+    } else {
+      setExpandedMatch(current => current === item.id ? undefined : item.id);
     }
-    if (matches.length > 1) {
-      setUnmatched(undefined);
-      setExpandedMatch(expandedMatch === item.id ? undefined : item.id);
-      return;
-    }
-    if (searchTerm) locate(item);
-    else if (item.children.length) toggleNode(item);
-    else if (!loading && !failed && item.terms.length) setUnmatched(item.id);
   }
 
   function renderMatches(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
@@ -201,7 +203,7 @@ export default function ChainAtlasWorkspace({
   function renderMatchAction(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
     if (!matches.length) return null;
     return (
-      <button type="button" className="chain-atlas-match" onClick={() => chooseNode(item, matches)}
+      <button type="button" className="chain-atlas-match" onClick={() => openMatch(item, matches)}
         aria-expanded={matches.length > 1 ? expandedMatch === item.id : undefined}
         aria-label={`${t("查看知识库记录", "View library records")} ${item.label}`}>
         <Database size={13} />
@@ -215,65 +217,52 @@ export default function ChainAtlasWorkspace({
 
   function renderNode(item: ChainNode, searchResult: boolean) {
     const matches = matchesFor(item);
+    const branch = item.children.length > 0;
     const open = selection.expanded.has(item.id);
-    const showChoices = expandedMatch === item.id && matches.length > 1;
-    const actionable = searchResult || item.children.length > 0 || item.terms.length > 0;
-    const label = <span className="chain-atlas-node-label">{item.label}</span>;
     const relation = item.relation ? chainRelations[item.relation] : undefined;
+    const rowContent = (
+      <>
+        <span className="chain-atlas-disclosure" aria-hidden="true">
+          {searchResult ? <ArrowDownRight size={16} /> : branch
+            ? open ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+            : <Circle size={7} className="chain-atlas-leaf-icon" />}
+        </span>
+        <span className="chain-atlas-node-body">
+          {searchResult && item.parents.length > 0 ? (
+            <span className="chain-atlas-breadcrumb">{item.parents.map(parent => parent.label).join(" / ")}</span>
+          ) : null}
+          <span className="chain-atlas-node-title">
+            {item.code ? <code>{item.code}</code> : null}
+            <span className="chain-atlas-node-label">{item.label}</span>
+            {relation ? <span className="chain-atlas-relation" data-relation={item.relation}>{t(...relation)}</span> : null}
+          </span>
+          {item.chemical ? (
+            <span className="chain-atlas-chemical">
+              <span>{item.chemical.english}</span>
+              {item.chemical.cas ? <code title="CAS">CAS {item.chemical.cas}</code> : null}
+            </span>
+          ) : null}
+        </span>
+        {branch && !searchResult ? (
+          <span className="chain-atlas-branch-count">{item.children.length} {t("分支", "branches")}</span>
+        ) : null}
+      </>
+    );
     return (
       <li key={item.id} data-chain-node={item.id} className="chain-atlas-node">
-        <div className="chain-atlas-row" data-focused={selection.focusedId === item.id} data-branch={item.children.length > 0} data-root={item.parents.length === 0}>
-          {searchResult ? (
-            <button className="chain-atlas-disclosure" type="button" onClick={() => locate(item)}
-              title={t("在目录中定位", "Locate in tree")} aria-label={`${t("定位", "Locate")} ${item.label}`}>
-              <ArrowDownRight size={16} />
+        <div className="chain-atlas-row" data-focused={selection.focusedId === item.id} data-branch={branch} data-root={item.parents.length === 0}>
+          {searchResult || branch ? (
+            <button className="chain-atlas-row-main" type="button"
+              aria-expanded={searchResult ? undefined : open}
+              aria-label={searchResult ? `${t("定位", "Locate")} ${item.label}` : undefined}
+              onClick={() => searchResult ? locate(item) : toggleNode(item)}>
+              {rowContent}
             </button>
-          ) : item.children.length ? (
-            <button className="chain-atlas-disclosure" type="button" onClick={() => toggleNode(item)}
-              aria-expanded={open} aria-label={`${open ? t("折叠", "Collapse") : t("展开", "Expand")} ${item.label}`}>
-              {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </button>
-          ) : (
-            <span className="chain-atlas-leaf" aria-hidden="true"><Circle size={7} /></span>
-          )}
-          <div className="chain-atlas-node-body">
-            {searchResult && item.parents.length > 0 ? (
-              <span className="chain-atlas-breadcrumb">{item.parents.map(parent => parent.label).join(" / ")}</span>
-            ) : null}
-            <div className="chain-atlas-node-title">
-              {item.code ? <code>{item.code}</code> : null}
-              {actionable ? (
-                <button type="button" className="chain-atlas-name" onClick={() => chooseNode(item, matches)}
-                  aria-expanded={matches.length > 1 ? showChoices : undefined}>
-                  {label}
-                </button>
-              ) : label}
-              {relation ? <span className="chain-atlas-relation" data-relation={item.relation}>{t(...relation)}</span> : null}
-            </div>
-            {item.chemical ? (
-              <div className="chain-atlas-chemical">
-                <span>{item.chemical.english}</span>
-                {item.chemical.formula ? <code>{item.chemical.formula}</code> : null}
-                {item.chemical.cas ? <code title="CAS">CAS {item.chemical.cas}</code> : null}
-              </div>
-            ) : null}
-            {item.context ? <p className="chain-atlas-note">{item.context}</p> : null}
-            {item.notes?.map((note, index) => <p className="chain-atlas-note" key={index}>{note}</p>)}
-            {item.reference && (open || searchResult || item.notes?.length) ? (
-              <a className="chain-atlas-reference" href={item.reference.url} target="_blank" rel="noreferrer">
-                {item.reference.label} <ArrowUpRight size={12} />
-              </a>
-            ) : null}
-          </div>
-          {matches.length > 0 ? renderMatchAction(item, matches) : item.children.length > 0 && !searchResult ? (
-            <span className="chain-atlas-branch-count">{item.children.length} {t("分支", "branches")}</span>
-          ) : null}
+          ) : <span className="chain-atlas-row-main">{rowContent}</span>}
+          {renderMatchAction(item, matches)}
         </div>
         {renderMatches(item, matches)}
-        {unmatched === item.id && matches.length === 0 && !loading && !failed ? (
-          <p className="chain-atlas-unmatched">{t("当前范围没有匹配的知识库实体", "No matching library entity in this scope")}</p>
-        ) : null}
-        {!searchResult && open && item.children.length > 0 ? (
+        {!searchResult && open && branch ? (
           <ul className="chain-atlas-children">{item.children.map(child => renderNode(child, false))}</ul>
         ) : null}
       </li>
@@ -353,10 +342,17 @@ export default function ChainAtlasWorkspace({
               </div>
               <div className="chain-atlas-section-actions">
                 {root ? renderMatchAction(root, rootMatches) : null}
-                {!searchTerm && (root || selection.expanded.size > 0) ? (
-                  <button type="button" onClick={() => { updateSelection(() => collapsedSelection()); clearRowFeedback(); content.current?.scrollTo(0, 0); }}>
-                    {t("全部收起", "Collapse all")}
-                  </button>
+                {!searchTerm ? (
+                  <>
+                    <button type="button" onClick={() => setAllExpanded(true)}
+                      disabled={!root && selection.expanded.size === branches.length}>
+                      {t("全部展开", "Expand all")}
+                    </button>
+                    <button type="button" onClick={() => setAllExpanded(false)}
+                      disabled={!root && selection.expanded.size === 0}>
+                      {t("全部收起", "Collapse all")}
+                    </button>
+                  </>
                 ) : null}
               </div>
             </div>
@@ -365,7 +361,7 @@ export default function ChainAtlasWorkspace({
             {failed ? (
               <p className="chain-atlas-status" role="status">
                 {t("知识库查询失败", "Library lookup failed")}
-                <button type="button" onClick={() => { setLookup({ key: "", rows: [] }); setRetry(retry + 1); }}>{t("重试", "Retry")}</button>
+                <button type="button" onClick={() => { setLookup(current => ({ ...current, error: false })); setRetry(value => value + 1); }}>{t("重试", "Retry")}</button>
               </p>
             ) : null}
 

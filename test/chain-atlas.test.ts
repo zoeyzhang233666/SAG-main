@@ -65,4 +65,16 @@ describe("reviewed atlas routes", () => {
     expect(find("R-410A 混合制冷剂")).not.toContain("75-10-5");
     expect(find("二氟甲烷")).toContain("R-32");
   });
+  it("fills application branches with named materials and omits generic placeholders", () => {
+    const manufacturing = ["C", "C-28"];
+    expect(children(branch("applications", ...manufacturing, "A-28-2821-01", "熔体纺丝"))).toContain("聚酰胺6");
+    const water = ["D", "D-46", "A-46-4620"];
+    expect(children(branch("applications", ...water, "除磷药剂"))).toEqual(
+      expect.arrayContaining(["三氯化铁", "硫酸铝", "氢氧化钙"])
+    );
+    const biogas = branch("applications", "D", "D-45", "A-45-4520", "沼气脱硫");
+    expect(children(biogas)).toEqual(["氧化铁脱硫介质", "活性炭"]);
+    expect(chainAtlas.applications.entries.some(node => /不涉及化学品|^消耗少$/.test(node.label))).toBe(false);
+  });
+
 });

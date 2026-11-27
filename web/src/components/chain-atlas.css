@@ -259,8 +259,7 @@
 .chain-atlas-section-heading span,
 .chain-atlas-section-actions > button:not(.chain-atlas-match),
 .chain-atlas-status,
-.chain-atlas-empty,
-.chain-atlas-unmatched {
+.chain-atlas-empty {
   color: var(--text-muted);
   font-size: .75rem;
 }
@@ -272,6 +271,13 @@
 
 .chain-atlas-section-actions > button:not(.chain-atlas-match) {
   padding: 4px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+}
+
+.chain-atlas-section-actions > button:disabled {
+  opacity: .5;
+  cursor: default;
 }
 
 .chain-atlas-tree,
@@ -304,12 +310,35 @@
 .chain-atlas-row {
   display: flex;
   align-items: center;
-  gap: 7px;
   min-height: 38px;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 3px 7px 3px 4px;
   scroll-margin-top: 8px;
+}
+
+.chain-atlas-row-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: inherit;
+  align-self: stretch;
+  padding: 3px 9px 3px 4px;
+  border-radius: 7px;
+  text-align: left;
+}
+
+button.chain-atlas-row-main {
+  cursor: pointer;
+}
+
+button.chain-atlas-row-main:hover .chain-atlas-node-label {
+  color: var(--atlas-accent);
+}
+
+.chain-atlas-row > .chain-atlas-match {
+  margin-inline-end: 7px;
 }
 
 .chain-atlas-row[data-branch="true"] {
@@ -323,8 +352,7 @@
   background: var(--atlas-wash);
 }
 
-.chain-atlas-disclosure,
-.chain-atlas-leaf {
+.chain-atlas-disclosure {
   display: grid;
   flex: none;
   width: 26px;
@@ -334,11 +362,7 @@
   color: var(--atlas-accent);
 }
 
-.chain-atlas-disclosure:hover {
-  background: var(--surface-inset);
-}
-
-.chain-atlas-leaf svg {
+.chain-atlas-leaf-icon {
   fill: currentColor;
 }
 
@@ -365,24 +389,13 @@
   font-weight: 650;
 }
 
-.chain-atlas-name {
-  min-width: 0;
-  text-align: left;
-}
-
-.chain-atlas-name:hover .chain-atlas-node-label {
-  color: var(--atlas-accent);
-}
-
 .chain-atlas-breadcrumb,
-.chain-atlas-note,
 .chain-atlas-branch-count {
   color: var(--text-muted);
   font-size: .68rem;
 }
 
-.chain-atlas-breadcrumb,
-.chain-atlas-note {
+.chain-atlas-breadcrumb {
   display: block;
   margin-block: 2px;
 }
@@ -456,10 +469,6 @@
   margin-left: 9px;
 }
 
-.chain-atlas-unmatched {
-  padding: 0 8px 6px 39px;
-}
-
 .chain-atlas-empty {
   display: grid;
   justify-items: center;
@@ -527,6 +536,9 @@
 
 .chain-atlas-row[data-root="true"] {
   min-height: 52px;
+}
+
+.chain-atlas-row[data-root="true"] .chain-atlas-row-main {
   padding-inline: 8px 12px;
 }
 
@@ -548,17 +560,6 @@
 .chain-atlas-chemical code {
   padding: 1px 4px;
   font-variant-numeric: tabular-nums;
-}
-
-.chain-atlas-reference {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin-top: 4px;
-  color: var(--atlas-accent);
-  font-size: .71rem;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 .chain-atlas-relation {

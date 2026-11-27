@@ -181,6 +181,28 @@ async function smoke(contents, origin, profile, mode) {
   assert.equal(await evaluate(() => document.querySelectorAll('.chain-atlas-tree [aria-expanded="true"]').length), 0,
     'Source tree should start with every branch collapsed');
   await evaluate(() => {
+    const row = document.querySelector('.chain-atlas-tree .chain-atlas-row-main');
+    row.querySelector('.chain-atlas-branch-count').click();
+  });
+  await until(() => evaluate(() => {
+    const row = document.querySelector('.chain-atlas-tree .chain-atlas-row-main');
+    return row?.getAttribute('aria-expanded') === 'true' &&
+      Boolean(row.closest('li').querySelector('.chain-atlas-children'));
+  }), 'Clicking the far end of an atlas row did not expand it');
+  const treeAction = label => evaluate(label => {
+    const button = Array.from(document.querySelectorAll('.chain-atlas-section-actions button'))
+      .find(item => item.textContent.trim() === label);
+    if (!button || button.disabled) return false;
+    button.click();
+    return true;
+  }, label);
+  const atlasText = (chinese, english) => evaluate((chinese, english) =>
+    Array.from(document.querySelectorAll('.chain-atlas-section-actions button'))
+      .some(button => button.textContent.trim() === chinese) ? chinese : english,
+  chinese, english);
+  const closeTree = await atlasText('全部收起', 'Collapse all');
+  await until(() => treeAction(closeTree), 'Source tree collapse action was unavailable');
+  await evaluate(() => {
     document.querySelectorAll('.chain-atlas-tabs button')[1].click();
   });
   await until(() => evaluate(() => {
@@ -190,6 +212,18 @@ async function smoke(contents, origin, profile, mode) {
   }), 'Applications tree did not switch independently');
   assert.equal(await evaluate(() => document.querySelectorAll('.chain-atlas-tree [aria-expanded="true"]').length), 0,
     'Applications tree should start with every branch collapsed');
+  const expandTree = await atlasText('全部展开', 'Expand all');
+  await until(() => treeAction(expandTree), 'Applications tree expand action was unavailable');
+  await until(() => evaluate(() => {
+    const tree = document.querySelector('.chain-atlas-tree');
+    return tree?.querySelectorAll('.chain-atlas-row-main[aria-expanded="true"]').length > 950 &&
+      tree.textContent.includes('氧化铁脱硫介质') && tree.textContent.includes('苯并三氮唑');
+  }), 'Expanding the whole track did not open deep application branches');
+  assert.equal(await evaluate(() => document.querySelectorAll('.chain-atlas a[href], .chain-atlas-note, .chain-atlas-unmatched').length), 0,
+    'Atlas should not display external links, explanatory notes, or unmatched notices');
+  await until(() => treeAction(closeTree), 'Applications tree collapse action was unavailable');
+  await until(() => evaluate(() => document.querySelectorAll('.chain-atlas-tree .chain-atlas-row-main[aria-expanded="true"]').length === 0),
+    'Collapse all did not reset the applications track');
   const enterAtlasSearch = query => evaluate(query => {
     const input = document.querySelector('.chain-atlas-search input');
     if (!input) return false;
@@ -197,7 +231,23 @@ async function smoke(contents, origin, profile, mode) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }, query);
-  await until(() => enterAtlasSearch('A-26-2611-01'), 'Applications search was unavailable');
+  await until(() => enterAtlasSearch('A-45-4520'), 'Applications search was unavailable');
+  await until(() => evaluate(() => {
+    const row = document.querySelector('.chain-atlas-results .chain-atlas-row-main');
+    if (!row?.textContent.includes('生物质燃气生产和供应业')) return false;
+    row.click();
+    return true;
+  }), 'Could not locate a new unmatched application branch');
+  await until(() => evaluate(() => {
+    const row = document.querySelector('.chain-atlas-row[data-focused="true"]');
+    const primary = row?.querySelector('.chain-atlas-row-main');
+    if (!primary || row.querySelector('.chain-atlas-match')) return false;
+    primary.click();
+    return true;
+  }), 'Unmatched application row could not expand');
+  assert.equal(await evaluate(() => document.querySelectorAll('[data-sag-detail-drawer], .chain-atlas-unmatched').length), 0,
+    'Expanding an unmatched row must not open a details drawer');
+  await until(() => enterAtlasSearch('A-26-2611-01'), 'Sulfuric acid search was unavailable');
   await until(() => evaluate(() => {
     const match = document.querySelector('.chain-atlas-results .chain-atlas-match');
     if (!match) return false;
@@ -221,11 +271,20 @@ async function smoke(contents, origin, profile, mode) {
     const row = Array.from(document.querySelectorAll('.chain-atlas-results .chain-atlas-row'))
       .find(item => item.querySelector('.chain-atlas-node-label')?.textContent === '乙烯' &&
         item.textContent.includes('CAS 74-85-1'));
-    const locate = row?.querySelector('.chain-atlas-disclosure');
+    const locate = row?.querySelector('.chain-atlas-row-main');
     if (!locate) return false;
     locate.click();
     return true;
   }), 'Atlas search result did not locate the node in its branch');
+  await until(() => evaluate(() => {
+    const row = document.querySelector('.chain-atlas-row[data-focused="true"]');
+    const primary = row?.querySelector('.chain-atlas-row-main');
+    if (!primary || !row.querySelector('.chain-atlas-match')) return false;
+    primary.querySelector('.chain-atlas-branch-count').click();
+    return true;
+  }), 'A matching entity blocked expansion from the rest of the row');
+  assert.equal(await evaluate(() => !!document.querySelector('[data-sag-detail-drawer]')), false,
+    'Row expansion opened a drawer instead of expanding');
   await until(() => evaluate(() => {
     const match = document.querySelector('.chain-atlas-row[data-focused="true"] .chain-atlas-match');
     if (!match) return false;
@@ -235,6 +294,9 @@ async function smoke(contents, origin, profile, mode) {
   await until(() => evaluate(entity =>
     document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === entity,
     entity), 'Atlas entity did not open the library detail drawer');
+  assert.equal(await evaluate(() =>
+    document.querySelector('.chain-atlas-row[data-focused="true"] .chain-atlas-row-main')?.getAttribute('aria-expanded')), 'true',
+    'Opening an entity changed the branch expansion state');
 
   if (mode !== 'read') fs.writeFileSync(baseline, JSON.stringify({ projectId: project.id, imported }));
   fs.writeFileSync(path.join(profile, `smoke-${mode}.ok`), origin + '\n');
