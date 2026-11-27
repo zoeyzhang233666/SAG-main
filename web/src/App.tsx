@@ -16,6 +16,7 @@ import {
   Bot,
   Building2,
   CircleCheck,
+  Compass,
   Check,
   Copy,
   Database,
@@ -47,6 +48,7 @@ import {
 import { api } from "./lib/api";
 import { cn, formatDate, shortId } from "./lib/utils";
 import type {
+  AnswerEvidence,
   ChunkRecord,
   DocumentRecord,
   EntityDetailRecord,
@@ -80,6 +82,7 @@ import { Card, CardContent, CardHeader } from "./components/ui/card";
 import { Input } from "./components/ui/input";
 import { Textarea } from "./components/ui/textarea";
 import { ProjectGraphFlow } from "./components/ProjectGraphFlow";
+import { ExploreWorkspace } from "./components/ExploreWorkspace";
 import { AnswerArtifacts } from "./components/AnswerArtifacts";
 import { MarkdownMessage } from "./components/MarkdownMessage";
 import { RichTextFragment } from "./components/RichText";
@@ -97,7 +100,7 @@ import {
 
 const ChainAtlasWorkspace = lazy(() => import("./components/ChainAtlasWorkspace"));
 
-type WorkspaceView = "chat" | "documents" | "graph" | "atlas" | "mcp" | "settings";
+type WorkspaceView = "chat" | "explore" | "documents" | "graph" | "atlas" | "mcp" | "settings";
 type ResultView = "overview" | "chunks" | "events" | "entities" | "search";
 type ProjectAssetDataKind = "chunks" | "events" | "entities";
 type ProjectAssetDataLoadStatus = "idle" | "loading" | "loaded";
@@ -301,6 +304,9 @@ function AppShell() {
   const [mcpInput, setMcpInput] = useState("");
   const [isMcpRunning, setIsMcpRunning] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState("");
+  const [exploreLive, setExploreLive] = useState<{ scope: string; evidence: AnswerEvidence }>();
+  const [exploreAnchor, setExploreAnchor] = useState<{ scope: string; node: QuestionAnchor & { label: string } }>();
+  const [exploreCitation, setExploreCitation] = useState<{ scope: string; chunkId: string; request: number }>();
   const [retryTurn, setRetryTurn] = useState<RetryTurn | null>(null);
   const [streamingAssistantText, setStreamingAssistantText] = useState("");
   const [runningMcpSearches, setRunningMcpSearches] = useState<
@@ -1716,7 +1722,7 @@ function AppShell() {
       [selectedProjectId]: sessionsResponse.sessions,
     }));
     await loadMcpSession(response.session.id);
-    setWorkspaceView("chat");
+    setWorkspaceView((current) => current === "explore" ? current : "chat");
   }
 
   async function loadMcpSession(sessionId: string) {
@@ -1830,6 +1836,7 @@ function AppShell() {
     if (retry && (retry.sessionId !== sessionId || retry.projectId !== selectedProjectId)) return;
     const clientTurnId = retry?.clientTurnId ?? newClientTurnId();
     setRetryTurn(null);
+    setExploreLive(undefined);
     const abortController = new AbortController();
     mcpAbortControllerRef.current = abortController;
     setIsMcpRunning(true);
@@ -1857,6 +1864,10 @@ function AppShell() {
       streamingAssistantSessionIdRef.current = sessionId;
       await api.streamMcpMessage(sessionId, content, (event) => {
         if (mcpAbortControllerRef.current !== abortController || abortController.signal.aborted) return;
+        if (event.type === "evidence" && event.evidence.projectId === selectedProjectId) {
+          setExploreLive({ scope: `${selectedProjectId}:${sessionId}`, evidence: event.evidence });
+        }
+        if (event.type === "done") setExploreLive(undefined);
         if (event.type === "message" && event.message.role === "assistant" && event.message.metadata.generationIncomplete && sessionId) {
           setRetryTurn({ sessionId, projectId: selectedProjectId, clientTurnId, content });
         }
@@ -2223,7 +2234,7 @@ function AppShell() {
   }
 
   async function selectProjectSession(projectId: string, sessionId: string) {
-    setWorkspaceView("chat");
+    setWorkspaceView((current) => current === "explore" ? current : "chat");
     setExpandedProjectIds((current) => {
       if (current.has(projectId)) return current;
       const next = new Set(current);
@@ -2239,6 +2250,44 @@ function AppShell() {
     await loadMcpSession(sessionId);
   }
 
+  const activeConversation = mcpDetail?.session.sourceIds.includes(selectedProjectId) ? mcpDetail : null;
+  const exploreScope = `${selectedProjectId}:${activeConversation?.session.id ?? "new"}`;
+  const anchor = workspaceView === "explore" && exploreAnchor?.scope === exploreScope ? exploreAnchor.node : undefined;
+  const citation = exploreCitation?.scope === exploreScope ? exploreCitation : undefined;
+  const conversation = (
+    <ConversationWorkspace
+      project={selectedProject}
+      graph={projectGraph}
+      welcomePromptTemplates={aiSettings?.welcomePromptTemplates}
+      detail={activeConversation}
+      input={mcpInput}
+      anchorLabel={anchor?.label}
+      onClearAnchor={() => setExploreAnchor(undefined)}
+      isRunning={isMcpRunning}
+      pendingUserMessage={pendingUserMessage}
+      streamingAssistantText={streamingAssistantText}
+      runningMcpSearches={runningMcpSearches}
+      onInputChange={setMcpInput}
+      onCreateSession={() => void createMcpSession()}
+      onClearSession={() => void clearCurrentMcpSession()}
+      onDeleteSession={() => void deleteCurrentMcpSession()}
+      onOpenCitation={(source) => {
+        if (workspaceView === "explore" && source.sourceId === selectedProjectId) {
+          setExploreCitation((current) => ({ scope: exploreScope, chunkId: source.chunkId, request: (current?.request ?? 0) + 1 }));
+        }
+        void openCitationDetail(source);
+      }}
+      onStop={() => stopMcpMessage()}
+      onRetry={retryTurn?.sessionId === activeConversation?.session.id && retryTurn?.projectId === selectedProjectId
+        ? () => { if (retryTurn) void sendMcpMessage(retryTurn.content, { retry: retryTurn }); }
+        : undefined}
+      onSend={() => void sendMcpMessage(undefined, { anchor })}
+      onSendPrompt={(text) => {
+        setMcpInput(text);
+        void sendMcpMessage(text, { anchor });
+      }}
+    />
+  );
   const showActivityPanel = workspaceView === "chat";
   const leftRailEffectiveWidth = isLeftRailCollapsed
     ? LEFT_RAIL_COLLAPSED_WIDTH
@@ -2484,33 +2533,26 @@ function AppShell() {
                 project={selectedProject}
                 settings={mcpSettings}
               />
-            ) : (
-              <ConversationWorkspace
-                project={selectedProject}
-                graph={projectGraph}
-                welcomePromptTemplates={aiSettings?.welcomePromptTemplates}
-                detail={mcpDetail}
-                input={mcpInput}
-                isRunning={isMcpRunning}
-                pendingUserMessage={pendingUserMessage}
-                streamingAssistantText={streamingAssistantText}
-                runningMcpSearches={runningMcpSearches}
-                onInputChange={setMcpInput}
-                onCreateSession={() => void createMcpSession()}
-                onClearSession={() => void clearCurrentMcpSession()}
-                onDeleteSession={() => void deleteCurrentMcpSession()}
-                onOpenCitation={(citation) => void openCitationDetail(citation)}
-                onStop={() => stopMcpMessage()}
-                onRetry={retryTurn?.sessionId === mcpDetail?.session.id && retryTurn?.projectId === selectedProjectId
-                  ? () => { if (retryTurn) void sendMcpMessage(retryTurn.content, { retry: retryTurn }); }
-                  : undefined}
-                onSend={() => void sendMcpMessage()}
-                onSendPrompt={(text) => {
-                  setMcpInput(text);
-                  void sendMcpMessage(text);
+            ) : workspaceView === "explore" && selectedProject ? (
+              <ExploreWorkspace key={exploreScope}
+                projectId={selectedProject.id}
+                sessionId={activeConversation?.session.id}
+                messages={activeConversation?.messages ?? []}
+                liveEvidence={exploreLive?.scope === exploreScope ? exploreLive.evidence : undefined}
+                defaultLayoutStyle={aiSettings?.graphDefaultLayoutStyle}
+                citationChunkId={citation?.chunkId}
+                citationRequest={citation?.request}
+                onPickNode={(node) => {
+                  setExploreCitation(undefined);
+                  setExploreAnchor({ scope: exploreScope, node });
                 }}
-              />
-            )}
+                onOpenChunk={(id) => void openChunkDetail(id)}
+                onOpenEvent={(id) => void openEventDetail(id)}
+                onOpenEntity={(id) => void openEntityDetail(id)}
+              >
+                {conversation}
+              </ExploreWorkspace>
+            ) : conversation}
           </main>
 
           {showActivityPanel ? (
@@ -3161,6 +3203,7 @@ function MainWorkspaceTabs(props: {
     icon: typeof Sparkles;
   }> = [
     { value: "chat", label: t("智能问答", "Q&A"), icon: Sparkles },
+    { value: "explore", label: t("探索", "Explore"), icon: Compass },
     { value: "documents", label: t("知识资产", "Assets"), icon: Database },
     { value: "graph", label: t("知识超图", "Hypergraph"), icon: Network },
     { value: "atlas", label: t("产业链图谱", "Chain atlas"), icon: ListTree },
@@ -3811,6 +3854,8 @@ function ConversationWorkspace(props: {
   welcomePromptTemplates?: string[];
   detail: McpSessionDetail | null;
   input: string;
+  anchorLabel?: string;
+  onClearAnchor?: () => void;
   isRunning: boolean;
   pendingUserMessage: string;
   streamingAssistantText: string;
@@ -4092,6 +4137,14 @@ function ConversationWorkspace(props: {
       </div>
 
       <div className="chem-composer-wrap shrink-0 border-t border-border px-4 py-3 md:px-6">
+        {props.anchorLabel && (
+          <div className="mx-auto mb-2 flex max-w-4xl items-center gap-2 text-xs text-muted-foreground">
+            <span className="min-w-0 truncate">{t("围绕", "About")} {props.anchorLabel}</span>
+            <button type="button" onClick={props.onClearAnchor} aria-label={t("移除图谱节点约束", "Remove graph focus")}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         <div className="chem-composer mx-auto flex max-w-4xl gap-2 rounded-2xl border border-border p-2">
           <Textarea
             className="h-12 min-h-12 flex-1 border-0 bg-transparent px-3 focus-visible:ring-0"

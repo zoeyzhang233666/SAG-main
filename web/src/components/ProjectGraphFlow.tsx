@@ -27,6 +27,7 @@ import type {
   ProjectGraphEventRecord,
   ProjectGraphRecord,
   ProjectGraphSuggestionRecord,
+  QuestionAnchor,
 } from "../types";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
@@ -137,6 +138,9 @@ export function ProjectGraphFlow(props: {
   } | null;
   defaultLayoutStyle?: string;
   compact?: boolean;
+  preferenceKey?: string;
+  selectedExternalId?: string;
+  onPickNode?: (node: QuestionAnchor & { label: string }) => void;
   language: SupportedLanguage;
   onSearch?: (query: string) => void;
   onRequestSuggestions?: (
@@ -167,6 +171,9 @@ function ProjectGraphCanvas(props: {
   } | null;
   defaultLayoutStyle?: string;
   compact?: boolean;
+  preferenceKey?: string;
+  selectedExternalId?: string;
+  onPickNode?: (node: QuestionAnchor & { label: string }) => void;
   language: SupportedLanguage;
   onSearch?: (query: string) => void;
   onRequestSuggestions?: (
@@ -203,7 +210,15 @@ function ProjectGraphCanvas(props: {
     new Set(),
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"2d" | "3d">("2d");
+  const [mode, setMode] = useState<"2d" | "3d">(() =>
+    props.preferenceKey && localStorage.getItem(`${props.preferenceKey}:mode`) === "3d" ? "3d" : "2d");
+  const [storedFilters] = useState(() => {
+    if (!props.preferenceKey) return [];
+    try {
+      const value = JSON.parse(localStorage.getItem(`${props.preferenceKey}:types`) ?? "[]");
+      return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    } catch { return []; }
+  });
   const [sceneUnavailable, setSceneUnavailable] = useState(false);
   const camera = useRef<{ x: number; y: number; z: number } | null>(null);
   const [graphQuery, setGraphQuery] = useState("");
@@ -218,7 +233,7 @@ function ProjectGraphCanvas(props: {
     new Set(),
   );
   const [selectedEntityTypes, setSelectedEntityTypes] = useState<Set<string>>(
-    new Set(),
+    () => new Set(storedFilters),
   );
   const [entityTypeQuery, setEntityTypeQuery] = useState("");
   const [entityTypeFilterCollapsed, setEntityTypeFilterCollapsed] =
@@ -240,6 +255,11 @@ function ProjectGraphCanvas(props: {
   const expandedEventIdsRef = useRef(expandedEventIds);
   const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
+  useEffect(() => {
+    if (!props.preferenceKey) return;
+    localStorage.setItem(`${props.preferenceKey}:mode`, mode);
+    localStorage.setItem(`${props.preferenceKey}:types`, JSON.stringify([...selectedEntityTypes]));
+  }, [mode, selectedEntityTypes, props.preferenceKey]);
   const sceneData = useMemo(() => buildSceneData({
     nodes: nodes.flatMap((node): SceneNode[] => node.data.kind === "question" ? [] : [{
       id: node.id, kind: node.data.kind, label: node.data.label, color: node.data.entityTypeColor
@@ -541,7 +561,7 @@ function ProjectGraphCanvas(props: {
         chunkEventEdges: props.graph.chunkEventEdges ?? [],
         positionByNodeId,
         selectedNodeId,
-        activeQueryLabel,
+        activeQueryLabel: props.compact ? "" : activeQueryLabel,
         queryLinkedNodeIds,
         selectedEntityTypes,
         layoutStyle,
@@ -565,6 +585,7 @@ function ProjectGraphCanvas(props: {
       positionByNodeId,
       props.graph.chunkEventEdges,
       props.graph.edges,
+      props.compact,
       queryLinkedNodeIds,
       selectedEntityTypes,
       layoutStyle,
@@ -791,13 +812,13 @@ function ProjectGraphCanvas(props: {
     setActiveEventBatch(null);
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
-    setFocusedChunkIds(new Set());
+    setFocusedChunkIds(new Set(props.compact ? focusChunkIds : []));
     setFocusedEntityIds(new Set(queryScopeEntityIds));
     setFocusedEventIds(new Set());
-    setSelectedNodeId(null);
-    setSelectedEntityTypes(
-      buildSelectedEntityTypes(queryScopeEntityIds, entityById),
-    );
+    if (!props.compact) {
+      setSelectedNodeId(null);
+      setSelectedEntityTypes(buildSelectedEntityTypes(queryScopeEntityIds, entityById));
+    }
     setGraphQuery(effectiveFocus.query);
     setActiveQueryLabel(
       `${graphText(props.language, "当前搜索", "Search")} · ${effectiveFocus.query}`,
@@ -848,6 +869,10 @@ function ProjectGraphCanvas(props: {
     queryLinkedNodeIds,
   ]);
 
+  useEffect(() => {
+    if (props.selectedExternalId) requestGraphNodeFocus(props.selectedExternalId);
+  }, [props.selectedExternalId, props.graph]);
+
   const onNodeClick: NodeMouseHandler<GraphNode> = (event, node) => {
     event.stopPropagation();
     selectGraphNode(node);
@@ -862,6 +887,7 @@ function ProjectGraphCanvas(props: {
     }
 
     setSelectedNodeId(node.id);
+    props.onPickNode?.({ kind: data.kind, id: node.id, label: data.label });
     if (data.kind === "chunk") {
       props.onOpenChunk(node.id);
       return;
@@ -1149,11 +1175,13 @@ function ProjectGraphCanvas(props: {
     setActiveGraphMode("manual");
     setExpandedEntityIds(new Set());
     setExpandedEventIds(new Set());
-    setFocusedChunkIds(new Set());
+    setFocusedChunkIds(new Set(props.compact ? effectiveFocus?.chunkIds ?? [] : []));
     setFocusedEntityIds(entityIds);
     setFocusedEventIds(new Set(visibleEventIds));
-    setSelectedNodeId(null);
-    setSelectedEntityTypes(new Set());
+    if (!props.compact) {
+      setSelectedNodeId(null);
+      setSelectedEntityTypes(new Set());
+    }
     setGraphQuery(input.label);
     setActiveQueryLabel(
       `${graphText(props.language, "当前搜索", "Search")} · ${input.label}`,

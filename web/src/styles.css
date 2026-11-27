@@ -1238,3 +1238,26 @@ select {
 .chem-answer-flow-scroll rect { fill: hsl(var(--background)); stroke: hsl(var(--border)); }
 .chem-answer-flow-scroll [data-kind="event"] rect { fill: hsl(var(--accent)); stroke: hsl(var(--primary) / 0.45); }
 .chem-answer-flow-edge { fill: none; stroke: hsl(var(--primary) / 0.5); stroke-width: 1.5; }
+
+.chem-explore {
+  display: grid;
+  grid-template-columns: minmax(0, var(--explore-left)) 8px minmax(0, 1fr);
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.chem-explore-handle {
+  background: hsl(var(--muted));
+  border-inline: 1px solid hsl(var(--border));
+  cursor: col-resize;
+  touch-action: none;
+}
+.chem-explore-handle:hover, .chem-explore-handle:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+@media (max-width: 950px) {
+  .chem-explore { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(190px, 43%) minmax(0, 1fr); }
+  .chem-explore-handle { display: none; }
+}

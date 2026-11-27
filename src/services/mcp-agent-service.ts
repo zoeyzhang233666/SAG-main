@@ -1824,7 +1824,7 @@ async function resolveQuestionAnchor(projectId: string, tenantId: string, anchor
   const graph = await getProjectGraph({ sourceId: projectId, tenantId, ...selection, limit: 16 });
   const label = anchor.kind === "event" ? graph.events.find((item) => item.id === anchor.id)?.title :
     anchor.kind === "entity" ? graph.entities.find((item) => item.id === anchor.id)?.name :
-      graph.chunks.find((item) => item.id === anchor.id)?.heading;
+      graph.chunks.find((item) => item.id === anchor.id)?.heading || graph.chunks.find((item) => item.id === anchor.id)?.content;
   if (!label) throw new McpRunConflictError("该节点已经离开当前项目的可用图谱。");
   return label.slice(0, 180);
 }

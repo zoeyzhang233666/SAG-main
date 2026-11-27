@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 
@@ -204,6 +205,65 @@ async function smoke(contents, origin, profile, mode) {
     delete window.__sagSmokeWebGL2;
   });
   console.log('WebGL-unavailable fallback passed');
+  if (mode !== 'read') {
+    const headers = { 'Content-Type': 'application/json' };
+    const { session } = await api('/api/mcp/sessions', {
+      method: 'POST', headers, body: JSON.stringify({ sourceIds: [project.id], title: 'Exploration smoke' })
+    }, 201);
+    const ask = (input) => evaluate(async (sessionId, input) => {
+      const response = await fetch(`/api/mcp/sessions/${sessionId}/messages/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+        signal: AbortSignal.timeout(25000)
+      });
+      const raw = await response.text();
+      const frames = raw.split(/\r?\n/).filter(line => line.startsWith('data: ')).map(line => JSON.parse(line.slice(6)));
+      if (!frames.some(frame => frame.type === 'done')) throw new Error('MCP ask failed: ' + raw.slice(-1800));
+      return frames;
+    }, session.id, input);
+    const prompt = { content: `${event} 产业链图`, clientTurnId: randomUUID() };
+    const first = await ask(prompt);
+    const firstEvidence = first.find(frame => frame.type === 'evidence')?.evidence;
+    assert.ok(firstEvidence?.eventIds.length, 'First answer did not emit real event evidence');
+    const followUp = { content: '它有哪些相关实体？', clientTurnId: randomUUID(),
+      anchor: { kind: 'event', id: firstEvidence.eventIds[0] } };
+    const second = await ask(followUp);
+    assert.ok(second.some(frame => frame.type === 'evidence'), 'Anchor follow-up lost its project evidence');
+    await ask({ ...followUp, retry: true });
+    const history = await api(`/api/mcp/sessions/${session.id}`);
+    assert.equal(history.messages.filter(message => message.role === 'user').length, 2, 'Retry duplicated the user turn');
+    assert.equal(history.messages.filter(message => message.role === 'assistant').length, 2, 'Retry duplicated a completed answer');
+    const current = await api(`/api/projects/${project.id}/graph?eventIds=${firstEvidence.eventIds.join(',')}`);
+    assert.ok(firstEvidence.eventIds.every(id => current.graph.events.some(event => event.id === id)));
+  }
+  contents.reload();
+  await until(() => evaluate(() => {
+    const tab = Array.from(document.querySelectorAll('.chem-workspace-tabs button'))
+      .find(item => /^(探索|Explore)$/.test(item.textContent.trim()));
+    if (!tab || tab.disabled) return false;
+    tab.click();
+    return true;
+  }), 'Could not open exploration');
+  await until(() => evaluate(() => Boolean(document.querySelector('[data-explore-workspace] [role="separator"]'))),
+    'Exploration resizer did not render');
+  if (mode !== 'read') {
+    await until(() => evaluate(() => Boolean(document.querySelector('[data-explore-workspace] .chem-answer-artifact svg'))),
+      'Exploration did not render the persisted SVG answer');
+    await until(() => evaluate(() => Boolean(document.querySelector('[data-explore-workspace] .react-flow__node'))),
+      'Exploration did not render the evidence graph');
+    await evaluate(() => {
+      const citation = document.querySelector('[data-explore-workspace] .chem-answer-artifact button');
+      if (!citation) throw new Error('No SVG citation');
+      citation.click();
+    });
+    await until(() => evaluate(() => Boolean(document.querySelector('[data-sag-detail-drawer]'))), 'Citation did not open its source');
+    await evaluate(() => Array.from(document.querySelectorAll('[data-sag-detail-drawer] button'))
+      .find(button => /^(关闭|Close)$/.test(button.textContent.trim()))?.click());
+    await until(() => evaluate(() => !document.querySelector('[data-sag-detail-drawer]')), 'Citation drawer did not close');
+  }
+  console.log('Exploration workbench, anchored answers and turn deduplication passed');
+
 
 
   await evaluate(() => {
