@@ -2374,7 +2374,7 @@ export async function matchChainAtlasEntities(input: {
               and e.deleted_at is null and d.archived_at is null
           )
         order by lower(s.name), ent.name, ent.id
-        limit 12
+        limit 500
       ) matched
     `,
     [names, names.map(normalizeEntityName), input.tenantId, input.projectId ?? null]
@@ -2387,6 +2387,114 @@ export async function matchChainAtlasEntities(input: {
     sourceId: row.source_id,
     sourceName: row.source_name
   }));
+}
+
+
+export async function getEntitiesKnowledgeBundle(input: {
+  entityIds: string[];
+  tenantId: string;
+  includeArchived?: boolean;
+}): Promise<{
+  entities: Array<EntityRecord & { description?: string | null; eventCount: number }>;
+  events: Array<EventRecord & { document?: DocumentRecord | null }>;
+}> {
+  const entityIds = [...new Set(input.entityIds.filter(Boolean))];
+  if (entityIds.length === 0) {
+    return { entities: [], events: [] };
+  }
+  const archiveEntitySql = input.includeArchived ? "" : "and s.archived_at is null";
+  const archiveEventSql = input.includeArchived
+    ? ""
+    : "and s.archived_at is null and d.archived_at is null";
+  const entitiesResult = await pool.query(
+    `
+      select
+        ent.id,
+        ent.source_id,
+        ent.type,
+        ent.name,
+        ent.normalized_name,
+        ent.description,
+        (
+          select count(distinct ee.event_id)::int
+          from event_entities ee
+          join events e on e.id = ee.event_id
+          join documents d on d.id = e.document_id
+          join sources es on es.id = e.source_id
+          where ee.entity_id = ent.id
+            and e.deleted_at is null
+            and es.tenant_id = $2
+            ${input.includeArchived ? "" : "and es.archived_at is null and d.archived_at is null"}
+        ) as event_count
+      from entities ent
+      join sources s on s.id = ent.source_id
+      where ent.id = any($1::uuid[])
+        and s.tenant_id = $2
+        ${archiveEntitySql}
+      order by ent.name, ent.type, ent.id
+    `,
+    [entityIds, input.tenantId]
+  );
+  const eventsResult = await pool.query(
+    `
+      select
+        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
+        d.id as document_id_for_detail,
+        d.title as document_title,
+        d.source_name as document_source_name,
+        d.source_type as document_source_type,
+        d.source_date as document_source_date,
+        d.source_author as document_source_author,
+        d.source_url as document_source_url,
+        d.status as document_status,
+        d.parse_status as document_parse_status,
+        d.metadata as document_metadata,
+        d.created_at as document_created_at,
+        d.updated_at as document_updated_at,
+        d.archived_at as document_archived_at
+      from events e
+      join sources s on s.id = e.source_id
+      join documents d on d.id = e.document_id
+      where e.id in (
+          select distinct ee.event_id
+          from event_entities ee
+          where ee.entity_id = any($1::uuid[])
+        )
+        and s.tenant_id = $2
+        and e.deleted_at is null
+        ${archiveEventSql}
+      order by e.rank, e.id
+    `,
+    [entityIds, input.tenantId]
+  );
+  return {
+    entities: entitiesResult.rows.map((row) => ({
+      ...entityFromRow(row),
+      description: row.description == null ? null : String(row.description),
+      eventCount: Number(row.event_count ?? 0)
+    })),
+    events: eventsResult.rows.map((row) => ({
+      ...eventFromRow(row),
+      document: row.document_id_for_detail == null
+        ? null
+        : documentFromRow({
+            id: row.document_id_for_detail,
+            source_id: row.source_id,
+            title: row.document_title,
+            source_name: row.document_source_name,
+            source_type: row.document_source_type,
+            source_date: row.document_source_date,
+            source_author: row.document_source_author,
+            source_url: row.document_source_url,
+            status: row.document_status,
+            parse_status: row.document_parse_status,
+            metadata: row.document_metadata,
+            created_at: row.document_created_at,
+            updated_at: row.document_updated_at,
+            archived_at: row.document_archived_at
+          })
+    }))
+  };
 }
 
 export async function getEntityDetail(input: {

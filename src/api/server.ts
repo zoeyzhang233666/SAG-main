@@ -818,6 +818,13 @@ export function buildHttpServer() {
     return webuiService.deleteEvent(params.eventId);
   });
 
+  app.post("/api/entities/knowledge-bundle", async (request) => {
+    const body = z.object({
+      entityIds: z.array(z.guid()).min(1).max(500)
+    }).parse(request.body);
+    return await webuiService.getEntitiesKnowledgeBundle(body.entityIds);
+  });
+
   app.get("/api/entities/:entityId", async (request, reply) => {
     const params = request.params as { entityId: string };
     z.guid().parse(params.entityId);

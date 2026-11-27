@@ -16,7 +16,7 @@ export const chainRelations: Record<string, readonly [string, string]> = {
   historical: ["历史路线", "Historical route"]
 };
 
-interface Chemical {
+export interface Chemical {
   name: string;
   english: string;
   cas?: string;
@@ -88,6 +88,33 @@ for (const chemical of chemicals) {
 }
 
 const chemicalsByCas = new Map(chemicals.filter(item => item.cas).map(item => [item.cas, item]));
+
+export function resolveChemicalByName(name: string): Chemical | undefined {
+  const hit = chemicalsByName.get(normalizeAtlasSearch(name));
+  return hit || undefined;
+}
+
+export function resolveChemicalByCas(cas: string): Chemical | undefined {
+  return chemicalsByCas.get(cas.trim()) ?? undefined;
+}
+
+export function chemicalIdentityTerms(chemical: Chemical): string[] {
+  return [...new Set([
+    ...chemicalNames(chemical),
+    ...(chemical.cas ? [chemical.cas] : []),
+  ])];
+}
+
+export function matchBelongsToChemical(
+  matchName: string,
+  chemical: Chemical,
+): boolean {
+  const keys = new Set(
+    chemicalIdentityTerms(chemical).map((term) => normalizeAtlasSearch(term)),
+  );
+  return keys.has(normalizeAtlasSearch(matchName));
+}
+
 
 function cleanLabel(label: string) {
   return label.replace(/\s*(?:★\s*注[：:]|注[：:]|★\s*修订[：:]).*$/u, "")

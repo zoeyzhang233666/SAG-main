@@ -323,6 +323,16 @@ export const api = {
     return request<EntityDetailRecord>(`/api/entities/${entityId}`);
   },
 
+  async getEntitiesKnowledgeBundle(entityIds: string[]) {
+    return request<{
+      entities: Array<EntityRecord & { description?: string | null; eventCount: number }>;
+      events: EventRecord[];
+    }>("/api/entities/knowledge-bundle", {
+      method: "POST",
+      body: JSON.stringify({ entityIds }),
+    });
+  },
+
   async updateEntity(entityId: string, input: { type?: string; name?: string; description?: string | null }) {
     return request<{ detail: EntityDetailRecord }>(`/api/entities/${entityId}`, {
       method: "PATCH",
