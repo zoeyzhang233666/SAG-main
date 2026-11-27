@@ -49,6 +49,8 @@ function sourceFromRow(row: Record<string, unknown>): SourceRecord {
 }
 
 function eventFromRow(row: Record<string, unknown>): EventRecord {
+  const category =
+    row.category == null ? undefined : String(row.category).trim() || undefined;
   return {
     id: String(row.id),
     sourceId: String(row.source_id),
@@ -57,6 +59,7 @@ function eventFromRow(row: Record<string, unknown>): EventRecord {
     title: String(row.title),
     summary: String(row.summary ?? ""),
     content: String(row.content ?? ""),
+    category,
     rank: Number(row.rank ?? 0),
     score: row.score == null ? undefined : Number(row.score),
     titleEmbedding: embeddingPreviewFromRow(row, "title_embedding_preview", "title_embedding_dimensions"),
@@ -862,7 +865,7 @@ export async function searchEventsByTitleVector(input: {
 }): Promise<EventRecord[]> {
   const result = await pool.query(
     `
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
              1 - (e.title_embedding <=> $1::vector) as score
       from events e
       join documents d on d.id = e.document_id
@@ -899,7 +902,7 @@ export async function searchEventsByText(input: {
           websearch_to_tsquery('simple', $2) as tsq,
           lower($2) as raw_query
       )
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
              greatest(
                coalesce(ts_rank_cd(e.search_text, q.tsq), 0),
                similarity(lower(e.title), q.raw_query),
@@ -948,7 +951,7 @@ export async function coarseRankEventsByContent(input: {
   }
   const result = await pool.query(
     `
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
              1 - (e.content_embedding <=> $1::vector) as score
       from events e
       join documents d on d.id = e.document_id
@@ -974,7 +977,7 @@ export async function getEventsWithEntityIds(eventIds: string[]): Promise<Map<st
   }
   const result = await pool.query(
     `
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
              coalesce(array_agg(ee.entity_id) filter (where ee.entity_id is not null), '{}') as entity_ids
       from events e
       join documents d on d.id = e.document_id
@@ -1086,7 +1089,7 @@ export async function getEventDetail(input: {
   const eventResult = await pool.query(
     `
       select
-        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
         e.title_embedding::text as title_embedding_preview,
         e.content_embedding::text as content_embedding_preview,
         d.id as document_id_for_detail,
@@ -1905,7 +1908,7 @@ export async function listEventsByDocument(input: {
   const result = await pool.query(
     `
       select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
-             e.content, e.rank,
+             e.content, e.category, e.rank,
              case when e.title_embedding is null then null else vector_dims(e.title_embedding) end as title_embedding_dimensions,
              case when e.content_embedding is null then null else vector_dims(e.content_embedding) end as content_embedding_dimensions,
              count(ee.entity_id)::int as entity_count,
@@ -1950,7 +1953,7 @@ export async function listEventsByProject(input: {
   const result = await pool.query(
     `
       select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
-             e.content, e.rank,
+             e.content, e.category, e.rank,
              case when e.title_embedding is null then null else vector_dims(e.title_embedding) end as title_embedding_dimensions,
              case when e.content_embedding is null then null else vector_dims(e.content_embedding) end as content_embedding_dimensions,
              count(ee.entity_id)::int as entity_count,
@@ -2275,7 +2278,7 @@ export async function getKnowledgeAssetsByChunkIds(input: {
   const eventsResult = await pool.query(
     `
       select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
-             e.content, e.rank, e.title_embedding::text as title_embedding_preview,
+             e.content, e.category, e.rank, e.title_embedding::text as title_embedding_preview,
              e.content_embedding::text as content_embedding_preview
       from events e
       join source_chunks c on c.id = e.chunk_id
@@ -2432,7 +2435,7 @@ export async function getEntityDetail(input: {
   const eventsResult = await pool.query(
     `
       select
-        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
         d.id as document_id_for_detail,
         d.title as document_title,
         d.source_name as document_source_name,

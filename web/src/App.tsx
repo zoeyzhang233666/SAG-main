@@ -45,6 +45,12 @@ import {
   Zap,
 } from "lucide-react";
 import { api } from "./lib/api";
+import {
+  EVENT_CATEGORY_DEFAULT_VISIBLE,
+  buildEventCategoryOptions,
+  filterEventsByCategories,
+  normalizeEventCategory,
+} from "./lib/event-category";
 import { cn, formatDate, shortId } from "./lib/utils";
 import type {
   ChunkRecord,
@@ -9600,6 +9606,7 @@ function DetailDrawer(props: {
             />
           ) : drawer.type === "entity" ? (
             <EntityDetailPanel
+              key={drawer.detail.entity.id}
               detail={drawer.detail}
               sameNameDetails={drawer.sameNameDetails}
               onOpenEvent={props.onOpenEvent}
@@ -9627,6 +9634,8 @@ function EventDetailPanel({
   onOpenEntity: (entityId: string) => void;
 }) {
   const { t } = useI18n();
+  const uncategorized = t("未分类", "Uncategorized");
+  const categoryLabel = normalizeEventCategory(detail.event.category, uncategorized);
   return (
     <div className="space-y-4">
       <PanelInfo
@@ -9634,6 +9643,7 @@ function EventDetailPanel({
         value={detail.document?.title ?? t("未知文档", "Unknown document")}
       />
       <DocumentSourceDetails document={detail.document} />
+      <PanelInfo label={t("事件分类", "Event category")} value={categoryLabel} />
       <PanelInfo
         label={t("事件内容", "Event content")}
         value={detail.event.content || detail.event.summary}
@@ -9690,7 +9700,40 @@ function EntityDetailPanel({
   onOpenEvent: (eventId: string) => void;
 }) {
   const { t } = useI18n();
+  const uncategorized = t("未分类", "Uncategorized");
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   const allSameNameDetails = [detail, ...(sameNameDetails ?? [])];
+  const categoryOptions = useMemo(
+    () => buildEventCategoryOptions(detail.events, uncategorized),
+    [detail.events, uncategorized],
+  );
+  const filteredEvents = useMemo(
+    () =>
+      filterEventsByCategories(
+        detail.events,
+        selectedCategories,
+        uncategorized,
+      ),
+    [detail.events, selectedCategories, uncategorized],
+  );
+  const hasCategoryFilter = selectedCategories.size > 0;
+
+  function toggleCategory(category: string) {
+    setSelectedCategories((current) => {
+      const next = new Set(current);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-4">
       <PanelInfo label={t("类型", "Type")} value={detail.entity.type} />
@@ -9725,31 +9768,238 @@ function EntityDetailPanel({
         </PanelSection>
       ) : null}
       <PanelSection
-        title={t(
-          `关联事件（${detail.events.length}）`,
-          `Related events (${detail.events.length})`,
-        )}
+        title={
+          hasCategoryFilter
+            ? t(
+                `关联事件（${filteredEvents.length}/${detail.events.length}）`,
+                `Related events (${filteredEvents.length}/${detail.events.length})`,
+              )
+            : t(
+                `关联事件（${detail.events.length}）`,
+                `Related events (${detail.events.length})`,
+              )
+        }
       >
+        {detail.events.length > 0 ? (
+          <EventCategoryFilter
+            options={categoryOptions}
+            selectedCategories={selectedCategories}
+            query={categoryQuery}
+            expanded={categoriesExpanded}
+            uncategorizedLabel={uncategorized}
+            onQueryChange={setCategoryQuery}
+            onToggleCategory={toggleCategory}
+            onClear={() => setSelectedCategories(new Set())}
+            onToggleExpanded={() => setCategoriesExpanded((value) => !value)}
+          />
+        ) : null}
         <div className="space-y-2">
           {detail.events.length === 0 ? (
             <EmptyLine text={t("暂无关联事件。", "No related events.")} />
+          ) : filteredEvents.length === 0 ? (
+            <EmptyLine
+              text={t(
+                "当前分类筛选下没有事件。",
+                "No events match the selected categories.",
+              )}
+            />
           ) : (
-            detail.events.map((event) => (
-              <button
-                key={event.id}
-                className="w-full rounded-md border border-border p-3 text-left hover:bg-accent"
-                onClick={() => onOpenEvent(event.id)}
-              >
-                <div className="text-sm font-medium"><RichTextFragment text={event.title} /></div>
-                <DocumentSourceSummary document={event.document} compact />
-                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                  <RichTextFragment text={event.summary || event.content} />
-                </p>
-              </button>
-            ))
+            filteredEvents.map((event) => {
+              const categoryLabel = normalizeEventCategory(
+                event.category,
+                uncategorized,
+              );
+              return (
+                <button
+                  key={event.id}
+                  className="w-full rounded-md border border-border p-3 text-left hover:bg-accent"
+                  onClick={() => onOpenEvent(event.id)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 text-sm font-medium">
+                      <RichTextFragment text={event.title} />
+                    </div>
+                    <Badge className="shrink-0">{categoryLabel}</Badge>
+                  </div>
+                  <DocumentSourceSummary document={event.document} compact />
+                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                    <RichTextFragment text={event.summary || event.content} />
+                  </p>
+                </button>
+              );
+            })
           )}
         </div>
       </PanelSection>
+    </div>
+  );
+}
+
+function EventCategoryFilter(props: {
+  options: Array<{ category: string; count: number }>;
+  selectedCategories: Set<string>;
+  query: string;
+  expanded: boolean;
+  uncategorizedLabel: string;
+  onQueryChange: (value: string) => void;
+  onToggleCategory: (category: string) => void;
+  onClear: () => void;
+  onToggleExpanded: () => void;
+}) {
+  const { t } = useI18n();
+  const selectedOptions = useMemo(
+    () =>
+      props.options.filter((option) =>
+        props.selectedCategories.has(option.category),
+      ),
+    [props.options, props.selectedCategories],
+  );
+  const query = props.query.trim().toLocaleLowerCase();
+  const matchedOptions = useMemo(() => {
+    if (!query) {
+      return props.options;
+    }
+    return props.options.filter((option) =>
+      option.category.toLocaleLowerCase().includes(query),
+    );
+  }, [props.options, query]);
+  const visibleOptions = useMemo(() => {
+    if (props.expanded || query) {
+      return matchedOptions;
+    }
+    const preferred = matchedOptions.slice(0, EVENT_CATEGORY_DEFAULT_VISIBLE);
+    const selectedMissing = selectedOptions.filter(
+      (option) =>
+        !preferred.some((item) => item.category === option.category),
+    );
+    return [...preferred, ...selectedMissing];
+  }, [matchedOptions, props.expanded, query, selectedOptions]);
+  const hiddenCount = Math.max(
+    0,
+    props.options.length - EVENT_CATEGORY_DEFAULT_VISIBLE,
+  );
+  const showSearch =
+    props.expanded || props.options.length > EVENT_CATEGORY_DEFAULT_VISIBLE;
+
+  if (props.options.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 rounded-xl border border-border bg-muted/20 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold">
+            {t("事件分类", "Event categories")}
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {t(
+              "按当前实体的全部关联事件聚合。默认显示全部；多选时取所选分类的并集。",
+              "Aggregated from all related events for this entity. Default is all; multi-select uses the union of categories.",
+            )}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge>
+            {t(
+              `${props.options.length} 类`,
+              `${props.options.length} categories`,
+            )}
+          </Badge>
+          {props.selectedCategories.size > 0 ? (
+            <button
+              type="button"
+              className="rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              onClick={props.onClear}
+            >
+              {t("全部", "All")}
+            </button>
+          ) : (
+            <Badge>{t("全部", "All")}</Badge>
+          )}
+        </div>
+      </div>
+
+      {selectedOptions.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {selectedOptions.map((option) => (
+            <button
+              key={option.category}
+              type="button"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.08] px-2 py-0.5 text-[11px] text-foreground"
+              onClick={() => props.onToggleCategory(option.category)}
+              title={t("移除筛选", "Remove filter")}
+            >
+              <span className="max-w-[10rem] truncate">{option.category}</span>
+              <span className="text-muted-foreground">{option.count}</span>
+              <X size={12} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {showSearch ? (
+        <div className="mt-2">
+          <Input
+            value={props.query}
+            onChange={(event) => props.onQueryChange(event.target.value)}
+            placeholder={t("搜索事件分类", "Search event categories")}
+          />
+        </div>
+      ) : null}
+
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        {visibleOptions.length === 0 ? (
+          <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
+            {t("没有匹配的事件分类", "No matching event categories")}
+          </div>
+        ) : (
+          visibleOptions.map((option) => {
+            const checked = props.selectedCategories.has(option.category);
+            return (
+              <label
+                key={option.category}
+                className={cn(
+                  "flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 py-2 text-xs hover:bg-accent",
+                  checked && "border-primary/30 bg-primary/[0.06]",
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => props.onToggleCategory(option.category)}
+                    className="h-3.5 w-3.5 shrink-0 rounded border-input"
+                  />
+                  <span className="truncate font-medium" title={option.category}>
+                    {option.category}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                  {option.count}
+                </span>
+              </label>
+            );
+          })
+        )}
+      </div>
+
+      {hiddenCount > 0 && !query ? (
+        <div className="mt-2">
+          <button
+            type="button"
+            className="rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            onClick={props.onToggleExpanded}
+          >
+            {props.expanded
+              ? t("收起分类", "Collapse categories")
+              : t(
+                  `展开其余 ${hiddenCount} 个分类`,
+                  `Show ${hiddenCount} more categories`,
+                )}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -9798,7 +10048,17 @@ function SameNameEntityDetailCard({
                 className="w-full rounded border border-border bg-background px-2 py-1.5 text-left text-xs hover:bg-accent"
                 onClick={() => onOpenEvent(event.id)}
               >
-                <span className="line-clamp-2"><RichTextFragment text={event.title} /></span>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="line-clamp-2 min-w-0">
+                    <RichTextFragment text={event.title} />
+                  </span>
+                  <Badge className="shrink-0">
+                    {normalizeEventCategory(
+                      event.category,
+                      t("未分类", "Uncategorized"),
+                    )}
+                  </Badge>
+                </div>
               </button>
             ))
           )}

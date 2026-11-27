@@ -55,6 +55,7 @@ export interface EventRecord {
   title: string;
   summary: string;
   content: string;
+  category?: string;
   rank: number;
   score?: number;
   document?: DocumentRecord | null;
