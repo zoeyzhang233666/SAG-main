@@ -204,8 +204,14 @@ async function smoke(contents, origin, profile, mode) {
     match.click();
     return true;
   }), 'The sulfuric acid classification did not match its library entity');
-  await until(() => evaluate(name => document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === name,
-    sulfuricAcid), 'The standard name did not resolve the imported English alias');
+  await until(() => evaluate(name => {
+    if (document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === name) return true;
+    // An upgraded profile may also contain the original Chinese fixture entity.
+    const choice = Array.from(document.querySelectorAll('.chain-atlas-results .chain-atlas-matches button'))
+      .find(item => item.querySelector('strong')?.textContent.trim() === name);
+    choice?.click();
+    return false;
+  }, sulfuricAcid), 'The standard name did not resolve the imported English alias');
   await evaluate(() => document.querySelector('[data-sag-detail-drawer] button')?.click());
   await evaluate(() => document.querySelectorAll('.chain-atlas-tabs button')[0].click());
   await until(() => evaluate(() => document.querySelector('.chain-atlas-index-heading')?.textContent.includes('v2.1')),
