@@ -26,6 +26,7 @@ const fixtures = Array.from({ length: 3 }, (_, fileIndex) => ({
       title: event,
       content: '甲醇通过 MTO 工艺生产乙烯和丙烯。',
       keywords: ['甲醇', 'MTO'],
+      category: chunkIndex % 2 ? '工艺' : '应用',
       entities: fileIndex % 2 ? [...entities].reverse() : entities
     }
   }))
@@ -258,15 +259,39 @@ async function smoke(contents, origin, profile, mode) {
     match.click();
     return true;
   }), 'The sulfuric acid classification did not match its library entity');
-  await until(() => evaluate(name => {
-    if (document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === name) return true;
+  const aliasMode = await until(() => evaluate(name => {
+    const drawer = document.querySelector('[data-sag-detail-drawer]');
+    const title = drawer?.querySelector('h2')?.textContent.trim();
+    if (title === name) return 'record';
+    if (title === '硫酸') return 'aggregate';
     // An upgraded profile may also contain the original Chinese fixture entity.
     const choice = Array.from(document.querySelectorAll('.chain-atlas-results .chain-atlas-matches button'))
       .find(item => item.querySelector('strong')?.textContent.trim() === name);
     choice?.click();
     return false;
   }, sulfuricAcid), 'The standard name did not resolve the imported English alias');
-  await evaluate(() => document.querySelector('[data-sag-detail-drawer] button')?.click());
+  if (aliasMode === 'aggregate') {
+    await until(() => evaluate(() => {
+      const button = Array.from(document.querySelectorAll('[data-sag-detail-drawer] button'))
+        .find(item => /展开.*条原始记录|Expand.*original records/.test(item.textContent));
+      if (!button) return false;
+      button.click();
+      return true;
+    }), 'Aggregated detail did not offer original records');
+    await until(() => evaluate(name => document.querySelector('[data-sag-detail-drawer]')?.textContent.includes(name), sulfuricAcid),
+      'Aggregated detail did not preserve the imported alias');
+    await until(() => evaluate(() => {
+      const category = document.querySelector('[data-sag-detail-drawer] button[title="应用"]');
+      if (!category) return false;
+      category.click();
+      return true;
+    }), 'Aggregated detail did not offer the imported event category');
+    await until(() => evaluate(() => /关联事件（\d+\/\d+）|Related events \(\d+\/\d+\)/
+      .test(document.querySelector('[data-sag-detail-drawer]')?.textContent ?? '')), 'Event category filtering did not update the count');
+  }
+  await evaluate(() => Array.from(document.querySelectorAll('[data-sag-detail-drawer] button'))
+    .find(button => /^(关闭|Close)$/.test(button.textContent.trim()))?.click());
+  await until(() => evaluate(() => !document.querySelector('[data-sag-detail-drawer]')), 'Entity drawer did not close');
   await evaluate(() => document.querySelectorAll('.chain-atlas-tabs button')[0].click());
   await until(() => evaluate(() => {
     const heading = document.querySelector('.chain-atlas-index-heading')?.textContent ?? '';
