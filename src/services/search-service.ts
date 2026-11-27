@@ -307,7 +307,7 @@ export class SearchService {
       });
       return {
         traceId,
-        sections: fallbackSections.slice(0, options.maxSections).map((section) => ({ ...section })),
+        sections: filterChunkFallback(fallbackSections, options.similarityThreshold).slice(0, options.maxSections),
         trace: input.returnTrace ? trace : undefined
       };
     }
@@ -457,7 +457,7 @@ export class SearchService {
         title: "向量召回切片",
         detail: "最终事件没有可用原文，尝试召回相关切片。"
       }, (error) => `切片向量召回不可用：${formatSearchError(error)}`);
-      sections = (fallback.value ?? []).filter((section) => section.score >= options.similarityThreshold);
+      sections = filterChunkFallback(fallback.value ?? [], options.similarityThreshold);
       appendFallbackReason(trace, fallback.fallbackDetail ?? "no event sections; tried vector chunk search");
     }
     signal?.throwIfAborted();
@@ -617,6 +617,10 @@ export class SearchService {
     }
     return sections;
   }
+}
+
+function filterChunkFallback(sections: SearchSection[], threshold: number): SearchSection[] {
+  return sections.filter((section) => section.score > 0 && section.score >= threshold);
 }
 
 function rankEventsByTextFallback(
