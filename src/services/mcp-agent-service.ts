@@ -1734,8 +1734,15 @@ function compactObservationsForPrompt(
         result
       };
     }
+    const event = observation.toolName === "sag_get_event" && isRecord(result.event) ? result.event : undefined;
     return {
       toolName: observation.toolName,
+      event: event ? {
+        id: event.id,
+        title: event.title,
+        summary: event.summary,
+        content: typeof event.content === "string" ? previewForPrompt(event.content) : undefined
+      } : undefined,
       traceId: result.traceId,
       trace: isRecord(result.trace)
         ? {
@@ -1858,35 +1865,26 @@ function isToolOnlyPlaceholder(value: string): boolean {
 }
 
 function buildEvidenceFallbackAnswer(toolCalls: McpToolCallRecord[]): string {
-  const latestSearch = [...toolCalls]
-    .reverse()
-    .find((toolCall) => toolCall.toolName === "sag_search" && toolCall.status === "SUCCEEDED");
-  if (latestSearch) {
-    const sections = selectDiverseCitationSections(
-      extractCitationSections(parseToolJsonResult(latestSearch.result))
-    );
-    if (sections.length > 0) {
-      return [
-        "我已经检索到相关项目证据。当前先按证据片段整理如下，关键业务结论建议结合原文继续核验：",
-        "",
-        ...sections.map((section, index) => {
-          const heading = section.heading?.trim() || `相关原文 ${index + 1}`;
-          const preview = section.content.replace(/\s+/g, " ").trim().slice(0, 420);
-          return `### ${index + 1}. ${heading}\n${preview}${section.content.length > 420 ? "…" : ""} [${index + 1}]`;
-        })
-      ].join("\n\n");
-    }
+  const citations = collectAnswerCitations(toolCalls);
+  if (citations.length > 0) {
+    return [
+      "已检索到以下项目证据：",
+      ...citations.map((section) => {
+        const heading = section.heading?.trim() || `相关原文 ${section.index}`;
+        const preview = section.content.replace(/\s+/g, " ").trim().slice(0, 420);
+        return `### ${heading}\n${preview}${section.content.length > 420 ? "…" : ""} [${section.index}]`;
+      })
+    ].join("\n\n");
   }
-  const failedCall = [...toolCalls].reverse().find((toolCall) => toolCall.status === "FAILED");
-  return failedCall
-    ? `本轮工具调用未能完成：${failedCall.error ?? "未知错误"}`
-    : "本轮没有拿到可用答案。可以换一个更具体的化工品、工艺、企业或应用场景重新提问。";
+  return toolCalls.some((call) => call.status === "FAILED")
+    ? "本轮检索未能完成。可查看检索过程并重试。"
+    : "当前项目没有检索到足够证据回答这个问题。可补充产品、时间、工艺或来源后重试。";
 }
 
 function collectAnswerCitations(toolCalls: McpToolCallRecord[]): AnswerCitation[] {
   const candidates: Array<Omit<AnswerCitation, "index">> = [];
   for (const toolCall of toolCalls) {
-    if (toolCall.toolName !== "sag_search" || toolCall.status !== "SUCCEEDED") {
+    if (!isEvidenceTool(toolCall.toolName) || toolCall.status !== "SUCCEEDED") {
       continue;
     }
     const result = parseToolJsonResult(toolCall.result);
@@ -1933,7 +1931,7 @@ function collectCitationSourcesFromObservations(
 ) {
   const candidates: Array<Omit<AnswerCitation, "index">> = [];
   for (const observation of observations) {
-    if (observation.toolName !== "sag_search" || observation.error) {
+    if (!isEvidenceTool(observation.toolName) || observation.error) {
       continue;
     }
     for (const section of extractCitationSections(parseToolJsonResult(observation.result))) {
@@ -1983,12 +1981,16 @@ function selectDiverseCitationSections<T extends { chunkId: string; documentId?:
   return selected;
 }
 
+function isEvidenceTool(tool: string): boolean {
+  return tool === "sag_search" || tool === "sag_get_event";
+}
+
 function extractCitationSections(result: unknown): Array<Omit<AnswerCitation, "index" | "query" | "toolCallId">> {
-  if (!isRecord(result) || !Array.isArray(result.sections)) {
-    return [];
-  }
+  if (!isRecord(result)) return [];
+  const rawSections = Array.isArray(result.sections) ? result.sections :
+    isRecord(result.event) && isRecord(result.chunk) ? [result.chunk] : [];
   const sections: Array<Omit<AnswerCitation, "index" | "query" | "toolCallId">> = [];
-  for (const section of result.sections) {
+  for (const section of rawSections) {
     if (!isRecord(section)) {
       continue;
     }
@@ -2175,6 +2177,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export const __mcpAgentTestUtils = {
+  buildEvidenceFallbackAnswer,
+  collectAnswerCitations,
   buildAssistantMessageMetadata,
   buildFinalAnswerMessages,
   compactRecentHistoryForPrompt,
