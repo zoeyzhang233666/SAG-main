@@ -494,6 +494,28 @@ describe("SearchService multi search", () => {
       detail: expect.stringContaining("文本检索")
     }));
   });
+
+  it("does not turn zero-similarity vector fallback into answer evidence", async () => {
+    const sourceId = "00000000-0000-0000-0000-000000000001";
+    repositories.searchChunksByVector.mockResolvedValue([
+      { sourceId, chunkId: "unrelated", content: "Other", rank: 0, score: 0 },
+      { sourceId, chunkId: "relevant", content: "Evidence", rank: 1, score: 0.78 }
+    ]);
+    const embeddings: EmbeddingClient = {
+      generate: vi.fn(async () => [1, 0, 0]),
+      batchGenerate: vi.fn()
+    };
+    const llm: LlmClient = {
+      extractNamedEntities: vi.fn(async () => []),
+      extractEventsFromChunk: vi.fn(),
+      rerankEvents: vi.fn()
+    };
+    const search = new SearchService(embeddings, llm);
+    const result = await search.multiSearch({
+      query: "Evidence", sourceIds: [sourceId], multi: { similarityThreshold: 0.4 }
+    });
+    expect(result.sections.map((section) => section.chunkId)).toEqual(["relevant"]);
+  });
 });
 
 function entity(id: string, sourceId: string, name: string) {

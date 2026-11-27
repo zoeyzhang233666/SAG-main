@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ingestionService } from "../services/ingestion-service.js";
 import { searchService } from "../services/search-service.js";
 import { graphService } from "../services/graph-service.js";
+import { closePool } from "../db/pool.js";
 import { logger } from "../observability/logger.js";
 import { subscribeModelCallLogs, type ModelCallLogRecord } from "../observability/model-call-log.js";
 import type { SearchProgressEvent } from "../types.js";
@@ -195,6 +196,9 @@ export async function startMcpServer(): Promise<void> {
   const server = buildMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  process.stdin.once("end", () => {
+    void closePool().catch((error: unknown) => logger.warn({ error }, "MCP database shutdown failed"));
+  });
   logger.info("SAG MCP stdio server started");
 }
 
