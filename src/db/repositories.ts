@@ -635,7 +635,7 @@ export async function searchProjectGraphSuggestions(input: {
   query: string;
   limit?: number;
 }): Promise<ProjectGraphSuggestionRecord[]> {
-  const query = input.query.trim();
+  const query = input.query.normalize("NFKC").trim();
   if (!query) {
     return [];
   }
@@ -655,8 +655,8 @@ export async function searchProjectGraphSuggestions(input: {
           ent.normalized_name,
           greatest(
             case when ent.normalized_name = q.raw_query then 1000 else 0 end,
-            case when ent.normalized_name like q.raw_query || '%' then 900 else 0 end,
-            case when ent.normalized_name like '%' || q.raw_query || '%' then 800 else 0 end,
+            case when starts_with(ent.normalized_name, q.raw_query) then 900 else 0 end,
+            case when strpos(lower(ent.name), q.raw_query) > 0 or strpos(ent.normalized_name, q.raw_query) > 0 then 800 else 0 end,
             coalesce(ts_rank_cd(ent.search_text, q.tsq) * 300, 0),
             similarity(ent.normalized_name, q.raw_query) * 500
           ) + 20 as score
@@ -677,10 +677,8 @@ export async function searchProjectGraphSuggestions(input: {
               and active_e.deleted_at is null
           )
           and (
-            ent.search_text @@ q.tsq
-            or ent.normalized_name % q.raw_query
-            or ent.normalized_name like '%' || q.raw_query || '%'
-            or q.raw_query like '%' || ent.normalized_name || '%'
+            strpos(lower(ent.name), q.raw_query) > 0
+            or strpos(ent.normalized_name, q.raw_query) > 0
           )
       ),
       entity_matches as (
@@ -715,8 +713,8 @@ export async function searchProjectGraphSuggestions(input: {
           e.title as label,
           greatest(
             case when lower(e.title) = q.raw_query then 960 else 0 end,
-            case when lower(e.title) like q.raw_query || '%' then 860 else 0 end,
-            case when lower(e.title) like '%' || q.raw_query || '%' then 760 else 0 end,
+            case when starts_with(lower(e.title), q.raw_query) then 860 else 0 end,
+            case when strpos(lower(e.title), q.raw_query) > 0 then 760 else 0 end,
             coalesce(ts_rank_cd(e.search_text, q.tsq) * 280, 0),
             similarity(lower(e.title), q.raw_query) * 420
           ) as score,
@@ -735,11 +733,7 @@ export async function searchProjectGraphSuggestions(input: {
           and s.archived_at is null
           and d.archived_at is null
           and e.deleted_at is null
-          and (
-            e.search_text @@ q.tsq
-            or lower(e.title) like '%' || q.raw_query || '%'
-            or lower(e.title) % q.raw_query
-          )
+          and strpos(lower(e.title), q.raw_query) > 0
         group by e.id, q.raw_query, q.tsq
         order by score desc, weight desc, e.rank, e.title
         limit $4
@@ -754,8 +748,8 @@ export async function searchProjectGraphSuggestions(input: {
           ) as label,
           greatest(
             case when lower(coalesce(c.heading, '')) = q.raw_query then 920 else 0 end,
-            case when lower(coalesce(c.heading, '')) like q.raw_query || '%' then 820 else 0 end,
-            case when lower(coalesce(c.heading, '')) like '%' || q.raw_query || '%' then 720 else 0 end,
+            case when starts_with(lower(coalesce(c.heading, '')), q.raw_query) then 820 else 0 end,
+            case when strpos(lower(coalesce(c.heading, '')), q.raw_query) > 0 then 720 else 0 end,
             coalesce(ts_rank_cd(c.search_text, q.tsq) * 260, 0),
             similarity(lower(coalesce(c.heading, '')), q.raw_query) * 380
           ) as score,
@@ -773,11 +767,7 @@ export async function searchProjectGraphSuggestions(input: {
           and s.tenant_id = $2
           and s.archived_at is null
           and (d.id is null or d.archived_at is null)
-          and (
-            c.search_text @@ q.tsq
-            or lower(coalesce(c.heading, '')) like '%' || q.raw_query || '%'
-            or lower(coalesce(c.heading, '')) % q.raw_query
-          )
+          and strpos(lower(coalesce(c.heading, '')), q.raw_query) > 0
         group by c.id, q.raw_query, q.tsq
         order by score desc, weight desc, c.rank, label
         limit $4
@@ -1441,8 +1431,10 @@ export async function getProjectGraph(input: {
 }): Promise<ProjectGraphRecord> {
   const chunkIds = uniqueIds(input.chunkIds);
   const requestedEventIds = uniqueIds(input.eventIds);
-  const graphQuery = input.query?.trim() ?? "";
   const normalizedEntityName = input.entityName?.trim() ?? "";
+  const entityIdsFromInput = uniqueIds(input.entityIds);
+  const graphQuery = chunkIds.length || requestedEventIds.length || entityIdsFromInput.length || normalizedEntityName
+    ? "" : input.query?.normalize("NFKC").trim().toLowerCase() ?? "";
   const exactEntityGroupIds = normalizedEntityName
     ? (
         await pool.query(
@@ -1467,18 +1459,31 @@ export async function getProjectGraph(input: {
       ).rows.map((row) => String(row.id))
     : [];
   const queryMatchedEntityIds = graphQuery
-    ? (await searchEntitiesByText({
-        sourceIds: [input.sourceId],
-        query: graphQuery,
-        limit: 80
-      })).map((entity) => entity.id)
+    ? (await pool.query(
+        `
+          select ent.id
+          from entities ent
+          where ent.source_id = $1
+            and (strpos(lower(ent.name), $3) > 0 or strpos(ent.normalized_name, $3) > 0)
+            and exists (
+              select 1 from event_entities ee
+              join events e on e.id = ee.event_id
+              join documents d on d.id = e.document_id
+              join sources s on s.id = e.source_id
+              where ee.entity_id = ent.id and e.source_id = $1 and s.tenant_id = $2
+                and s.archived_at is null and d.archived_at is null and e.deleted_at is null
+            )
+          order by (ent.normalized_name = $3) desc, ent.name, ent.id
+          limit 80
+        `, [input.sourceId, input.tenantId, graphQuery]
+      )).rows.map((row) => String(row.id))
     : [];
   const graphCollectionLimit = normalizedEntityName
     ? Number.MAX_SAFE_INTEGER
     : MAX_PROJECT_GRAPH_LIMIT;
   const requestedEntityIds = uniqueIds(
     [
-      ...uniqueIds(input.entityIds),
+      ...entityIdsFromInput,
       ...exactEntityGroupIds,
       ...queryMatchedEntityIds
     ],
@@ -1512,40 +1517,30 @@ export async function getProjectGraph(input: {
               and s.archived_at is null
               and d.archived_at is null
               and e.deleted_at is null
+          ),
+          ranked as (
+            select ae.id, ae.rank,
+              case
+                when ae.id = any($3::uuid[]) then 0
+                when ae.chunk_id = any($4::uuid[]) then 1
+                when $7::text <> '' and strpos(lower(ae.title), $7::text) > 0 then 2
+                when cardinality($5::uuid[]) > 0 and exists (
+                  select 1 from event_entities ee
+                  where ee.event_id = ae.id and ee.entity_id = any($5::uuid[])
+                ) then 3
+                when $7::text <> '' and strpos(lower(ae.chunk_heading), $7::text) > 0 then 4
+                when $7::text <> '' and strpos(lower(ae.chunk_content), $7::text) > 0 then 5
+                else 6
+              end as match_rank
+            from active_events ae
           )
-          select ae.id
-          from active_events ae
-          where ae.id = any($3::uuid[])
-             or ae.chunk_id = any($4::uuid[])
-             or exists (
-               select 1
-               from event_entities ee
-               where ee.event_id = ae.id
-                 and ee.entity_id = any($5::uuid[])
-             )
+          select id from ranked
+          where match_rank < 4
              or (
-               $7::text <> ''
-               and (
-                 lower(ae.title) like '%' || lower($7::text) || '%'
-                 or lower(ae.chunk_heading) like '%' || lower($7::text) || '%'
-                 or lower(ae.chunk_content) like '%' || lower($7::text) || '%'
-               )
+               match_rank in (4, 5)
+               and match_rank = (select min(match_rank) from ranked)
              )
-          order by
-            case
-              when ae.id = any($3::uuid[]) then 0
-              when ae.chunk_id = any($4::uuid[]) then 1
-              when exists (
-                select 1
-                from event_entities ee
-                where ee.event_id = ae.id
-                  and ee.entity_id = any($5::uuid[])
-              ) then 2
-              when $7::text <> '' then 3
-              else 4
-            end,
-            ae.rank,
-            ae.id
+          order by match_rank, rank, id
           limit $6::int
         `,
         [

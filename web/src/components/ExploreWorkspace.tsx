@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { AnswerEvidence, McpMessageRecord, ProjectGraphRecord, ProjectGraphSuggestionRecord, QuestionAnchor } from "../types";
 import { api } from "../lib/api";
@@ -89,6 +89,9 @@ export function ExploreWorkspace(props: Props) {
 
   const requested = focus ?? evidenceFocus;
   const requestKey = requested?.key ?? "";
+  const requestSuggestions = useCallback(async (query: string, signal: AbortSignal) =>
+    (await api.getProjectGraphSuggestions(projectId, { query, limit: 10 }, signal)).suggestions,
+  [projectId]);
   useEffect(() => {
     const controller = new AbortController();
     setLoadError(false);
@@ -97,7 +100,8 @@ export function ExploreWorkspace(props: Props) {
         chunkIds: requested.chunkIds,
         eventIds: requested.eventIds,
         entityIds: requested.entityIds,
-        query: requested.query || undefined,
+        query: requested.chunkIds.length || requested.eventIds.length || requested.entityIds.length || requested.entityName
+          ? undefined : requested.query || undefined,
         entityName: requested.entityName
       } : {}),
       limit: 120
@@ -138,8 +142,11 @@ export function ExploreWorkspace(props: Props) {
               setSelectedCitation(undefined);
               props.onPickNode(node);
             }}
-            onSearch={(query) => setFocus(query ? { ...emptyScope, key: `search:${query}`, query } : null)}
-            onRequestSuggestions={async (query, signal) => (await api.getProjectGraphSuggestions(projectId, { query, limit: 10 }, signal)).suggestions}
+            onSearch={(query) => {
+              setSelectedCitation(undefined);
+              setFocus(query ? { ...emptyScope, key: `search:${query}`, query } : null);
+            }}
+            onRequestSuggestions={requestSuggestions}
             onSelectSuggestion={(suggestion) => {
               setSelectedCitation(suggestion.id);
               setFocus({ ...scopeFor(suggestion), key: `node:${suggestion.id}`, query: suggestion.label,

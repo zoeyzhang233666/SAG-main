@@ -159,6 +159,40 @@ async function smoke(contents, origin, profile, mode) {
   assert.ok(graph.entities.some(item => item.name === entity), 'Imported entity missing from graph');
   assert.ok(graph.edges.length, 'Imported relationships missing from graph');
 
+  if (mode !== 'read') {
+    const asphaltFixture = {
+      documents: [{ title: '检索范围回归', chunks: [
+        { key: '1', heading: '铺路材料', content: '道路材料有独立实体记录。', event: {
+          title: '道路铺面记录', category: '应用', entities: [{ type: '材料', name: '沥青' }]
+        } },
+        { key: '2', heading: '颜色目录', content: '包装颜色记录。', event: {
+          title: '青色包装', category: '包装', entities: [{ type: '颜色', name: '青' }]
+        } },
+        { key: '3', heading: '建材目录', content: '这份总目录还顺带列举沥青。', event: {
+          title: '通用建材目录', category: '目录', entities: [{ type: '建材', name: '建材目录' }]
+        } },
+        { key: '4', heading: '材料检测', content: '检测。', event: {
+          title: '沥青检验报告', category: '检测', entities: [{ type: '机构', name: '材料实验室' }]
+        } },
+      ] }]
+    };
+    await api('/api/documents/import-structured', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceId: project.id, format: 'json', fileName: 'graph-query.json', content: JSON.stringify(asphaltFixture) })
+    }, 201);
+  }
+  const exactQuery = encodeURIComponent('沥青');
+  const graphPath = `/api/projects/${project.id}/graph`;
+  const asphalt = (await api(`${graphPath}?query=${exactQuery}`)).graph;
+  assert.deepEqual(asphalt.events.map(item => item.title).sort(), ['沥青检验报告', '道路铺面记录'].sort());
+  const asphaltEntity = asphalt.entities.find(item => item.name === '沥青');
+  assert.ok(asphalt.edges.some(edge => edge.entityId === asphaltEntity?.id), 'Exact graph search lost its matching entity');
+  const { suggestions: asphaltSuggestions } = await api(`${graphPath}/suggestions?q=${exactQuery}`);
+  assert.ok(asphaltSuggestions.length && asphaltSuggestions.every(item => item.label.includes('沥青')),
+    'Search suggestions must have a matching title, chunk heading or entity name');
+  const noMatch = (await api(`${graphPath}?query=%25`)).graph;
+  assert.equal(noMatch.events.length, 0, 'A literal percent sign must not match all events');
+
   contents.reload();
   await until(() => evaluate(() => {
     const tab = Array.from(document.querySelectorAll('.chem-workspace-tabs button'))
@@ -171,6 +205,9 @@ async function smoke(contents, origin, profile, mode) {
     return Array.from(document.querySelectorAll('.react-flow__node'))
       .some(node => node.textContent.includes(event) && node.getBoundingClientRect().width > 0);
   }, event), 'V1 Hypergraph did not render the imported event');
+  await until(() => evaluate(() => Array.from(document.querySelectorAll(
+    '[data-graph-renderer="atlas-2d"] .react-flow__node [data-event-category]'
+  )).some(label => /工艺|应用/.test(label.textContent))), 'Event categories did not render in the original 2D hypergraph');
   assert.equal(await evaluate(() => document.querySelector('[data-graph-renderer]')?.dataset.graphRenderer), 'atlas-2d');
   if (mode === 'write') {
     assert.equal(await evaluate(() => document.querySelector('[data-graph-renderer] select')?.value), 'columns',
@@ -200,9 +237,24 @@ async function smoke(contents, origin, profile, mode) {
       const count = document.querySelector('.atlas-orbital-legend span:last-child')?.textContent.match(/\d+/)?.[0];
       return Number(count) > 0;
     }), '3D planet should show related nodes on the outer orbit');
+    await evaluate(() => {
+      const canvas = document.querySelector('[data-orbital-mode="plates"] canvas');
+      if (!canvas) throw new Error('No orbital canvas to select');
+      window.__sagOrbitCanvas = canvas;
+      for (const key of ['ArrowRight', 'Enter']) canvas.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    });
+    await until(() => evaluate(() => Boolean(document.querySelector('[data-sag-detail-drawer]'))), '3D selection did not open an event');
+    await delay(350);
+    assert.ok(await evaluate(() => window.__sagOrbitCanvas === document.querySelector('[data-orbital-mode="plates"] canvas')),
+      'Selecting an event replaced its WebGL canvas');
+    await evaluate(() => Array.from(document.querySelectorAll('[data-sag-detail-drawer] button'))
+      .find(button => /^(关闭|Close)$/.test(button.textContent.trim()))?.click());
+    await until(() => evaluate(() => !document.querySelector('[data-sag-detail-drawer]')), '3D event drawer did not close');
     await evaluate(() => document.querySelector('.atlas-orbital-tools button')?.click());
     await until(() => evaluate(() => Boolean(document.querySelector('[data-orbital-mode="nodes"] canvas'))),
       '3D dual-orbit mode did not render');
+    assert.ok(await evaluate(() => window.__sagOrbitCanvas === document.querySelector('[data-orbital-mode="nodes"] canvas')),
+      'Switching 3D styles replaced the WebGL canvas');
     assert.ok(await graphModeButton('2D'), 'Could not return to 2D');
     await until(() => evaluate(() => !document.querySelector('[data-graph-3d]')), '3D scene was not released');
     console.log('WebGL2 graph mounted and released');
@@ -269,6 +321,8 @@ async function smoke(contents, origin, profile, mode) {
     const label = canvas?.querySelector('.atlas-universe-node [data-event-category]');
     if (!label || !pane || getComputedStyle(pane).colorScheme !== 'dark') return false;
     if (!canvas.querySelector('.atlas-universe-galaxy') || getComputedStyle(label).visibility !== 'visible') return false;
+    const line = canvas.querySelector('[data-universe-link="event-entity"]');
+    if (!line || line.getBBox().width + line.getBBox().height <= 0 || getComputedStyle(line).stroke === 'none') return false;
     const bounds = canvas.getBoundingClientRect();
     const box = label.getBoundingClientRect();
     return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;

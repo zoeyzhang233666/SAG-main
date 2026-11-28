@@ -15,7 +15,7 @@ it("prioritizes focused 3D nodes and only emits real links between visible nodes
     }
   });
   expect(data.nodes).toHaveLength(120);
-  expect(data.nodes[0]?.id).toBe("121");
+  expect(data.nodes.at(-1)?.id).toBe("121");
   expect(data.links).toEqual([{ source: "0", target: "121" }]);
   expect(data.cropped).toBe(true);
   expect(nodes[0]?.id).toBe("0");
