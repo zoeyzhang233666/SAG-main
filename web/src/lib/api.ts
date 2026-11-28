@@ -339,6 +339,13 @@ export const api = {
     });
   },
 
+  async getAtlasEntityKnowledgeBundle(entityId: string) {
+    return request<{
+      entities: Array<EntityRecord & { description?: string | null; sourceName?: string | null; eventCount: number }>;
+      events: EventRecord[];
+    }>(`/api/chain-atlas/entities/${entityId}/knowledge`);
+  },
+
   async getChemicalKnowledgeBundle(input: {
     terms: string[];
     cas?: string;

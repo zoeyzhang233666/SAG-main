@@ -6,11 +6,13 @@ export interface Chemical {
   cas?: string;
   formula?: string;
   aliases?: string[];
+  materialEntityTypes?: string[];
 }
 
 export type ChemicalMatchCandidate = {
   name: string;
   description?: string | null;
+  type?: string;
 };
 
 const AMBIGUOUS_ABBREVIATIONS = new Set([
@@ -105,6 +107,9 @@ export function entityBelongsToChemical(
   candidate: ChemicalMatchCandidate,
   chemical: Chemical,
 ): boolean {
+  if (chemical.materialEntityTypes && !chemical.materialEntityTypes.some(
+    (type) => normalizeChemicalSearch(type) === normalizeChemicalSearch(candidate.type ?? ""),
+  )) return false;
   const nameKey = normalizeChemicalSearch(candidate.name);
   if (!nameKey) return false;
 
@@ -130,7 +135,8 @@ export function matchBelongsToChemical(
 export function resolveEntityChemical(
   entity: ChemicalMatchCandidate,
 ): Chemical | undefined {
-  return resolveChemicalByName(entity.name);
+  const chemical = resolveChemicalByName(entity.name);
+  return chemical && entityBelongsToChemical(entity, chemical) ? chemical : undefined;
 }
 
 export function filterEntitiesBelongingToChemical<T extends ChemicalMatchCandidate & { id: string }>(

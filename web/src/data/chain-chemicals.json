@@ -62,6 +62,11 @@
     "formula": "CH4"
   },
   {
+    "name": "天然气",
+    "english": "Natural gas",
+    "materialEntityTypes": ["产品", "化学品", "化工原料", "化工品", "化工品原料", "化石燃料", "原料", "原料气", "联产品", "能源", "Product", "Chemical", "Raw material", "Feedstock", "Fuel", "Energy", "By-product"]
+  },
+  {
     "name": "乙炔",
     "english": "Acetylene",
     "cas": "74-86-2",

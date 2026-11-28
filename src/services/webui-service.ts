@@ -27,6 +27,7 @@ import {
   listSources,
   matchChainAtlasEntities,
   getEntitiesKnowledgeBundle,
+  getAtlasEntityKnowledgeBundle,
   getChemicalKnowledgeBundle,
   restoreDocument,
   restoreSource,
@@ -727,6 +728,10 @@ export class WebuiService {
 
   async getEntitiesKnowledgeBundle(entityIds: string[], tenantId = config.DEFAULT_TENANT_ID) {
     return getEntitiesKnowledgeBundle({ entityIds, tenantId });
+  }
+
+  async getAtlasEntityKnowledgeBundle(entityId: string, tenantId = config.DEFAULT_TENANT_ID) {
+    return getAtlasEntityKnowledgeBundle({ entityId, tenantId });
   }
 
   async getChemicalKnowledgeBundle(
