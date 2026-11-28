@@ -24,6 +24,11 @@ import type {
   ProjectStatsRecord,
   SourceRecord
 } from "../types.js";
+import {
+  chemicalIdentityTerms,
+  entityBelongsToChemical,
+  resolveChemicalFromQuery
+} from "../lib/chemical-identity.js";
 
 type Queryable = Pick<pg.Pool | pg.PoolClient, "query">;
 
@@ -49,6 +54,8 @@ function sourceFromRow(row: Record<string, unknown>): SourceRecord {
 }
 
 function eventFromRow(row: Record<string, unknown>): EventRecord {
+  const category =
+    row.category == null ? undefined : String(row.category).trim() || undefined;
   return {
     id: String(row.id),
     sourceId: String(row.source_id),
@@ -57,6 +64,7 @@ function eventFromRow(row: Record<string, unknown>): EventRecord {
     title: String(row.title),
     summary: String(row.summary ?? ""),
     content: String(row.content ?? ""),
+    category,
     rank: Number(row.rank ?? 0),
     score: row.score == null ? undefined : Number(row.score),
     titleEmbedding: embeddingPreviewFromRow(row, "title_embedding_preview", "title_embedding_dimensions"),
@@ -862,7 +870,7 @@ export async function searchEventsByTitleVector(input: {
 }): Promise<EventRecord[]> {
   const result = await pool.query(
     `
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
              1 - (e.title_embedding <=> $1::vector) as score
       from events e
       join documents d on d.id = e.document_id
@@ -899,7 +907,7 @@ export async function searchEventsByText(input: {
           websearch_to_tsquery('simple', $2) as tsq,
           lower($2) as raw_query
       )
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
              greatest(
                coalesce(ts_rank_cd(e.search_text, q.tsq), 0),
                similarity(lower(e.title), q.raw_query),
@@ -948,7 +956,7 @@ export async function coarseRankEventsByContent(input: {
   }
   const result = await pool.query(
     `
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
              1 - (e.content_embedding <=> $1::vector) as score
       from events e
       join documents d on d.id = e.document_id
@@ -974,7 +982,7 @@ export async function getEventsWithEntityIds(eventIds: string[]): Promise<Map<st
   }
   const result = await pool.query(
     `
-      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+      select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
              coalesce(array_agg(ee.entity_id) filter (where ee.entity_id is not null), '{}') as entity_ids
       from events e
       join documents d on d.id = e.document_id
@@ -1086,7 +1094,7 @@ export async function getEventDetail(input: {
   const eventResult = await pool.query(
     `
       select
-        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
         e.title_embedding::text as title_embedding_preview,
         e.content_embedding::text as content_embedding_preview,
         d.id as document_id_for_detail,
@@ -1905,7 +1913,7 @@ export async function listEventsByDocument(input: {
   const result = await pool.query(
     `
       select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
-             e.content, e.rank,
+             e.content, e.category, e.rank,
              case when e.title_embedding is null then null else vector_dims(e.title_embedding) end as title_embedding_dimensions,
              case when e.content_embedding is null then null else vector_dims(e.content_embedding) end as content_embedding_dimensions,
              count(ee.entity_id)::int as entity_count,
@@ -1950,7 +1958,7 @@ export async function listEventsByProject(input: {
   const result = await pool.query(
     `
       select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
-             e.content, e.rank,
+             e.content, e.category, e.rank,
              case when e.title_embedding is null then null else vector_dims(e.title_embedding) end as title_embedding_dimensions,
              case when e.content_embedding is null then null else vector_dims(e.content_embedding) end as content_embedding_dimensions,
              count(ee.entity_id)::int as entity_count,
@@ -2275,7 +2283,7 @@ export async function getKnowledgeAssetsByChunkIds(input: {
   const eventsResult = await pool.query(
     `
       select e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary,
-             e.content, e.rank, e.title_embedding::text as title_embedding_preview,
+             e.content, e.category, e.rank, e.title_embedding::text as title_embedding_preview,
              e.content_embedding::text as content_embedding_preview
       from events e
       join source_chunks c on c.id = e.chunk_id
@@ -2337,6 +2345,21 @@ export async function getKnowledgeAssetsByChunkIds(input: {
   };
 }
 
+const ATLAS_TREE_MATCH_LIMIT = 12;
+const KNOWLEDGE_ENTITY_PAGE_SIZE = 200;
+const KNOWLEDGE_BUNDLE_ENTITY_BATCH = 200;
+
+export type KnowledgeEntityRecord = EntityRecord & {
+  description?: string | null;
+  sourceName?: string | null;
+  eventCount: number;
+};
+
+export type KnowledgeBundleRecord = {
+  entities: KnowledgeEntityRecord[];
+  events: Array<EventRecord & { document?: DocumentRecord | null }>;
+};
+
 export async function matchChainAtlasEntities(input: {
   names: string[];
   tenantId: string;
@@ -2349,6 +2372,7 @@ export async function matchChainAtlasEntities(input: {
     id: string;
     name: string;
     type: string;
+    description: string | null;
     source_id: string;
     source_name: string;
   }>(
@@ -2356,7 +2380,13 @@ export async function matchChainAtlasEntities(input: {
       select requested.term, matched.*
       from unnest($1::text[], $2::text[]) as requested(term, normalized)
       cross join lateral (
-        select ent.id, ent.name, ent.type, s.id as source_id, s.name as source_name
+        select
+          ent.id,
+          ent.name,
+          ent.type,
+          ent.description,
+          s.id as source_id,
+          s.name as source_name
         from entities ent
         join sources s on s.id = ent.source_id
         where ent.normalized_name in (requested.normalized, lower(requested.term))
@@ -2371,19 +2401,301 @@ export async function matchChainAtlasEntities(input: {
               and e.deleted_at is null and d.archived_at is null
           )
         order by lower(s.name), ent.name, ent.id
-        limit 12
+        limit $5
       ) matched
     `,
-    [names, names.map(normalizeEntityName), input.tenantId, input.projectId ?? null]
+    [
+      names,
+      names.map(normalizeEntityName),
+      input.tenantId,
+      input.projectId ?? null,
+      ATLAS_TREE_MATCH_LIMIT
+    ]
   );
   return result.rows.map(row => ({
     term: row.term,
     id: row.id,
     name: row.name,
     type: row.type,
+    description: row.description == null ? null : String(row.description),
     sourceId: row.source_id,
     sourceName: row.source_name
   }));
+}
+
+async function listEntityIdsByIdentityPage(input: {
+  terms: string[];
+  tenantId: string;
+  projectId?: string;
+  includeArchived?: boolean;
+  limit: number;
+  offset: number;
+}): Promise<{ ids: string[]; hasMore: boolean }> {
+  const terms = [...new Set(input.terms.map((term) => term.trim()).filter(Boolean))];
+  const normalized = [...new Set(terms.map(normalizeEntityName).filter(Boolean))];
+  if (normalized.length === 0) {
+    return { ids: [], hasMore: false };
+  }
+  const archiveSql = input.includeArchived ? "" : "and s.archived_at is null";
+  // Candidate recall is exact name / normalized_name only — never description text.
+  const result = await pool.query<{ id: string }>(
+    `
+      select ent.id
+      from entities ent
+      join sources s on s.id = ent.source_id
+      where s.tenant_id = $1
+        ${archiveSql}
+        and ($2::uuid is null or s.id = $2)
+        and (
+          ent.normalized_name = any($3::text[])
+          or lower(ent.name) = any($4::text[])
+        )
+        and exists (
+          select 1
+          from event_entities ee
+          join events e on e.id = ee.event_id
+          join documents d on d.id = e.document_id
+          where ee.entity_id = ent.id
+            and e.deleted_at is null
+            ${input.includeArchived ? "" : "and d.archived_at is null"}
+        )
+      order by ent.name, ent.type, ent.id
+      limit $5 offset $6
+    `,
+    [
+      input.tenantId,
+      input.projectId ?? null,
+      normalized,
+      terms.map((term) => term.toLowerCase()),
+      input.limit + 1,
+      input.offset
+    ]
+  );
+  const hasMore = result.rows.length > input.limit;
+  const ids = result.rows.slice(0, input.limit).map((row) => row.id);
+  return { ids, hasMore };
+}
+
+async function fetchEntitiesKnowledgeBundlePage(input: {
+  entityIds: string[];
+  tenantId: string;
+  includeArchived?: boolean;
+}): Promise<KnowledgeBundleRecord> {
+  const entityIds = [...new Set(input.entityIds.filter(Boolean))];
+  if (entityIds.length === 0) {
+    return { entities: [], events: [] };
+  }
+  const archiveEntitySql = input.includeArchived ? "" : "and s.archived_at is null";
+  const archiveEventSql = input.includeArchived
+    ? ""
+    : "and s.archived_at is null and d.archived_at is null";
+  const entitiesResult = await pool.query(
+    `
+      select
+        ent.id,
+        ent.source_id,
+        ent.type,
+        ent.name,
+        ent.normalized_name,
+        ent.description,
+        s.name as source_name,
+        (
+          select count(distinct ee.event_id)::int
+          from event_entities ee
+          join events e on e.id = ee.event_id
+          join documents d on d.id = e.document_id
+          join sources es on es.id = e.source_id
+          where ee.entity_id = ent.id
+            and e.deleted_at is null
+            and es.tenant_id = $2
+            ${input.includeArchived ? "" : "and es.archived_at is null and d.archived_at is null"}
+        ) as event_count
+      from entities ent
+      join sources s on s.id = ent.source_id
+      where ent.id = any($1::uuid[])
+        and s.tenant_id = $2
+        ${archiveEntitySql}
+      order by ent.name, ent.type, ent.id
+    `,
+    [entityIds, input.tenantId]
+  );
+  const eventsResult = await pool.query(
+    `
+      select
+        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
+        d.id as document_id_for_detail,
+        d.title as document_title,
+        d.source_name as document_source_name,
+        d.source_type as document_source_type,
+        d.source_date as document_source_date,
+        d.source_author as document_source_author,
+        d.source_url as document_source_url,
+        d.status as document_status,
+        d.parse_status as document_parse_status,
+        d.metadata as document_metadata,
+        d.created_at as document_created_at,
+        d.updated_at as document_updated_at,
+        d.archived_at as document_archived_at
+      from events e
+      join sources s on s.id = e.source_id
+      join documents d on d.id = e.document_id
+      where e.id in (
+          select distinct ee.event_id
+          from event_entities ee
+          where ee.entity_id = any($1::uuid[])
+        )
+        and s.tenant_id = $2
+        and e.deleted_at is null
+        ${archiveEventSql}
+      order by e.rank, e.id
+    `,
+    [entityIds, input.tenantId]
+  );
+  return {
+    entities: entitiesResult.rows.map((row) => ({
+      ...entityFromRow(row),
+      description: row.description == null ? null : String(row.description),
+      sourceName: row.source_name == null ? null : String(row.source_name),
+      eventCount: Number(row.event_count ?? 0)
+    })),
+    events: eventsResult.rows.map((row) => ({
+      ...eventFromRow(row),
+      document: row.document_id_for_detail == null
+        ? null
+        : documentFromRow({
+            id: row.document_id_for_detail,
+            source_id: row.source_id,
+            title: row.document_title,
+            source_name: row.document_source_name,
+            source_type: row.document_source_type,
+            source_date: row.document_source_date,
+            source_author: row.document_source_author,
+            source_url: row.document_source_url,
+            status: row.document_status,
+            parse_status: row.document_parse_status,
+            metadata: row.document_metadata,
+            created_at: row.document_created_at,
+            updated_at: row.document_updated_at,
+            archived_at: row.document_archived_at
+          })
+    }))
+  };
+}
+
+function mergeKnowledgeBundleRecords(
+  bundles: KnowledgeBundleRecord[]
+): KnowledgeBundleRecord {
+  const entities = new Map<string, KnowledgeEntityRecord>();
+  const events = new Map<string, EventRecord & { document?: DocumentRecord | null }>();
+  for (const bundle of bundles) {
+    for (const entity of bundle.entities) {
+      if (!entities.has(entity.id)) entities.set(entity.id, entity);
+    }
+    for (const event of bundle.events) {
+      if (!events.has(event.id)) events.set(event.id, event);
+    }
+  }
+  return {
+    entities: [...entities.values()].sort(
+      (left, right) =>
+        left.name.localeCompare(right.name) ||
+        left.type.localeCompare(right.type) ||
+        left.id.localeCompare(right.id)
+    ),
+    events: [...events.values()].sort(
+      (left, right) =>
+        (left.rank ?? 0) - (right.rank ?? 0) || left.id.localeCompare(right.id)
+    )
+  };
+}
+
+export async function getEntitiesKnowledgeBundle(input: {
+  entityIds: string[];
+  tenantId: string;
+  includeArchived?: boolean;
+}): Promise<KnowledgeBundleRecord> {
+  const entityIds = [...new Set(input.entityIds.filter(Boolean))];
+  if (entityIds.length === 0) {
+    return { entities: [], events: [] };
+  }
+  const bundles: KnowledgeBundleRecord[] = [];
+  for (let offset = 0; offset < entityIds.length; offset += KNOWLEDGE_BUNDLE_ENTITY_BATCH) {
+    const batch = entityIds.slice(offset, offset + KNOWLEDGE_BUNDLE_ENTITY_BATCH);
+    bundles.push(
+      await fetchEntitiesKnowledgeBundlePage({
+        entityIds: batch,
+        tenantId: input.tenantId,
+        includeArchived: input.includeArchived
+      })
+    );
+  }
+  return mergeKnowledgeBundleRecords(bundles);
+}
+
+export async function getChemicalKnowledgeBundle(input: {
+  terms: string[];
+  cas?: string;
+  chemicalName?: string;
+  tenantId: string;
+  projectId?: string;
+  includeArchived?: boolean;
+}): Promise<KnowledgeBundleRecord> {
+  const chemical = resolveChemicalFromQuery({
+    terms: input.terms,
+    cas: input.cas,
+    chemicalName: input.chemicalName
+  });
+  if (!chemical) {
+    return { entities: [], events: [] };
+  }
+
+  // Only unambiguous identity terms are used for candidate recall.
+  const confirmedTerms = chemicalIdentityTerms(chemical);
+  const candidateIds: string[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await listEntityIdsByIdentityPage({
+      terms: confirmedTerms,
+      tenantId: input.tenantId,
+      projectId: input.projectId,
+      includeArchived: input.includeArchived,
+      limit: KNOWLEDGE_ENTITY_PAGE_SIZE,
+      offset
+    });
+    candidateIds.push(...page.ids);
+    if (!page.hasMore) break;
+    offset += KNOWLEDGE_ENTITY_PAGE_SIZE;
+  }
+  if (candidateIds.length === 0) {
+    return { entities: [], events: [] };
+  }
+
+  // Fetch entity metadata first, then re-confirm identity before loading events.
+  const candidateBundle = await getEntitiesKnowledgeBundle({
+    entityIds: candidateIds,
+    tenantId: input.tenantId,
+    includeArchived: input.includeArchived
+  });
+  const confirmedEntities = candidateBundle.entities.filter((entity) =>
+    entityBelongsToChemical(entity, chemical)
+  );
+  if (confirmedEntities.length === 0) {
+    return { entities: [], events: [] };
+  }
+  if (confirmedEntities.length === candidateBundle.entities.length) {
+    return {
+      entities: confirmedEntities,
+      events: candidateBundle.events
+    };
+  }
+
+  // Reload events strictly for confirmed entities so rejected candidates
+  // (and any events only linked to them) cannot leak into the aggregate.
+  return getEntitiesKnowledgeBundle({
+    entityIds: confirmedEntities.map((entity) => entity.id),
+    tenantId: input.tenantId,
+    includeArchived: input.includeArchived
+  });
 }
 
 export async function getEntityDetail(input: {
@@ -2432,7 +2744,7 @@ export async function getEntityDetail(input: {
   const eventsResult = await pool.query(
     `
       select
-        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.rank,
+        e.id, e.source_id, e.document_id, e.chunk_id, e.title, e.summary, e.content, e.category, e.rank,
         d.id as document_id_for_detail,
         d.title as document_title,
         d.source_name as document_source_name,

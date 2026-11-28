@@ -16,7 +16,7 @@ export const chainRelations: Record<string, readonly [string, string]> = {
   historical: ["历史路线", "Historical route"]
 };
 
-interface Chemical {
+export interface Chemical {
   name: string;
   english: string;
   cas?: string;
@@ -89,6 +89,19 @@ for (const chemical of chemicals) {
 
 const chemicalsByCas = new Map(chemicals.filter(item => item.cas).map(item => [item.cas, item]));
 
+export {
+  chemicalIdentityTerms,
+  entityBelongsToChemical,
+  filterEntitiesBelongingToChemical,
+  isAmbiguousChemicalTerm,
+  matchBelongsToChemical,
+  resolveChemicalByCas,
+  resolveChemicalByName,
+  resolveChemicalFromQuery,
+  resolveEntityChemical,
+  type ChemicalMatchCandidate,
+} from "./chemical-identity.js";
+
 function cleanLabel(label: string) {
   return label.replace(/\s*(?:★\s*注[：:]|注[：:]|★\s*修订[：:]).*$/u, "")
     .replace(/\[\s*★+\s*\]/gu, "")
@@ -109,15 +122,23 @@ function labelParts(label: string) {
 function chemicalFor(node: AtlasNode) {
   if (node.displayName) return chemicalsByName.get(normalizeAtlasSearch(node.displayName)) ?? undefined;
 
-  const { head, withoutCas, name } = labelParts(node.label);
+  const { head, withoutCas, name, unqualified } = labelParts(node.label);
   const applicationName = node.code?.startsWith("A-") && name.includes("-") ? name.slice(name.indexOf("-") + 1) : "";
-  const named = [name, withoutCas, applicationName]
+  const arrowTail = unqualified.includes("→") || unqualified.includes("←") || unqualified.includes("↔")
+    ? unqualified.split(/[→←↔]/u).at(-1)?.trim() ?? ""
+    : "";
+  const arrowPlain = arrowTail.replace(/\[[^\]]+\]/gu, "").trim();
+  const arrowHan = arrowPlain.match(/^(.*?\p{Script=Han}+)/u)?.[1] ?? arrowPlain;
+  const named = [name, withoutCas, applicationName, arrowPlain, arrowHan]
     .map(candidate => chemicalsByName.get(normalizeAtlasSearch(candidate)))
     .find(Boolean);
-  const cas = head.match(/\[(\d{2,7}-\d{2}-\d)\]/u)?.[1];
+  const cas =
+    unqualified.match(/\[(\d{2,7}-\d{2}-\d)\]/u)?.[1] ??
+    head.match(/\[(\d{2,7}-\d{2}-\d)\]/u)?.[1];
   if (named && (!cas || !named.cas || cas === named.cas)) return named;
-  if (/[\/、;；]/u.test(name)) return undefined;
+  // Prefer CAS identity before rejecting slash-joined feedstock labels.
   if (cas) return chemicalsByCas.get(cas);
+  if (/[\/、;；]/u.test(name)) return undefined;
 }
 
 function entityTerms(label: string, code?: string) {

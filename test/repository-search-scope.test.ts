@@ -119,6 +119,93 @@ describe("search repository scope", () => {
     expect(sql).toContain("d.archived_at is null");
   });
 
+  it("loads every related event category without truncating the entity detail query", async () => {
+    db.query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "00000000-0000-0000-0000-000000000011",
+          source_id: "00000000-0000-0000-0000-000000000001",
+          type: "产品",
+          name: "乙烯",
+          normalized_name: "乙烯",
+          description: null,
+          embedding_preview: null,
+          event_count: 2,
+          tenant_id: "default",
+          source_name: "demo",
+          source_description: null,
+          source_metadata: {},
+          source_archived_at: null,
+          source_created_at: "2026-07-10T00:00:00.000Z",
+          source_updated_at: "2026-07-10T00:00:00.000Z"
+        }]
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000021",
+            source_id: "00000000-0000-0000-0000-000000000001",
+            document_id: "00000000-0000-0000-0000-000000000002",
+            chunk_id: null,
+            title: "工艺事件",
+            summary: "",
+            content: "内容",
+            category: "生产工艺",
+            rank: 0,
+            document_id_for_detail: "00000000-0000-0000-0000-000000000002",
+            document_title: "文档",
+            document_source_name: null,
+            document_source_type: null,
+            document_source_date: null,
+            document_source_author: null,
+            document_source_url: null,
+            document_status: "READY",
+            document_parse_status: "SUCCEEDED",
+            document_metadata: {},
+            document_created_at: "2026-07-10T00:00:00.000Z",
+            document_updated_at: "2026-07-10T00:00:00.000Z",
+            document_archived_at: null
+          },
+          {
+            id: "00000000-0000-0000-0000-000000000022",
+            source_id: "00000000-0000-0000-0000-000000000001",
+            document_id: "00000000-0000-0000-0000-000000000002",
+            chunk_id: null,
+            title: "空白分类事件",
+            summary: "",
+            content: "内容",
+            category: "  ",
+            rank: 1,
+            document_id_for_detail: "00000000-0000-0000-0000-000000000002",
+            document_title: "文档",
+            document_source_name: null,
+            document_source_type: null,
+            document_source_date: null,
+            document_source_author: null,
+            document_source_url: null,
+            document_status: "READY",
+            document_parse_status: "SUCCEEDED",
+            document_metadata: {},
+            document_created_at: "2026-07-10T00:00:00.000Z",
+            document_updated_at: "2026-07-10T00:00:00.000Z",
+            document_archived_at: null
+          }
+        ]
+      });
+
+    const detail = await getEntityDetail({
+      entityId: "00000000-0000-0000-0000-000000000011",
+      tenantId: "default"
+    });
+
+    const eventsSql = normalizeSql(db.query.mock.calls[1][0]);
+    expect(eventsSql).toContain("e.category");
+    expect(eventsSql).not.toContain("limit");
+    expect(detail?.events).toHaveLength(2);
+    expect(detail?.events[0]?.category).toBe("生产工艺");
+    expect(detail?.events[1]?.category).toBeUndefined();
+  });
+
   it("returns lightweight vector status for project asset lists", async () => {
     db.query
       .mockResolvedValueOnce({

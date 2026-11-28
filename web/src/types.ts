@@ -55,6 +55,7 @@ export interface EventRecord {
   title: string;
   summary: string;
   content: string;
+  category?: string;
   rank: number;
   score?: number;
   document?: DocumentRecord | null;
@@ -71,6 +72,7 @@ export interface EntityRecord {
   name: string;
   normalizedName: string;
   description?: string | null;
+  sourceName?: string | null;
   eventCount?: number;
   score?: number;
   embedding?: EmbeddingPreview | null;
@@ -96,6 +98,7 @@ export interface ChainAtlasEntityMatch {
   id: string;
   name: string;
   type: string;
+  description?: string | null;
   sourceId: string;
   sourceName: string;
 }

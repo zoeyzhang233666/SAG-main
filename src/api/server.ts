@@ -818,6 +818,26 @@ export function buildHttpServer() {
     return webuiService.deleteEvent(params.eventId);
   });
 
+  app.post("/api/entities/knowledge-bundle", async (request) => {
+    const body = z.object({
+      entityIds: z.array(z.guid()).min(1).max(5000)
+    }).parse(request.body);
+    return await webuiService.getEntitiesKnowledgeBundle(body.entityIds);
+  });
+
+  app.post("/api/entities/chemical-knowledge", async (request) => {
+    const body = z.object({
+      terms: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
+      cas: z.string().trim().min(1).max(32).optional(),
+      chemicalName: z.string().trim().min(1).max(120).optional(),
+      projectId: z.guid().optional()
+    }).refine(
+      (value) => value.terms.length > 0 || Boolean(value.cas) || Boolean(value.chemicalName),
+      { message: "terms, cas, or chemicalName required" }
+    ).parse(request.body);
+    return await webuiService.getChemicalKnowledgeBundle(body);
+  });
+
   app.get("/api/entities/:entityId", async (request, reply) => {
     const params = request.params as { entityId: string };
     z.guid().parse(params.entityId);

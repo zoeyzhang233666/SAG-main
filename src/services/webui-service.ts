@@ -26,6 +26,8 @@ import {
   listEventsByProject,
   listSources,
   matchChainAtlasEntities,
+  getEntitiesKnowledgeBundle,
+  getChemicalKnowledgeBundle,
   restoreDocument,
   restoreSource,
   searchProjectGraphSuggestions,
@@ -721,6 +723,17 @@ export class WebuiService {
 
   async getEntity(entityId: string, tenantId = config.DEFAULT_TENANT_ID) {
     return getEntityDetail({ entityId, tenantId });
+  }
+
+  async getEntitiesKnowledgeBundle(entityIds: string[], tenantId = config.DEFAULT_TENANT_ID) {
+    return getEntitiesKnowledgeBundle({ entityIds, tenantId });
+  }
+
+  async getChemicalKnowledgeBundle(
+    input: { terms: string[]; cas?: string; chemicalName?: string; projectId?: string },
+    tenantId = config.DEFAULT_TENANT_ID
+  ) {
+    return getChemicalKnowledgeBundle({ ...input, tenantId });
   }
 }
 
