@@ -1,4 +1,10 @@
 import {
+  DEFAULT_EMBEDDING_BASE_URL,
+  DEFAULT_EMBEDDING_MODEL,
+  DEFAULT_LLM_BASE_URL,
+  DEFAULT_LLM_MODEL,
+} from "../../src/config/default-ai-providers.js";
+import {
   lazy,
   Suspense,
   useCallback,
@@ -8794,6 +8800,122 @@ function SettingsPanel(props: {
 
       <ThemeSettingsCard />
 
+      <SettingsCard title={t("语言模型（LLM）", "Language model (LLM)")}
+        badge={llmBaseUrl.trim().replace(/\/+$/, "") === DEFAULT_LLM_BASE_URL ? "APIHub" : t("自定义", "Custom")}>
+        <Field label={t("LLM API Key", "LLM API key")}>
+          <Input name="llm-api-key" type="password" autoComplete="new-password" value={llmApiKey}
+            onChange={(event) => {
+              setLlmApiKey(event.target.value);
+              if (event.target.value.trim()) setClearLlmApiKey(false);
+            }}
+            placeholder={props.settings.hasLlmApiKey && llmBaseUrl.trim().replace(/\/+$/, "") === props.settings.llmBaseUrl.replace(/\/+$/, "")
+              ? t("已配置，留空保留", "Configured, leave blank to keep")
+              : t("粘贴当前语言模型服务商的 Key", "Paste the language model provider's key")} />
+        </Field>
+        <Field label={t("LLM 模型 ID", "LLM model ID")}>
+          <Input value={llmModel} onChange={(event) => setLlmModel(event.target.value)} />
+        </Field>
+        <Field label={t("LLM 接口地址", "LLM API base URL")}>
+          <Input value={llmBaseUrl} onChange={(event) => {
+            setLlmBaseUrl(event.target.value);
+            setLlmApiKey("");
+          }} />
+        </Field>
+        <div className="flex flex-wrap items-end gap-3 self-end">
+          <Button type="button" variant="outline" onClick={() => {
+            if (llmBaseUrl.trim().replace(/\/+$/, "") !== DEFAULT_LLM_BASE_URL) setLlmApiKey("");
+            setLlmBaseUrl(DEFAULT_LLM_BASE_URL);
+            setLlmModel(DEFAULT_LLM_MODEL);
+          }}>{t("使用 APIHub · DeepSeek V4.1 Flash", "Use APIHub · DeepSeek V4.1 Flash")}</Button>
+          {props.settings.hasLlmApiKey && <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={clearLlmApiKey} onChange={(event) => {
+              setClearLlmApiKey(event.target.checked);
+              if (event.target.checked) setLlmApiKey("");
+            }} />
+            {t("保存时清空 LLM Key", "Clear LLM key on save")}
+          </label>}
+        </div>
+        <Field
+          label={t(
+            "超时毫秒（第三方中转建议 300000）",
+            "Timeout in ms (300000 recommended for relays)",
+          )}
+        >
+          <Input
+            type="number"
+            min={10000}
+            step={10000}
+            value={llmTimeoutMs}
+            onChange={(event) => setLlmTimeoutMs(Number(event.target.value))}
+          />
+        </Field>
+        <Field label={t("结构化输出", "Structured output")}>
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3"
+            value={structuredOutputMode}
+            onChange={(event) => setStructuredOutputMode(event.target.value as typeof structuredOutputMode)}
+          >
+            <option value="auto">{t("自动兼容", "Automatic")}</option>
+            <option value="json_schema">JSON Schema</option>
+            <option value="json_object">JSON Object</option>
+            <option value="prompt_only">{t("仅提示词", "Prompt only")}</option>
+          </select>
+        </Field>
+        <Field label={t("重试次数", "Retry count")}>
+          <Input
+            type="number"
+            min={0}
+            max={10}
+            value={llmMaxRetries}
+            onChange={(event) => setLlmMaxRetries(Number(event.target.value))}
+          />
+        </Field>
+      </SettingsCard>
+
+      <SettingsCard title={t("向量模型（Embedding）", "Embedding model")}
+        badge={embeddingBaseUrl.trim().replace(/\/+$/, "") === DEFAULT_EMBEDDING_BASE_URL ? t("硅基流动", "SiliconFlow") : t("自定义", "Custom")}>
+        <Field label={t("Embedding API Key", "Embedding API key")}>
+          <Input name="embedding-api-key" type="password" autoComplete="new-password" value={embeddingApiKey}
+            onChange={(event) => {
+              setEmbeddingApiKey(event.target.value);
+              if (event.target.value.trim()) setClearEmbeddingApiKey(false);
+            }}
+            placeholder={props.settings.hasEmbeddingApiKey && embeddingBaseUrl.trim().replace(/\/+$/, "") === props.settings.embeddingBaseUrl.replace(/\/+$/, "")
+              ? t("已配置，留空保留", "Configured, leave blank to keep")
+              : t("粘贴当前向量模型服务商的 Key", "Paste the embedding provider's key")} />
+        </Field>
+        <Field label={t("Embedding 模型 ID", "Embedding model ID")}>
+          <Input value={embeddingModel} onChange={(event) => setEmbeddingModel(event.target.value)} />
+        </Field>
+        <Field label={t("Embedding 接口地址", "Embedding API base URL")}>
+          <Input value={embeddingBaseUrl} onChange={(event) => {
+            setEmbeddingBaseUrl(event.target.value);
+            setEmbeddingApiKey("");
+          }} />
+        </Field>
+        <div className="flex flex-wrap items-end gap-3 self-end">
+          <Button type="button" variant="outline" onClick={() => {
+            if (embeddingBaseUrl.trim().replace(/\/+$/, "") !== DEFAULT_EMBEDDING_BASE_URL) setEmbeddingApiKey("");
+            setEmbeddingBaseUrl(DEFAULT_EMBEDDING_BASE_URL);
+            setEmbeddingModel(DEFAULT_EMBEDDING_MODEL);
+          }}>{t("使用硅基流动 · BGE-M3", "Use SiliconFlow · BGE-M3")}</Button>
+          {props.settings.hasEmbeddingApiKey && <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={clearEmbeddingApiKey} onChange={(event) => {
+              setClearEmbeddingApiKey(event.target.checked);
+              if (event.target.checked) setEmbeddingApiKey("");
+            }} />
+            {t("保存时清空 Embedding Key", "Clear Embedding key on save")}
+          </label>}
+        </div>
+        <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
+          {t(
+            "数据库使用 1024 维向量。更换模型不会重算历史向量，旧向量需要重新编码才能与新模型的查询向量比较。",
+            "The database uses 1024-dimensional vectors. Changing the model keeps stored vectors. Re-encode them before comparing against queries from the new model.",
+          )}
+        </p>
+      </SettingsCard>
+
+
       <SettingsCard
         title={t("界面", "Interface")}
         badge={props.language === "zh" ? "中文" : "English"}
@@ -8905,107 +9027,6 @@ function SettingsPanel(props: {
             )}
           </div>
         </div>
-      </SettingsCard>
-
-      <SettingsCard title="AI Provider" badge="302.ai">
-        <Field label={t("Embedding 接口地址", "Embedding API base URL")}>
-          <Input
-            value={embeddingBaseUrl}
-            onChange={(event) => setEmbeddingBaseUrl(event.target.value)}
-          />
-        </Field>
-        <Field label={t("Embedding 模型", "Embedding model")}>
-          <Input
-            value={embeddingModel}
-            onChange={(event) => setEmbeddingModel(event.target.value)}
-          />
-        </Field>
-        <Field
-          label={t(
-            "向量维度（数据库固定）",
-            "Vector dimensions (database fixed)",
-          )}
-        >
-          <Input
-            type="number"
-            min={1024}
-            max={1024}
-            value={embeddingDimensions}
-            disabled
-            onChange={(event) =>
-              setEmbeddingDimensions(Number(event.target.value))
-            }
-          />
-        </Field>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 md:col-span-2">
-          {t(
-            "Embedding 必须填写“向量模型”的 OpenAI 兼容接口，本项目会自动请求 接口地址 + /embeddings，并且数据库固定要求 1024 维。DeepSeek 聊天模型通常只能填在 LLM 区域；如果第三方中转没有把 DeepSeek 密钥映射到可用的 embedding 模型，就会报错。建议选择支持 1024 维的 bge-m3、jina-embeddings-v3 或中转平台明确标注的 embedding 模型。",
-            "Embedding must use an OpenAI-compatible embedding model endpoint. SAG calls base URL + /embeddings, and the database requires 1024 dimensions. DeepSeek chat models usually belong in the LLM fields; they will fail here unless your relay maps the key to a real embedding model. Use a 1024-dimensional model such as bge-m3, jina-embeddings-v3, or an embedding model explicitly listed by your relay.",
-          )}
-        </div>
-        <Field
-          label={t(
-            `Embedding 密钥：${props.settings.hasEmbeddingApiKey ? "已配置" : "未配置"}`,
-            `Embedding key: ${props.settings.hasEmbeddingApiKey ? "configured" : "not configured"}`,
-          )}
-        >
-          <Input
-            type="password"
-            value={embeddingApiKey}
-            onChange={(event) => {
-              setEmbeddingApiKey(event.target.value);
-              if (event.target.value.trim()) setClearEmbeddingApiKey(false);
-            }}
-            placeholder={t("留空不修改", "Leave blank to keep unchanged")}
-          />
-        </Field>
-        <Field label={t("LLM 接口地址", "LLM API base URL")}>
-          <Input
-            value={llmBaseUrl}
-            onChange={(event) => setLlmBaseUrl(event.target.value)}
-          />
-        </Field>
-        <Field label={t("LLM 模型", "LLM model")}>
-          <Input
-            value={llmModel}
-            onChange={(event) => setLlmModel(event.target.value)}
-          />
-        </Field>
-        <Field
-          label={t(
-            "超时毫秒（第三方中转建议 300000）",
-            "Timeout in ms (300000 recommended for relays)",
-          )}
-        >
-          <Input
-            type="number"
-            min={10000}
-            step={10000}
-            value={llmTimeoutMs}
-            onChange={(event) => setLlmTimeoutMs(Number(event.target.value))}
-          />
-        </Field>
-        <Field label={t("结构化输出", "Structured output")}>
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3"
-            value={structuredOutputMode}
-            onChange={(event) => setStructuredOutputMode(event.target.value as typeof structuredOutputMode)}
-          >
-            <option value="auto">{t("自动兼容", "Automatic")}</option>
-            <option value="json_schema">JSON Schema</option>
-            <option value="json_object">JSON Object</option>
-            <option value="prompt_only">{t("仅提示词", "Prompt only")}</option>
-          </select>
-        </Field>
-        <Field label={t("重试次数", "Retry count")}>
-          <Input
-            type="number"
-            min={0}
-            max={10}
-            value={llmMaxRetries}
-            onChange={(event) => setLlmMaxRetries(Number(event.target.value))}
-          />
-        </Field>
       </SettingsCard>
 
       <SettingsCard
@@ -9175,34 +9196,6 @@ function SettingsPanel(props: {
             }
           />
         </Field>
-      </SettingsCard>
-
-      <SettingsCard
-        title={t("危险操作", "Danger zone")}
-        badge={t("谨慎", "Careful")}
-      >
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={clearEmbeddingApiKey}
-            onChange={(event) => {
-              setClearEmbeddingApiKey(event.target.checked);
-              if (event.target.checked) setEmbeddingApiKey("");
-            }}
-          />
-          {t("清空 Embedding 密钥", "Clear Embedding key")}
-        </label>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={clearLlmApiKey}
-            onChange={(event) => {
-              setClearLlmApiKey(event.target.checked);
-              if (event.target.checked) setLlmApiKey("");
-            }}
-          />
-          {t("清空 LLM 密钥", "Clear LLM key")}
-        </label>
       </SettingsCard>
 
       <div className="flex justify-end">

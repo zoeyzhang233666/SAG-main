@@ -56,6 +56,40 @@ async function smoke(contents, origin, profile, mode) {
   }, url, options, status);
 
   await until(() => evaluate(() => document.querySelector('#root')?.childElementCount), 'V1 frontend did not mount');
+  if (mode === 'write') {
+    const route = '/api/settings/ai';
+    const { settings } = await api(route);
+    assert.equal(settings.llmBaseUrl, 'https://www.apihub.ink/v1');
+    assert.equal(settings.llmModel, 'deepseek-flash');
+    assert.equal(settings.embeddingBaseUrl, 'https://api.siliconflow.cn/v1');
+    assert.equal(settings.embeddingModel, 'BAAI/bge-m3');
+    assert.equal(settings.embeddingDimensions, 1024);
+    await until(() => evaluate(() => {
+      const button = document.querySelector('[aria-label="全局设置"], [aria-label="Global settings"]');
+      if (!button) return false;
+      button.click();
+      return true;
+    }), 'Global settings did not open');
+    await until(() => evaluate(() => Boolean(
+      document.querySelector('input[name="llm-api-key"][type="password"]')?.getBoundingClientRect().width &&
+      document.querySelector('input[name="embedding-api-key"][type="password"]')?.getBoundingClientRect().width
+    )), 'Both provider key fields must be visible and masked');
+    await evaluate(() => Array.from(document.querySelectorAll('button'))
+      .find(button => /^(退出设置|Exit settings)$/.test(button.textContent.trim()))?.click());
+
+    const storeSettings = (input) => api(route, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
+    });
+    const mockUrl = 'http://127.0.0.1:1/v1';
+    const fakeKey = 'atlas-testing-only';
+    await storeSettings({ ...settings, llmBaseUrl: mockUrl, llmApiKey: fakeKey });
+    await storeSettings({ ...settings, llmBaseUrl: mockUrl + '/' });
+    const saved = (await api(route)).settings;
+    assert.equal(saved.hasLlmApiKey, true, 'Equivalent provider URL should preserve its saved key');
+    assert.ok(!JSON.stringify(saved).includes(fakeKey), 'Settings API returned a cleartext key');
+    await storeSettings(settings);
+    assert.equal((await api(route)).settings.hasLlmApiKey, false, 'Switching provider must not reuse another provider key');
+  }
   const baseline = path.join(profile, 'smoke-records.json');
   const { projects } = await api('/api/projects');
   let project = projects.find(item => item.name === name);

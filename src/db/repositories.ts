@@ -2588,13 +2588,15 @@ export async function upsertAiProviderSettings(input: {
         embedding_model = excluded.embedding_model,
         embedding_dimensions = excluded.embedding_dimensions,
         embedding_api_key = case
-          when $11::boolean then ai_provider_settings.embedding_api_key
+          when $11::boolean and rtrim(ai_provider_settings.embedding_base_url, '/') = rtrim(excluded.embedding_base_url, '/')
+            then ai_provider_settings.embedding_api_key
           else excluded.embedding_api_key
         end,
         llm_base_url = excluded.llm_base_url,
         llm_model = excluded.llm_model,
         llm_api_key = case
-          when $12::boolean then ai_provider_settings.llm_api_key
+          when $12::boolean and rtrim(ai_provider_settings.llm_base_url, '/') = rtrim(excluded.llm_base_url, '/')
+            then ai_provider_settings.llm_api_key
           else excluded.llm_api_key
         end,
         llm_timeout_ms = excluded.llm_timeout_ms,
