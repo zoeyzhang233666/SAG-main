@@ -57,6 +57,7 @@ type GraphNodeData = {
   entityTypeColor?: string;
   category?: string;
   showLabel?: boolean;
+  labelSide?: "left" | "right";
 } & Record<string, unknown>;
 
 type GraphNode = Node<GraphNodeData>;
@@ -294,7 +295,8 @@ function ProjectGraphCanvas(props: GraphProps) {
         const selected = selectedNodeId === node.id;
         return { id: node.id, type: "universe", width: 25, height: 25, position: { x: position.x * 3, y: -position.y * 3 },
           selected, draggable: false, ariaLabel: [node.label, node.category].filter(Boolean).join(" · "),
-          data: { ...node, expanded: false, showLabel: selected || (node.kind === "event" && labeled++ < 8) } };
+          data: { ...node, expanded: false, labelSide: position.x > 0 ? "left" : "right",
+            showLabel: selected || (node.kind === "event" && labeled++ < 8) } };
       }),
       edges: sceneData.links.map(({ source, target }): GraphEdge => ({
         id: JSON.stringify([source, target]), source, target, type: "straight", selectable: false,
@@ -554,7 +556,9 @@ function ProjectGraphCanvas(props: GraphProps) {
     () =>
       buildEntityTypeOptionsFromScope({
         scopeEntityIds: entityTypeScopeEntityIds,
-        visibleEntityIds: visibleGraphScopeAfterEntityFilter.visibleEntityIds,
+        visibleEntityIds: starView
+          ? new Set(sceneData.nodes.filter((node) => node.kind === "entity").map((node) => node.id))
+          : visibleGraphScopeAfterEntityFilter.visibleEntityIds,
         entityById,
         language: props.language,
       }),
@@ -562,6 +566,8 @@ function ProjectGraphCanvas(props: GraphProps) {
       entityById,
       entityTypeScopeEntityIds,
       props.language,
+      sceneData,
+      starView,
       visibleGraphScopeAfterEntityFilter.visibleEntityIds,
     ],
   );
@@ -1735,7 +1741,7 @@ function UniverseGraphNode({ data }: NodeProps<GraphNode>) {
     <div className="atlas-universe-node" data-kind={data.kind} title={[data.label, data.category].filter(Boolean).join(" · ")}>
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <span className="atlas-universe-star" aria-hidden="true" />
-      <span className="atlas-universe-label" data-kind={data.kind} data-visible={data.showLabel}>
+      <span className="atlas-universe-label" data-kind={data.kind} data-visible={data.showLabel} data-side={data.labelSide}>
         {data.category && <small data-event-category="">{data.category}</small>}
         <strong>{data.label}</strong>
       </span>

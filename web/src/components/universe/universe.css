@@ -220,6 +220,7 @@
 }
 
 .atlas-universe-node .atlas-universe-label[data-visible="false"] { visibility: hidden; }
+.atlas-universe-node .atlas-universe-label[data-side="left"] { right: calc(100% + 3px); left: auto; }
 .atlas-universe-node:hover .atlas-universe-label,
 .react-flow__node-universe:focus-visible .atlas-universe-label { visibility: visible; }
 
