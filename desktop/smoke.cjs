@@ -8,6 +8,7 @@ const title = '甲醇供应链测试';
 const event = '甲醇制烯烃测试事件';
 const entity = '乙烯';
 const sulfuricAcid = 'Sulphuric acid';
+const sulfuricAcidStandardName = '硫酸';
 const preference = 'sag-desktop-smoke';
 const chunksPerFile = 30;
 const entities = [
@@ -258,14 +259,16 @@ async function smoke(contents, origin, profile, mode) {
     match.click();
     return true;
   }), 'The sulfuric acid classification did not match its library entity');
-  await until(() => evaluate(name => {
-    if (document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim() === name) return true;
-    // An upgraded profile may also contain the original Chinese fixture entity.
+  await until(() => evaluate((standardName, aliasName) => {
+    const drawerTitle = document.querySelector('[data-sag-detail-drawer] h2')?.textContent.trim();
+    // Aggregated chemical knowledge uses the dictionary standard name in the drawer title.
+    if (drawerTitle === standardName) return true;
+    // Fallback for upgrade profiles that still open a raw entity picker.
     const choice = Array.from(document.querySelectorAll('.chain-atlas-results .chain-atlas-matches button'))
-      .find(item => item.querySelector('strong')?.textContent.trim() === name);
+      .find(item => item.querySelector('strong')?.textContent.trim() === aliasName);
     choice?.click();
-    return false;
-  }, sulfuricAcid), 'The standard name did not resolve the imported English alias');
+    return drawerTitle === aliasName;
+  }, sulfuricAcidStandardName, sulfuricAcid), 'The standard name did not resolve the imported English alias');
   await evaluate(() => document.querySelector('[data-sag-detail-drawer] button')?.click());
   await evaluate(() => document.querySelectorAll('.chain-atlas-tabs button')[0].click());
   await until(() => evaluate(() => {
