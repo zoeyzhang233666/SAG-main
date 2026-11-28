@@ -2360,6 +2360,21 @@ export type KnowledgeBundleRecord = {
   events: Array<EventRecord & { document?: DocumentRecord | null }>;
 };
 
+const ATLAS_MATERIAL_ROLES = new Set(
+  ["产品", "化学品", "化工原料", "化工品", "化工品原料", "化石燃料", "原料", "原料气", "联产品", "能源", "原材料",
+    "材料", "中间体", "副产品", "副产物", "product", "chemical", "raw material", "feedstock", "fuel", "energy",
+    "by-product", "material", "intermediate"].map(normalizeEntityName)
+);
+
+function atlasEntityGroupKey(entity: { id: string; name: string; type: string; sourceId: string }) {
+  const name = normalizeEntityName(entity.name);
+  const type = normalizeEntityName(entity.type);
+  // Short or generic terms should stay in their own recorded type.
+  const material = name.length >= 2 && !/^(其他|未知|产品|原料|材料|other|unknown)$/iu.test(name)
+    && ATLAS_MATERIAL_ROLES.has(type);
+  return JSON.stringify([entity.sourceId, name, material ? "material-role" : type || entity.id]);
+}
+
 export async function matchChainAtlasEntities(input: {
   names: string[];
   tenantId: string;
@@ -2419,8 +2434,44 @@ export async function matchChainAtlasEntities(input: {
     type: row.type,
     description: row.description == null ? null : String(row.description),
     sourceId: row.source_id,
-    sourceName: row.source_name
+    sourceName: row.source_name,
+    groupKey: atlasEntityGroupKey({ id: row.id, name: row.name, type: row.type, sourceId: row.source_id })
   }));
+}
+
+export async function getAtlasEntityKnowledgeBundle(input: {
+  entityId: string;
+  tenantId: string;
+}): Promise<KnowledgeBundleRecord> {
+  const result = await pool.query<{ id: string; name: string; type: string; source_id: string }>(
+    `
+      select ent.id, ent.name, ent.type, ent.source_id
+      from entities anchor
+      join sources s on s.id = anchor.source_id
+      join entities ent on ent.source_id = anchor.source_id and ent.normalized_name = anchor.normalized_name
+      where anchor.id = $1 and s.tenant_id = $2 and s.archived_at is null
+        and exists (
+          select 1
+          from event_entities ee
+          join events e on e.id = ee.event_id
+          join documents d on d.id = e.document_id
+          where ee.entity_id = ent.id and e.source_id = anchor.source_id
+            and e.deleted_at is null and d.archived_at is null
+        )
+      order by ent.name, ent.type, ent.id
+    `,
+    [input.entityId, input.tenantId]
+  );
+  const matches = result.rows.map((row) => ({
+    id: row.id, name: row.name, type: row.type, sourceId: row.source_id
+  }));
+  const anchor = matches.find((row) => row.id === input.entityId);
+  if (!anchor) return { entities: [], events: [] };
+  const key = atlasEntityGroupKey(anchor);
+  return getEntitiesKnowledgeBundle({
+    entityIds: matches.filter((row) => atlasEntityGroupKey(row) === key).map((row) => row.id),
+    tenantId: input.tenantId
+  });
 }
 
 async function listEntityIdsByIdentityPage(input: {

@@ -47,6 +47,7 @@ function visibleNodes(nodes: ChainNode[], expanded: Set<string>): ChainNode[] {
 export type AtlasKnowledgeOpenInput = {
   entityIds: string[];
   title: string;
+  atlasEntityId?: string;
   chemical?: Chemical;
   terms?: string[];
   cas?: string;
@@ -202,6 +203,28 @@ export default function ChainAtlasWorkspace({
     return matches.filter((match) => entityBelongsToChemical(match, chemical));
   }
 
+  function recordGroups(matches: ChainAtlasEntityMatch[]) {
+    const groups = new Map<string, ChainAtlasEntityMatch[]>();
+    for (const match of matches) {
+      const key = onOpenKnowledge ? match.groupKey ?? match.id : match.id;
+      const group = groups.get(key) ?? [];
+      group.push(match);
+      groups.set(key, group);
+    }
+    return [...groups.values()];
+  }
+
+  function openRecordGroup(group: ChainAtlasEntityMatch[]) {
+    const first = group[0];
+    if (!first) return;
+    clearRowFeedback();
+    if (group.length > 1 && onOpenKnowledge) {
+      onOpenKnowledge({ entityIds: group.map((match) => match.id), title: first.name, atlasEntityId: first.id });
+    } else {
+      onOpenEntity(first.id);
+    }
+  }
+
   function openMatch(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
     if (item.chemical && onOpenKnowledge) {
       const confirmed = knowledgeMatches(item, matches);
@@ -217,18 +240,10 @@ export default function ChainAtlasWorkspace({
         });
         return;
       }
-      // Unconfirmed identity: never fall back to aggregating all matches.
-      if (matches.length === 1) {
-        clearRowFeedback();
-        onOpenEntity(matches[0].id);
-      } else if (matches.length > 1) {
-        setExpandedMatch((current) => (current === item.id ? undefined : item.id));
-      }
-      return;
     }
-    if (matches.length === 1) {
-      clearRowFeedback();
-      onOpenEntity(matches[0].id);
+    const groups = recordGroups(matches);
+    if (groups.length === 1) {
+      openRecordGroup(groups[0]);
     } else {
       setExpandedMatch((current) => (current === item.id ? undefined : item.id));
     }
@@ -237,14 +252,17 @@ export default function ChainAtlasWorkspace({
   function renderMatches(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
     if (expandedMatch !== item.id) return null;
     const confirmed = new Set(knowledgeMatches(item, matches).map((match) => match.id));
-    const remaining = matches.filter((match) => !confirmed.has(match.id));
+    const remaining = recordGroups(matches.filter((match) => !confirmed.has(match.id)));
     if (!remaining.length) return null;
     return (
       <div className="chain-atlas-matches">
-        {remaining.map(match => (
-          <button key={match.id} type="button" onClick={() => onOpenEntity(match.id)}>
+        {remaining.map((group) => (
+          <button key={group[0].id} type="button" onClick={() => openRecordGroup(group)}>
             <Database size={15} />
-            <span><strong>{match.name}</strong><small>{match.sourceName} · {match.type}</small></span>
+            <span><strong>{group[0].name}</strong><small>
+              {group[0].sourceName} · {[...new Set(group.map((match) => match.type))].join(" / ")}
+              {group.length > 1 && t(` · ${group.length} 条记录`, ` · ${group.length} records`)}
+            </small></span>
             <ArrowUpRight size={15} />
           </button>
         ))}
@@ -256,15 +274,17 @@ export default function ChainAtlasWorkspace({
     if (!matches.length) return null;
     const confirmed = knowledgeMatches(item, matches).length;
     const remaining = matches.length - confirmed;
+    const groups = recordGroups(matches);
+    const opensKnowledge = confirmed > 0 || (groups.length === 1 && matches.length > 1);
     return (
       <>
         <button type="button" className="chain-atlas-match" onClick={() => openMatch(item, matches)}
-          aria-expanded={!confirmed && matches.length > 1 ? expandedMatch === item.id : undefined}
-          aria-label={`${confirmed ? t("查看知识", "View knowledge") : t("查看知识库记录", "View library records")} ${item.label}`}>
+          aria-expanded={!confirmed && groups.length > 1 ? expandedMatch === item.id : undefined}
+          aria-label={`${opensKnowledge ? t("查看知识", "View knowledge") : t("查看知识库记录", "View library records")} ${item.label}`}>
           <Database size={13} />
-          <span>{confirmed ? t("查看知识", "View knowledge")
+          <span>{opensKnowledge ? t("查看知识", "View knowledge")
             : matches.length === 1 ? t("查看实体", "View entity")
-              : t(`${matches.length} 个实体`, `${matches.length} entities`)}</span>
+              : t(`${groups.length} 组实体`, `${groups.length} entity groups`)}</span>
           <ArrowUpRight size={13} />
         </button>
         {confirmed > 0 && remaining > 0 && (

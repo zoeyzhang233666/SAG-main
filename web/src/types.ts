@@ -94,6 +94,7 @@ export interface EventDetailRecord {
 }
 
 export interface ChainAtlasEntityMatch {
+  groupKey?: string;
   term: string;
   id: string;
   name: string;

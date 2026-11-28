@@ -8,7 +8,7 @@ vi.mock("../src/db/pool.js", () => ({
   pool: db
 }));
 
-import { getChemicalKnowledgeBundle } from "../src/db/repositories.js";
+import { getAtlasEntityKnowledgeBundle, getChemicalKnowledgeBundle } from "../src/db/repositories.js";
 import {
   chemicalIdentityTerms,
   entityBelongsToChemical,
@@ -70,6 +70,23 @@ function eventRow(input: { id: string; title: string; rank?: number }) {
 describe("getChemicalKnowledgeBundle identity chain", () => {
   beforeEach(() => {
     db.query.mockReset();
+  });
+
+  it("uses an atlas anchor to aggregate material roles without collecting same-name industry events", async () => {
+    const feedstock = entityRow({ id: "feedstock", name: "某牌号原料", type: "原料" });
+    const product = entityRow({ id: "product", name: "某牌号原料", type: "产品" });
+    const sector = entityRow({ id: "sector", name: "某牌号原料", type: "终端行业" });
+    db.query.mockResolvedValueOnce({ rows: [feedstock, product, sector] })
+      .mockResolvedValueOnce({ rows: [feedstock, product] })
+      .mockResolvedValueOnce({ rows: [eventRow({ id: "material-event", title: "原料供应" })] });
+
+    const bundle = await getAtlasEntityKnowledgeBundle({ entityId: feedstock.id, tenantId: "default" });
+    expect(bundle.entities.map((entity) => entity.id).sort()).toEqual([feedstock.id, product.id].sort());
+    expect(db.query.mock.calls[0][1]).toEqual([feedstock.id, "default"]);
+    const anchorSql = normalizeSql(String(db.query.mock.calls[0][0]));
+    expect(anchorSql).toContain("ent.source_id = anchor.source_id");
+    expect(anchorSql).toContain("e.deleted_at is null");
+    expect(db.query.mock.calls[1][1][0]).toEqual([feedstock.id, product.id]);
   });
 
   it("combines natural gas material roles and excludes same-name sector records", async () => {

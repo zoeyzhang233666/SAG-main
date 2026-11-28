@@ -442,6 +442,11 @@ export function buildHttpServer() {
     return { matches: await webuiService.matchChainAtlasEntities(input) };
   });
 
+  app.get("/api/chain-atlas/entities/:entityId/knowledge", async (request) => {
+    const { entityId } = z.object({ entityId: z.guid() }).parse(request.params);
+    return await webuiService.getAtlasEntityKnowledgeBundle(entityId);
+  });
+
   app.get("/api/projects/:projectId/graph", async (request) => {
     const params = request.params as { projectId: string };
     const query = graphQuerySchema.parse(request.query);

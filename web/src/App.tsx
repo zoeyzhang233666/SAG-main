@@ -2093,17 +2093,18 @@ function AppShell() {
   async function openChemicalKnowledge(input: {
     entityIds: string[];
     title: string;
+    atlasEntityId?: string;
     chemical?: Chemical;
     terms?: string[];
     cas?: string;
     projectId?: string;
   }) {
     try {
-      const chemical =
+      const chemical = input.atlasEntityId ? undefined :
         input.chemical ??
         resolveChemicalByName(input.title) ??
         undefined;
-      const bundle = chemical
+      const bundle = input.atlasEntityId ? await api.getAtlasEntityKnowledgeBundle(input.atlasEntityId) : chemical
         ? await api.getChemicalKnowledgeBundle({
             terms: input.terms?.length
               ? input.terms
