@@ -1,4 +1,5 @@
 import { config } from "../config/env.js";
+import { DEFAULT_LLM_BASE_URL } from "../config/default-ai-providers.js";
 import { aiSettingsService, type AiRuntimeSettings } from "../services/ai-settings-service.js";
 import { createModelCallLogger, formatModelCallError } from "../observability/model-call-log.js";
 import type { EventRecord } from "../types.js";
@@ -191,7 +192,8 @@ function resolveRerankTarget(settings: AiRuntimeSettings): { baseUrl: string; ap
       apiKey: dedicatedKey
     };
   }
-  return { baseUrl: settings.llmBaseUrl, apiKey: settings.llmApiKey };
+  const apiKey = settings.llmBaseUrl.replace(/\/+$/, "") === DEFAULT_LLM_BASE_URL ? "" : settings.llmApiKey;
+  return { baseUrl: settings.llmBaseUrl, apiKey };
 }
 
 function eventToRerankDocument(event: EventRecord, candidateCount: number): string {
