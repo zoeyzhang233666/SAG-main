@@ -18,7 +18,7 @@ export const DEFAULT_ANSWER_SYSTEM_PROMPT = [
   "关键结论尽量引用 [1]、[2] 这样的证据编号。",
   "默认结构清晰、专业，但不要堆砌空话。"
 ].join("\n");
-export const DEFAULT_GRAPH_LAYOUT_STYLE = "search_layers";
+export const DEFAULT_GRAPH_LAYOUT_STYLE = "columns";
 export const DEFAULT_LONG_TERM_MEMORY_ENABLED = false;
 const LEGACY_DEFAULT_WELCOME_PROMPT_TEMPLATES = [
   "请用表格整理「{focus}」相关的产业链关系：上游原料、工艺/事件、相关企业、下游应用和证据来源。",

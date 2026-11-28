@@ -166,6 +166,7 @@ export interface ProjectGraphEventRecord {
   documentId?: string | null;
   chunkId?: string | null;
   title: string;
+  category?: string | null;
   rank: number;
   entityIds: string[];
 }

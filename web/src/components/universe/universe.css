@@ -1,0 +1,387 @@
+/* Space palette and galaxy treatment adapted from SAG-main-V2, ec26707 (MIT). */
+.atlas-universe-panel,
+.atlas-universe.atlas-universe {
+  background: hsl(240 8% 4%);
+}
+
+.atlas-universe {
+  isolation: isolate;
+  color-scheme: dark;
+}
+
+.atlas-universe-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    linear-gradient(118deg, hsl(194 18% 11% / 0.44), transparent 42%),
+    linear-gradient(302deg, hsl(330 12% 10% / 0.28), transparent 48%),
+    radial-gradient(ellipse at 76% 51%, hsl(212 66% 35% / 0.13), transparent 52%);
+}
+
+.atlas-universe-backdrop::before {
+  position: absolute;
+  right: -27%;
+  top: -56%;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid rgb(255 255 255 / 0.10);
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  border-radius: 50%;
+  transform: rotate(17deg);
+  content: "";
+}
+
+.atlas-universe-backdrop::after {
+  position: absolute;
+  inset: 0;
+  opacity: 0.42;
+  background:
+    radial-gradient(circle at 7% 18%, #fbd378 0.7px, transparent 3px),
+    radial-gradient(circle at 24% 8%, #fbd378 0.7px, transparent 3px),
+    radial-gradient(circle at 38% 84%, #fbd378 0.7px, transparent 3px),
+    radial-gradient(circle at 51% 12%, #b7ecfa 0.7px, transparent 3px),
+    radial-gradient(circle at 73% 27%, #fbd378 0.8px, transparent 3px),
+    radial-gradient(circle at 82% 78%, #b7ecfa 0.8px, transparent 3px),
+    radial-gradient(circle at 93% 44%, #fbd378 0.7px, transparent 3px),
+    radial-gradient(1px 1px at 13px 24px, #d2dae6 60%, transparent) 0 0 / 97px 109px,
+    radial-gradient(1px 1px at 29px 57px, #7585a6 60%, transparent) 0 0 / 149px 163px;
+  content: "";
+}
+
+.atlas-universe-galaxy {
+  position: absolute;
+  left: 18%;
+  top: 12%;
+  width: 104%;
+  height: 87%;
+  opacity: 0.46;
+  transform: rotate(-11deg);
+}
+
+.atlas-universe [data-sag-entity-type-panel],
+.atlas-universe .atlas-graph-toolbar,
+.atlas-universe select,
+.atlas-universe input,
+.atlas-universe input + div {
+  border-color: rgb(163 191 216 / 0.24);
+  background: rgb(17 23 31 / 0.94);
+  color: #e1eaf1;
+}
+
+.atlas-universe .atlas-graph-toolbar {
+  font-size: 11px;
+  gap: 0.3rem;
+  padding: 0.32rem;
+}
+
+.atlas-universe .atlas-graph-toolbar button {
+  height: 1.8rem;
+  padding-inline: 0.48rem;
+  border-color: rgb(163 191 216 / 0.20);
+  background: rgb(22 31 43 / 0.86);
+  color: #d9e9f0;
+  font-size: 11px;
+}
+
+.atlas-universe .atlas-graph-toolbar button:hover,
+.atlas-universe .atlas-graph-toolbar button[aria-pressed="true"] {
+  border-color: rgb(133 216 232 / 0.54);
+  background: rgb(39 71 84 / 0.90);
+  color: #edfcff;
+}
+
+.atlas-universe [data-sag-entity-type-panel] :is(.text-muted-foreground, .text-foreground) {
+  color: #cdd4dc;
+}
+
+.atlas-universe [data-sag-entity-type-panel] {
+  top: calc(var(--atlas-graph-toolbar-height, 110px) + 19px) !important;
+}
+
+.atlas-universe [data-sag-entity-type-panel] :is(.bg-muted, button.border) {
+  border-color: rgb(163 191 216 / 0.24);
+  background: #233040;
+  color: #dfebf3;
+}
+
+.atlas-universe .atlas-graph-toolbar [data-graph-batch] {
+  height: 1.8rem;
+  border-color: rgb(255 209 102 / 0.22);
+  background: rgb(255 209 102 / 0.07);
+  color: #ecd196;
+  font-size: 11px;
+}
+
+.atlas-universe [data-sag-entity-type-panel] button:hover,
+.atlas-universe input + div button:hover {
+  background: #273644;
+  color: #edfaff;
+}
+
+.atlas-universe .atlas-graph-toolbar [role="status"] {
+  color: #d9e9f0;
+}
+
+.atlas-universe-node {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  color: #b5a4fa;
+}
+
+.atlas-universe-node[data-kind="event"] { color: #ffd166; }
+.atlas-universe-node[data-kind="entity"] { color: #75d8e8; }
+
+.atlas-universe-node .react-flow__handle {
+  left: 50%;
+  top: 50%;
+  bottom: auto;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.atlas-universe-star {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f3edff 4%, currentColor 20%, transparent 64%);
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.atlas-universe-node[data-kind="event"] .atlas-universe-star {
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, #fff3c5 7%, rgb(255 205 100 / 0.36) 27%, transparent 70%);
+}
+
+.atlas-universe-node[data-kind="event"] .atlas-universe-star::after {
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  clip-path: polygon(50% 0, 55% 39%, 77% 23%, 61% 45%, 100% 50%, 61% 55%, 77% 77%, 55% 61%, 50% 100%, 45% 61%, 23% 77%, 39% 55%, 0 50%, 39% 45%, 23% 23%, 45% 39%);
+  content: "";
+}
+
+.atlas-universe-node[data-kind="entity"] .atlas-universe-star {
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgb(117 216 232 / 0.75);
+  background: radial-gradient(circle, #e0ffff 9%, currentColor 21%, transparent 51%);
+}
+
+.atlas-universe-label {
+  --label-mark: #b5a4fa;
+  display: flex;
+  width: max-content;
+  max-width: 175px;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid rgb(162 187 216 / 0.24);
+  border-radius: 6px;
+  padding: 4px 7px 5px 8px;
+  background: rgb(14 19 28 / 0.89);
+  color: #edf4fa;
+  box-shadow: inset 2px 0 0 var(--label-mark), 0 6px 16px rgb(0 0 0 / 0.28);
+  text-align: left;
+  white-space: normal;
+}
+
+.atlas-universe-label[data-kind="event"] { --label-mark: #ffd166; }
+.atlas-universe-label[data-kind="entity"] { --label-mark: #75d8e8; }
+
+.atlas-universe-label small {
+  color: var(--label-mark);
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+.atlas-universe-label strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.25;
+}
+
+.atlas-universe-node .atlas-universe-label {
+  position: absolute;
+  top: 12px;
+  left: calc(100% + 3px);
+  transform: translateY(-50%);
+  pointer-events: auto;
+}
+
+.atlas-universe-node .atlas-universe-label[data-visible="false"] { visibility: hidden; }
+.atlas-universe-node .atlas-universe-label[data-side="left"] { right: calc(100% + 3px); left: auto; }
+.atlas-universe-node:hover .atlas-universe-label,
+.react-flow__node-universe:focus-visible .atlas-universe-label { visibility: visible; }
+
+.react-flow__node-universe.selected .atlas-universe-star {
+  transform: scale(1.3);
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.atlas-universe .react-flow__controls button {
+  border-color: rgb(163 191 216 / 0.20);
+  color: #cbe8eb;
+  background: #18212c;
+}
+
+.atlas-orbital {
+  background: #070a12;
+}
+
+.sag-orbital-label {
+  display: flex;
+  max-width: 190px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: rgb(9 13 24 / 0.90);
+  color: rgb(255 255 255 / 0.90);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.34);
+  font-size: 10px;
+  font-weight: 550;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, border-color 140ms ease;
+  visibility: hidden;
+}
+
+.sag-orbital-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sag-orbital-label small {
+  color: #f5a9b9;
+  font-size: 9px;
+}
+
+.sag-orbital-label[data-kind="event"] { border-color: rgb(255 121 146 / 0.50); }
+.sag-orbital-label[data-kind="entity"] { border-color: rgb(102 139 255 / 0.55); }
+.sag-orbital-label[data-visible="true"] { opacity: 0.96; visibility: visible; }
+.sag-orbital-label[data-active="true"] { border-color: rgb(255 255 255 / 0.90); color: white; }
+
+.atlas-orbital-legend,
+.atlas-orbital-tools {
+  position: absolute;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 7px;
+  padding: 5px 7px;
+  background: rgb(11 16 32 / 0.88);
+  color: #bac7da;
+  font-size: 10px;
+}
+
+.atlas-orbital-legend { left: 12px; pointer-events: none; }
+.atlas-orbital-tools { right: 12px; }
+
+.atlas-orbital-tools button {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 5px;
+}
+
+.atlas-orbital-tools button:hover,
+.atlas-orbital-tools button[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.14);
+  color: white;
+}
+
+.atlas-orbital-legend :is(.atlas-orbital-event-dot, .atlas-orbital-entity-dot) {
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgb(255 255 255 / 0.50);
+  border-radius: 50%;
+}
+
+.atlas-orbital-event-dot { background: #ef7894; }
+.atlas-orbital-entity-dot { background: #6383ff; }
+
+.atlas-orbital-empty {
+  position: absolute;
+  inset: 48% 0 auto;
+  color: #bac7da;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .atlas-orbital-legend { bottom: 55px; }
+}
+
+.atlas-explore-conversation {
+  color-scheme: dark;
+  --background: 225 23% 9%;
+  --foreground: 218 25% 92%;
+  --muted: 222 21% 15%;
+  --muted-foreground: 218 14% 69%;
+  --accent: 197 24% 17%;
+  --accent-foreground: 191 62% 83%;
+  --primary: 192 46% 66%;
+  --primary-foreground: 220 31% 10%;
+  --border: 223 17% 23%;
+  --input: 223 17% 29%;
+  --ring: 188 42% 59%;
+  --surface-page: #0a0c12;
+  --surface-raised: #151922;
+  --surface-panel: #11151e;
+  --surface-inset: #0c1018;
+  --surface-glass: rgb(19 23 31 / 0.82);
+  --hairline: #2b3443;
+  --accent-color: #8bcbd8;
+  --accent-soft: rgb(111 196 211 / 0.13);
+  --accent-softer: rgb(111 196 211 / 0.06);
+  --text-strong: #f0f5fb;
+  --text: #dce6f1;
+  --text-muted: #a6b2c4;
+  --shadow-soft: rgb(0 0 0 / 0.2);
+  background: radial-gradient(ellipse at 12% 13%, #151d28, #0a0c12 61%);
+  color: var(--text);
+}
+
+.chem-explore .chem-explore-handle {
+  border-color: rgb(150 174 203 / 0.12);
+  background: #0c111a;
+}
+
+.chem-explore .chem-explore-handle:is(:hover, :focus-visible) {
+  outline-color: #5b98aa;
+}
+
+.atlas-explore-conversation .chem-section-header {
+  background: rgb(15 21 31 / 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.atlas-explore-conversation :is(.chem-message-assistant, .chem-composer, .chem-welcome) {
+  background: rgb(20 26 37 / 0.88);
+  backdrop-filter: blur(14px);
+}
+
+.atlas-explore-conversation .chem-message-user {
+  border: 1px solid #36515f;
+  background: #253843;
+  box-shadow: none;
+}

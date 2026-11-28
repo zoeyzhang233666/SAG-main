@@ -2539,7 +2539,6 @@ function AppShell() {
                 sessionId={activeConversation?.session.id}
                 messages={activeConversation?.messages ?? []}
                 liveEvidence={exploreLive?.scope === exploreScope ? exploreLive.evidence : undefined}
-                defaultLayoutStyle={aiSettings?.graphDefaultLayoutStyle}
                 citationChunkId={citation?.chunkId}
                 citationRequest={citation?.request}
                 onPickNode={(node) => {

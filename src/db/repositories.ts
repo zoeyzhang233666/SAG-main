@@ -1589,6 +1589,7 @@ export async function getProjectGraph(input: {
               e.document_id,
               e.chunk_id,
               e.title,
+              e.category,
               e.rank,
               coalesce(
                 array_agg(ee.entity_id order by ent.name) filter (where ee.entity_id is not null),
@@ -1617,6 +1618,7 @@ export async function getProjectGraph(input: {
     documentId: row.document_id == null ? null : String(row.document_id),
     chunkId: row.chunk_id == null ? null : String(row.chunk_id),
     title: String(row.title),
+    category: row.category == null ? null : String(row.category),
     rank: Number(row.rank ?? 0),
     entityIds: Array.isArray(row.entity_ids) ? row.entity_ids.map(String) : []
   }));
