@@ -27,6 +27,7 @@ const fixtures = Array.from({ length: 3 }, (_, fileIndex) => ({
       title: event,
       content: '甲醇通过 MTO 工艺生产乙烯和丙烯。',
       keywords: ['甲醇', 'MTO'],
+      category: chunkIndex % 2 ? '工艺' : '应用',
       entities: fileIndex % 2 ? [...entities].reverse() : entities
     }
   }))
