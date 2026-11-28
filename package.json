@@ -30,7 +30,6 @@
     "@fastify/static": "^11.0.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@xyflow/react": "^12.11.0",
-    "3d-force-graph": "1.80.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3-force": "^3.0.0",

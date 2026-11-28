@@ -33,7 +33,9 @@ import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import type { SupportedLanguage } from "../i18n";
 import { RichTextFragment } from "./RichText";
-import { buildSceneData, type SceneNode } from "../lib/graph-scene-data";
+import { buildSceneData, layoutUniverse, type SceneNode } from "../lib/graph-scene-data";
+import { ParticleGalaxy } from "./universe/ParticleGalaxy";
+import "./universe/universe.css";
 
 const ProjectGraph3D = lazy(() => import("./ProjectGraph3D"));
 
@@ -53,6 +55,8 @@ type GraphNodeData = {
   expanded: boolean;
   entityType?: string;
   entityTypeColor?: string;
+  category?: string;
+  showLabel?: boolean;
 } & Record<string, unknown>;
 
 type GraphNode = Node<GraphNodeData>;
@@ -126,7 +130,7 @@ const DEFAULT_GRAPH_SHOWCASE_MODES: GraphShowcaseMode[] = [
 
 export type GraphLayoutStyle = "search_layers" | "entity_inner" | "columns";
 
-export function ProjectGraphFlow(props: {
+type GraphProps = {
   graph: ProjectGraphRecord;
   focus?: {
     key: string;
@@ -138,6 +142,7 @@ export function ProjectGraphFlow(props: {
   } | null;
   defaultLayoutStyle?: string;
   compact?: boolean;
+  universe2D?: boolean;
   preferenceKey?: string;
   selectedExternalId?: string;
   onPickNode?: (node: QuestionAnchor & { label: string }) => void;
@@ -151,7 +156,9 @@ export function ProjectGraphFlow(props: {
   onOpenChunk: (chunkId: string) => void;
   onOpenEvent: (eventId: string) => void;
   onOpenEntity: (entityId: string) => void;
-}) {
+};
+
+export function ProjectGraphFlow(props: GraphProps) {
   return (
     <ReactFlowProvider>
       <ProjectGraphCanvas {...props} />
@@ -159,32 +166,7 @@ export function ProjectGraphFlow(props: {
   );
 }
 
-function ProjectGraphCanvas(props: {
-  graph: ProjectGraphRecord;
-  focus?: {
-    key: string;
-    query: string;
-    chunkIds: string[];
-    eventIds: string[];
-    entityIds: string[];
-    primaryEntityId?: string;
-  } | null;
-  defaultLayoutStyle?: string;
-  compact?: boolean;
-  preferenceKey?: string;
-  selectedExternalId?: string;
-  onPickNode?: (node: QuestionAnchor & { label: string }) => void;
-  language: SupportedLanguage;
-  onSearch?: (query: string) => void;
-  onRequestSuggestions?: (
-    query: string,
-    signal: AbortSignal,
-  ) => Promise<ProjectGraphSuggestionRecord[]>;
-  onSelectSuggestion?: (suggestion: ProjectGraphSuggestionRecord) => void;
-  onOpenChunk: (chunkId: string) => void;
-  onOpenEvent: (eventId: string) => void;
-  onOpenEntity: (entityId: string) => void;
-}) {
+function ProjectGraphCanvas(props: GraphProps) {
   const initialEntityIds = useMemo(
     () =>
       new Set(
@@ -232,12 +214,13 @@ function ProjectGraphCanvas(props: {
   const [queryLinkedNodeIds, setQueryLinkedNodeIds] = useState<Set<string>>(
     new Set(),
   );
+  const starView = mode === "3d" || Boolean(props.universe2D);
   const [selectedEntityTypes, setSelectedEntityTypes] = useState<Set<string>>(
     () => new Set(storedFilters),
   );
   const [entityTypeQuery, setEntityTypeQuery] = useState("");
   const [entityTypeFilterCollapsed, setEntityTypeFilterCollapsed] =
-    useState(false);
+    useState(Boolean(props.universe2D));
   const [activeGraphMode, setActiveGraphMode] = useState<ActiveGraphMode>(() =>
     randomGraphShowcaseMode(),
   );
@@ -255,24 +238,76 @@ function ProjectGraphCanvas(props: {
   const expandedEventIdsRef = useRef(expandedEventIds);
   const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
+  const [eventCategory, setEventCategory] = useState("");
+  const [entityFilterUsed, setEntityFilterUsed] = useState(() =>
+    Boolean(props.preferenceKey && localStorage.getItem(`${props.preferenceKey}:entity-filter`) === "true")
+  );
   useEffect(() => {
     if (!props.preferenceKey) return;
     localStorage.setItem(`${props.preferenceKey}:mode`, mode);
     localStorage.setItem(`${props.preferenceKey}:types`, JSON.stringify([...selectedEntityTypes]));
-  }, [mode, selectedEntityTypes, props.preferenceKey]);
+    localStorage.setItem(`${props.preferenceKey}:entity-filter`, String(entityFilterUsed));
+  }, [mode, selectedEntityTypes, entityFilterUsed, props.preferenceKey]);
+  const sceneNodes = useMemo(() => {
+    const categoryByEvent = new Map(props.graph.events.map((event) => [event.id, event.category?.trim()]));
+    const visible = nodes.flatMap((node): SceneNode[] => node.data.kind === "question" ? [] : [{
+      id: node.id, kind: node.data.kind, label: node.data.label,
+      category: node.data.kind === "event" ? categoryByEvent.get(node.id) ||
+        graphText(props.language, "未分类", "Uncategorized") : undefined
+    }]);
+    if (!starView) return visible;
+    const seen = new Set(visible.map((node) => node.id));
+    const eventIds = new Set(visible.filter((node) => node.kind === "event").map((node) => node.id));
+    const linkedEntities = new Set(props.graph.edges.filter((edge) => eventIds.has(edge.eventId)).map((edge) => edge.entityId));
+    const linkedChunks = new Set(props.graph.chunkEventEdges.filter((edge) => eventIds.has(edge.eventId)).map((edge) => edge.chunkId));
+    const filterEntities = entityFilterUsed || selectedEntityTypes.size > 0;
+    for (const entity of props.graph.entities) {
+      if (linkedEntities.has(entity.id) && !seen.has(entity.id) && (!filterEntities || selectedEntityTypes.has(entity.type))) {
+        visible.push({ id: entity.id, kind: "entity", label: entity.name });
+      }
+    }
+    for (const chunk of props.graph.chunks ?? []) {
+      if (linkedChunks.has(chunk.id) && !seen.has(chunk.id)) {
+        visible.push({ id: chunk.id, kind: "chunk", label: chunk.heading || chunk.content.slice(0, 56) });
+      }
+    }
+    return visible;
+  }, [nodes, props.graph, props.language, selectedEntityTypes, starView, entityFilterUsed]);
+  const categories = useMemo(() =>
+    [...new Set(sceneNodes.flatMap((node) => node.category ? [node.category] : []))].sort(),
+  [sceneNodes]);
+  const category = categories.includes(eventCategory) ? eventCategory : "";
   const sceneData = useMemo(() => buildSceneData({
-    nodes: nodes.flatMap((node): SceneNode[] => node.data.kind === "question" ? [] : [{
-      id: node.id, kind: node.data.kind, label: node.data.label, color: node.data.entityTypeColor
-    }]),
+    nodes: sceneNodes,
     graph: props.graph,
     priority: new Set([...(selectedNodeId ? [selectedNodeId] : []), ...queryLinkedNodeIds, ...expandedEventIds]),
-    compact: props.compact ?? false
-  }), [nodes, props.graph, selectedNodeId, queryLinkedNodeIds, expandedEventIds, props.compact]);
+    compact: props.compact ?? false,
+    category
+  }), [sceneNodes, props.graph, selectedNodeId, queryLinkedNodeIds, expandedEventIds, props.compact, category]);
+  const flatScene = useMemo(() => {
+    if (!props.universe2D || mode !== "2d") return null;
+    const positions = layoutUniverse(sceneData.nodes, sceneData.links);
+    let labeled = 0;
+    return {
+      nodes: sceneData.nodes.map((node): GraphNode => {
+        const position = positions.get(node.id)!;
+        const selected = selectedNodeId === node.id;
+        return { id: node.id, type: "universe", width: 25, height: 25, position: { x: position.x * 3, y: -position.y * 3 },
+          selected, draggable: false, ariaLabel: [node.label, node.category].filter(Boolean).join(" · "),
+          data: { ...node, expanded: false, showLabel: selected || (node.kind === "event" && labeled++ < 8) } };
+      }),
+      edges: sceneData.links.map(({ source, target }): GraphEdge => ({
+        id: JSON.stringify([source, target]), source, target, type: "straight", selectable: false,
+        style: { stroke: "#9ccbd6", strokeWidth: 1, opacity: 0.35 }
+      }))
+    };
+  }, [props.universe2D, mode, sceneData, selectedNodeId]);
   const { fitView, getNode, setCenter, setViewport } = useReactFlow<GraphNode, GraphEdge>();
   const graphEdgeTypes = useMemo(() => ({ bus: BusEdge }), []);
-  const graphNodeTypes = useMemo(() => ({ rich: RichGraphNode }), []);
+  const graphNodeTypes = useMemo(() => ({ rich: RichGraphNode, universe: UniverseGraphNode }), []);
   const clickTimerRef = useRef<number | null>(null);
   const flowContainerRef = useRef<HTMLDivElement | null>(null);
+  const graphToolbarRef = useRef<HTMLDivElement>(null);
   const shouldFitViewRef = useRef(true);
   const pendingCenterNodeIdRef = useRef<string | null>(null);
   const pendingFitNodeIdsRef = useRef<{
@@ -870,37 +905,58 @@ function ProjectGraphCanvas(props: {
   ]);
 
   useEffect(() => {
-    if (props.selectedExternalId) requestGraphNodeFocus(props.selectedExternalId);
+    if (props.selectedExternalId) {
+      setEventCategory("");
+      requestGraphNodeFocus(props.selectedExternalId);
+    }
   }, [props.selectedExternalId, props.graph]);
+
+  useEffect(() => {
+    if (!props.universe2D || mode !== "2d") return;
+    const frame = requestAnimationFrame(() => {
+      void fitView({ padding: 0.36, maxZoom: 1.15, duration: 220 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [props.universe2D, mode, props.graph, category, fitView]);
+
+  useEffect(() => {
+    const toolbar = graphToolbarRef.current;
+    const container = flowContainerRef.current;
+    if (!starView || !toolbar || !container) return;
+    const fitToolbar = () => container.style.setProperty("--atlas-graph-toolbar-height", `${toolbar.offsetHeight}px`);
+    const observer = new ResizeObserver(fitToolbar);
+    observer.observe(toolbar);
+    fitToolbar();
+    return () => observer.disconnect();
+  }, [starView]);
 
   const onNodeClick: NodeMouseHandler<GraphNode> = (event, node) => {
     event.stopPropagation();
-    selectGraphNode(node);
+    selectGraphNode(node.id, node.data);
   };
 
-  function selectGraphNode(node: GraphNode) {
+  function selectGraphNode(id: string, data: Pick<GraphNodeData, "kind" | "label">) {
     clearClickTimer();
-    const data = node.data;
     if (data.kind === "question") {
       setSelectedNodeId(null);
       return;
     }
 
-    setSelectedNodeId(node.id);
-    props.onPickNode?.({ kind: data.kind, id: node.id, label: data.label });
+    setSelectedNodeId(id);
+    props.onPickNode?.({ kind: data.kind, id, label: data.label });
     if (data.kind === "chunk") {
-      props.onOpenChunk(node.id);
+      props.onOpenChunk(id);
       return;
     }
     if (data.kind === "entity") {
-      props.onOpenEntity(node.id);
+      props.onOpenEntity(id);
       return;
     }
 
-    props.onOpenEvent(node.id);
+    props.onOpenEvent(id);
     clickTimerRef.current = window.setTimeout(() => {
-      expandEventNode(node.id);
-      requestEventEntityFit(node.id);
+      expandEventNode(id);
+      requestEventEntityFit(id);
       clickTimerRef.current = null;
     }, 220);
   }
@@ -1316,11 +1372,15 @@ function ProjectGraphCanvas(props: {
     setExpandedEventIds(new Set());
   }
 
+  const starTypesDefault = starView && !entityFilterUsed && selectedEntityTypes.size === 0;
   return (
     <div
       ref={flowContainerRef}
-      className="relative h-full min-h-0 overflow-hidden rounded-xl bg-background"
+      className={cn("relative h-full min-h-0 overflow-hidden rounded-xl bg-background",
+        starView && "atlas-universe", props.universe2D && "atlas-universe-explore")}
+      data-graph-renderer={mode === "3d" ? "universe-3d" : props.universe2D ? "universe-2d" : "atlas-2d"}
     >
+      {flatScene && <div className="atlas-universe-backdrop" aria-hidden="true"><ParticleGalaxy /></div>}
       <style>{`
         @keyframes sag-edge-dash-slow {
           from { stroke-dashoffset: 0; }
@@ -1360,8 +1420,8 @@ function ProjectGraphCanvas(props: {
           pointer-events: none;
         }
       `}</style>
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-20">
-      <div className="pointer-events-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-border bg-background/90 p-2 shadow-[0_10px_30px_rgba(24,36,58,0.08)] backdrop-blur">
+      <div ref={graphToolbarRef} className="pointer-events-none absolute inset-x-3 top-3 z-20">
+      <div className="atlas-graph-toolbar pointer-events-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-border bg-background/90 p-2 shadow-[0_10px_30px_rgba(24,36,58,0.08)] backdrop-blur">
         <div role="group" aria-label={graphText(props.language, "图谱视图", "Graph view")} className="flex gap-1">
           <Button type="button" size="sm" variant={mode === "2d" ? "default" : "outline"}
             aria-pressed={mode === "2d"} onClick={() => setMode("2d")}>2D</Button>
@@ -1396,7 +1456,7 @@ function ProjectGraphCanvas(props: {
           {graphText(props.language, "换一批", "Shuffle")}
         </Button>
         {activeEventBatch ? (
-          <div className="flex h-8 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 text-xs text-amber-900">
+          <div data-graph-batch="" className="flex h-8 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 text-xs text-amber-900">
             <span>{formatActiveEventBatchLabel(activeEventBatch, props.language, eventDisplayLimit)}</span>
             <Button
               type="button"
@@ -1419,7 +1479,7 @@ function ProjectGraphCanvas(props: {
             </Button>
           </div>
         ) : activeShowcase && activeGraphMode !== "manual" ? (
-          <div className="flex h-8 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 text-xs text-amber-900">
+          <div data-graph-batch="" className="flex h-8 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 text-xs text-amber-900">
             <span>{formatShowcaseEventLabel(activeShowcase, props.language, eventDisplayLimit)}</span>
             <Button
               type="button"
@@ -1437,7 +1497,7 @@ function ProjectGraphCanvas(props: {
             </Button>
           </div>
         ) : null}
-        {mode === "2d" && <select
+        {!starView && <select
           value={layoutStyle}
           title={graphText(props.language, "重排风格", "Layout style")}
           className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -1455,7 +1515,7 @@ function ProjectGraphCanvas(props: {
             {graphText(props.language, "分栏", "Columns")}
           </option>
         </select>}
-        {mode === "2d" && <Button
+        {!starView && <Button
           type="button"
           variant="outline"
           size="sm"
@@ -1464,6 +1524,15 @@ function ProjectGraphCanvas(props: {
           <RefreshCw className="h-3.5 w-3.5" />
           {graphText(props.language, "自动重排", "Auto layout")}
         </Button>}
+        {starView && categories.length > 0 && <select
+          aria-label={graphText(props.language, "事件分类", "Event category")}
+          className="atlas-universe-category h-8 max-w-36 rounded-md px-2 text-xs"
+          value={category}
+          onChange={(event) => { setSelectedNodeId(null); setEventCategory(event.target.value); }}
+        >
+          <option value="">{graphText(props.language, "全部事件分类", "All event categories")}</option>
+          {categories.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>}
         {sceneUnavailable && <span className="text-xs text-muted-foreground" role="status">
           {graphText(props.language, "当前设备无法使用 3D，已返回 2D。", "3D is unavailable on this device. Returned to 2D.")}
         </span>}
@@ -1550,22 +1619,31 @@ function ProjectGraphCanvas(props: {
         language={props.language}
         options={filteredEntityTypeOptions}
         totalCount={entityTypeOptions.length}
-        selectedTypes={selectedEntityTypes}
+        selectedTypes={starTypesDefault ? new Set(entityTypeOptions.map((option) => option.type)) : selectedEntityTypes}
         query={entityTypeQuery}
         collapsed={entityTypeFilterCollapsed}
         onToggleCollapsed={() =>
           setEntityTypeFilterCollapsed((collapsed) => !collapsed)
         }
         onQueryChange={setEntityTypeQuery}
-        onToggleType={toggleEntityType}
-        onSelectAll={selectAllEntityTypes}
-        onClear={clearEntityTypeFilter}
+        onToggleType={(type) => {
+          setEntityFilterUsed(true);
+          if (starTypesDefault) {
+            shouldFitViewRef.current = true;
+            setSelectedNodeId(null);
+            setSelectedEntityTypes(new Set(entityTypeOptions.filter((option) => option.type !== type).map((option) => option.type)));
+          } else {
+            toggleEntityType(type);
+          }
+        }}
+        onSelectAll={() => { setEntityFilterUsed(true); selectAllEntityTypes(); }}
+        onClear={() => { setEntityFilterUsed(true); clearEntityTypeFilter(); }}
       />
       <div className={cn("absolute inset-0", mode === "3d" && "invisible pointer-events-none")} aria-hidden={mode === "3d"}>
       <ReactFlow<GraphNode, GraphEdge>
         className="sag-graph-flow"
-        nodes={nodes}
-        edges={edges}
+        nodes={flatScene?.nodes ?? nodes}
+        edges={flatScene?.edges ?? edges}
         edgeTypes={graphEdgeTypes}
         nodeTypes={graphNodeTypes}
         defaultEdgeOptions={{ zIndex: 0 }}
@@ -1584,9 +1662,9 @@ function ProjectGraphCanvas(props: {
         elementsSelectable
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+        {!props.universe2D && <Background variant={BackgroundVariant.Dots} gap={24} size={1} />}
         <Controls showInteractive={false} />
-        <MiniMap
+        {!props.universe2D && <MiniMap
           pannable
           zoomable
           nodeColor={(node) => {
@@ -1600,7 +1678,7 @@ function ProjectGraphCanvas(props: {
                   : "#4f46e5";
           }}
           maskColor="rgba(238,242,247,0.72)"
-        />
+        />}
       </ReactFlow>
       </div>
       {mode === "3d" && (
@@ -1610,7 +1688,7 @@ function ProjectGraphCanvas(props: {
           </div>}>
             <ProjectGraph3D data={sceneData} selectedId={selectedNodeId} camera={camera}
               onUnavailable={unavailable} onClear={() => setSelectedNodeId(null)}
-              onSelect={(id) => { const node = nodes.find((item) => item.id === id); if (node) selectGraphNode(node); }} />
+              onSelect={(id) => { const node = sceneData.nodes.find((item) => item.id === id); if (node) selectGraphNode(id, node); }} />
           </Suspense>
           {sceneData.cropped && <span className="pointer-events-none absolute bottom-3 left-3 rounded bg-background/85 px-2 py-1 text-xs text-muted-foreground">
             {graphText(props.language, "3D 已限制显示范围，搜索可聚焦更多节点。", "3D display is capped. Search to focus other nodes.")}
@@ -1648,6 +1726,20 @@ function RichGraphNode({ data }: NodeProps<GraphNode>) {
         isConnectable={false}
         className="sag-rich-graph-handle"
       />
+    </div>
+  );
+}
+
+function UniverseGraphNode({ data }: NodeProps<GraphNode>) {
+  return (
+    <div className="atlas-universe-node" data-kind={data.kind} title={[data.label, data.category].filter(Boolean).join(" · ")}>
+      <Handle type="target" position={Position.Top} isConnectable={false} />
+      <span className="atlas-universe-star" aria-hidden="true" />
+      <span className="atlas-universe-label" data-kind={data.kind} data-visible={data.showLabel}>
+        {data.category && <small data-event-category="">{data.category}</small>}
+        <strong>{data.label}</strong>
+      </span>
+      <Handle type="source" position={Position.Bottom} isConnectable={false} />
     </div>
   );
 }
@@ -1788,7 +1880,7 @@ function normalizeGraphLayoutStyle(value: unknown): GraphLayoutStyle {
     value === "columns" ||
     value === "search_layers"
     ? value
-    : "search_layers";
+    : "columns";
 }
 
 function getGraphEventDisplayLimit(layoutStyle: GraphLayoutStyle) {

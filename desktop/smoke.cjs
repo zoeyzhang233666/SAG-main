@@ -154,7 +154,7 @@ async function smoke(contents, origin, profile, mode) {
     assert.ok(documents.some(item => item.id === doc.id && item.title === doc.title), 'Imported document missing: ' + doc.title);
   }
   const { graph } = await api(`/api/projects/${project.id}/graph`);
-  assert.ok(graph.events.some(item => item.title === event), 'Imported event missing from graph');
+  assert.ok(graph.events.some(item => item.title === event && item.category === '工艺'), 'Imported event category missing from graph');
   assert.ok(graph.entities.some(item => item.name === entity), 'Imported entity missing from graph');
   assert.ok(graph.edges.length, 'Imported relationships missing from graph');
 
@@ -170,6 +170,11 @@ async function smoke(contents, origin, profile, mode) {
     return Array.from(document.querySelectorAll('.react-flow__node'))
       .some(node => node.textContent.includes(event) && node.getBoundingClientRect().width > 0);
   }, event), 'V1 Hypergraph did not render the imported event');
+  assert.equal(await evaluate(() => document.querySelector('[data-graph-renderer]')?.dataset.graphRenderer), 'atlas-2d');
+  if (mode === 'write') {
+    assert.equal(await evaluate(() => document.querySelector('[data-graph-renderer] select')?.value), 'columns',
+      'A fresh profile should default to the original columns layout');
+  }
   const graphModeButton = label => evaluate(label => {
     const button = Array.from(document.querySelectorAll('[role="group"] button'))
       .find(element => element.textContent.trim() === label);
@@ -187,6 +192,16 @@ async function smoke(contents, origin, profile, mode) {
     assert.ok(await graphModeButton('3D'), 'Could not select 3D');
     await until(() => evaluate(() => Boolean(document.querySelector('[data-graph-3d="ready"] canvas'))),
       '3D graph did not create a WebGL canvas');
+    await until(() => evaluate(() => Boolean(document.querySelector(
+      '[data-orbital-mode="plates"] .sag-orbital-label [data-event-category]'
+    ))), '3D planet did not render imported event categories');
+    await until(() => evaluate(() => {
+      const count = document.querySelector('.atlas-orbital-legend span:last-child')?.textContent.match(/\d+/)?.[0];
+      return Number(count) > 0;
+    }), '3D planet should show related nodes on the outer orbit');
+    await evaluate(() => document.querySelector('.atlas-orbital-tools button')?.click());
+    await until(() => evaluate(() => Boolean(document.querySelector('[data-orbital-mode="nodes"] canvas'))),
+      '3D dual-orbit mode did not render');
     assert.ok(await graphModeButton('2D'), 'Could not return to 2D');
     await until(() => evaluate(() => !document.querySelector('[data-graph-3d]')), '3D scene was not released');
     console.log('WebGL2 graph mounted and released');
@@ -247,6 +262,29 @@ async function smoke(contents, origin, profile, mode) {
   }), 'Could not open exploration');
   await until(() => evaluate(() => Boolean(document.querySelector('[data-explore-workspace] [role="separator"]'))),
     'Exploration resizer did not render');
+  await until(() => evaluate(() => {
+    const canvas = document.querySelector('[data-explore-workspace] [data-graph-renderer="universe-2d"]');
+    const pane = document.querySelector('[data-explore-workspace] .atlas-explore-conversation');
+    const label = canvas?.querySelector('.atlas-universe-node [data-event-category]');
+    if (!label || !pane || getComputedStyle(pane).colorScheme !== 'dark') return false;
+    if (!canvas.querySelector('.atlas-universe-galaxy') || getComputedStyle(label).visibility !== 'visible') return false;
+    const bounds = canvas.getBoundingClientRect();
+    const box = label.getBoundingClientRect();
+    return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;
+  }), 'Exploration should open with visible event stars and a dark conversation pane');
+  const appliedCategory = await evaluate(() => {
+    const picker = document.querySelector('[data-explore-workspace] .atlas-universe-category');
+    const category = picker?.options[1]?.value;
+    if (!category) return null;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(picker, category);
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    return category;
+  });
+  assert.ok(appliedCategory, 'The star graph has no event categories to filter');
+  await until(() => evaluate(category => {
+    const labels = Array.from(document.querySelectorAll('[data-explore-workspace] .atlas-universe-node [data-event-category]'));
+    return labels.length > 0 && labels.every(label => label.textContent === category);
+  }, appliedCategory), 'The star graph did not respect its event category filter');
   if (mode !== 'read') {
     await until(() => evaluate(() => Boolean(document.querySelector('[data-explore-workspace] .chem-answer-artifact svg'))),
       'Exploration did not render the persisted SVG answer');

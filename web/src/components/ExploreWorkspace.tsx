@@ -14,7 +14,6 @@ type Props = {
   sessionId?: string;
   messages: McpMessageRecord[];
   liveEvidence?: AnswerEvidence;
-  defaultLayoutStyle?: string;
   citationChunkId?: string;
   citationRequest?: number;
   onPickNode: (node: Target) => void;
@@ -121,7 +120,7 @@ export function ExploreWorkspace(props: Props) {
 
   return (
     <div ref={area} className="chem-explore" style={{ "--explore-left": `${leftWidth}%` } as CSSProperties} data-explore-workspace="">
-      <section aria-label={t("探索图谱", "Exploration graph")} className="relative min-h-0 min-w-0 overflow-hidden">
+      <section aria-label={t("探索图谱", "Exploration graph")} className="atlas-universe-panel relative min-h-0 min-w-0 overflow-hidden">
         {loadError && <p className="absolute bottom-3 left-3 z-30 flex items-center gap-2 rounded-lg border border-border bg-background p-2 text-sm" role="status">
           {t("图谱加载失败", "Could not load graph")}
           <Button variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>{t("重试", "Retry")}</Button>
@@ -131,8 +130,8 @@ export function ExploreWorkspace(props: Props) {
             graph={loaded.graph}
             focus={loaded.focus}
             language={language}
-            defaultLayoutStyle={props.defaultLayoutStyle}
             compact
+            universe2D
             preferenceKey={`sag:explore.view:${projectId}:${sessionId ?? "new"}`}
             selectedExternalId={selectedCitation}
             onPickNode={(node) => {
@@ -171,7 +170,7 @@ export function ExploreWorkspace(props: Props) {
             clamp(value + (event.key === "ArrowLeft" ? -3 : 3)));
         }}
       />
-      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">{props.children}</div>
+      <div className="atlas-explore-conversation flex min-h-0 min-w-0 flex-col overflow-hidden">{props.children}</div>
     </div>
   );
 }
