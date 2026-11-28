@@ -79,6 +79,14 @@ interface OrbitalSceneApi {
   setSelected: (nodeId: string | null) => void;
 }
 
+type OrbitalRenderer = {
+  renderer: THREE.WebGLRenderer;
+  labelRenderer: CSS2DRenderer;
+  camera: THREE.PerspectiveCamera;
+  controls: OrbitControls;
+};
+
+const BASE_HOME_POSITION = new THREE.Vector3(0, 54, 1250);
 const INNER_RADIUS = 158;
 const OUTER_RADIUS = 424;
 const ENTITY_SIZE_RATIO = 0.6;
@@ -541,12 +549,17 @@ export default function ProjectGraph3D(props: Props) {
   const { t } = useI18n();
   const mountRef = React.useRef<HTMLDivElement>(null);
   const sceneApiRef = React.useRef<OrbitalSceneApi | null>(null);
+  const rendererRef = React.useRef<OrbitalRenderer | null>(null);
   const autoRotateRef = React.useRef(false);
   const callbacks = React.useRef(props);
   callbacks.current = props;
   const [autoRotate, setAutoRotate] = React.useState(false);
   const [eventSurfaceMode, setEventSurfaceMode] = React.useState<EventSurfaceMode>("plates");
-  const slice = React.useMemo(() => toOrbitalSlice(props.data), [props.data]);
+  const topology = JSON.stringify([props.data.nodes, props.data.links]);
+  const slice = React.useMemo(() => {
+    const [nodes, links]: [SceneNode[], SceneLink[]] = JSON.parse(topology);
+    return toOrbitalSlice({ nodes, links });
+  }, [topology]);
   const layout = React.useMemo(() => buildOrbitalLayout(slice), [slice]);
   const empty = !slice.events.length && !slice.entities.length;
 
@@ -579,9 +592,6 @@ export default function ProjectGraph3D(props: Props) {
       return;
     }
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x070a12);
-    scene.fog = new THREE.Fog(0x070a12, 1400, 4200);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -590,12 +600,6 @@ export default function ProjectGraph3D(props: Props) {
       "absolute inset-0 size-full touch-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400";
     renderer.domElement.dataset.graphCanvas = "orbital-3d";
     renderer.domElement.tabIndex = 0;
-    renderer.domElement.setAttribute(
-      "aria-label",
-      eventSurfaceMode === "plates"
-        ? t("大陆星球图谱", "Planetary graph")
-        : t("双轨道图谱", "Dual-orbit graph"),
-    );
     renderer.domElement.setAttribute("role", "application");
 
     const labelRenderer = new CSS2DRenderer();
@@ -604,11 +608,9 @@ export default function ProjectGraph3D(props: Props) {
     mount.replaceChildren(renderer.domElement, labelRenderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(42, 1, 1, 2200);
-    const baseHomePosition = new THREE.Vector3(0, 54, 1250);
-    const homePosition = baseHomePosition.clone();
     const savedView = callbacks.current.camera.current;
     if (savedView) camera.position.set(savedView.x, savedView.y, savedView.z);
-    else camera.position.copy(homePosition);
+    else camera.position.copy(BASE_HOME_POSITION);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -622,7 +624,41 @@ export default function ProjectGraph3D(props: Props) {
     controls.autoRotate = autoRotateRef.current;
     controls.autoRotateSpeed = 0.32;
     controls.update();
+    rendererRef.current = { renderer, labelRenderer, camera, controls };
 
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      callbacks.current.onUnavailable();
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onContextLost);
+    return () => {
+      callbacks.current.camera.current = {
+        x: camera.position.x, y: camera.position.y, z: camera.position.z,
+        target: [controls.target.x, controls.target.y, controls.target.z]
+      };
+      rendererRef.current = null;
+      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
+      controls.dispose();
+      mount.replaceChildren();
+      renderer.dispose();
+      renderer.forceContextLoss();
+    };
+  }, [empty]);
+
+  React.useEffect(() => {
+    const mount = mountRef.current;
+    const current = rendererRef.current;
+    if (!mount || !current || empty) return;
+    const { renderer, labelRenderer, camera, controls } = current;
+    renderer.domElement.setAttribute("aria-label",
+      eventSurfaceMode === "plates" ? t("大陆星球图谱", "Planetary graph") : t("双轨道图谱", "Dual-orbit graph"));
+    const homePosition = BASE_HOME_POSITION.clone().multiplyScalar(
+      mount.clientWidth < mount.clientHeight ? Math.min(2.2, mount.clientHeight / Math.max(1, mount.clientWidth)) : 1
+    );
+    if (camera.position.distanceTo(BASE_HOME_POSITION) < 2) camera.position.copy(homePosition);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x070a12);
+    scene.fog = new THREE.Fog(0x070a12, 1400, 4200);
     addBackgroundPoints(scene);
     if (eventSurfaceMode === "nodes") {
       addOrbitRings(scene, layout.innerRadius, "#ef8b9f", 0.18);
@@ -1087,12 +1123,7 @@ export default function ProjectGraph3D(props: Props) {
     renderer.domElement.addEventListener("keydown", onKeyDown);
     renderer.domElement.addEventListener("blur", onBlur);
 
-    const onContextLost = (event: Event) => {
-      event.preventDefault();
-      callbacks.current.onUnavailable();
-    };
-    renderer.domElement.addEventListener("webglcontextlost", onContextLost);
-
+    const renderSize = new THREE.Vector2();
     const resize = () => {
       const width = Math.max(1, mount.clientWidth);
       const height = Math.max(1, mount.clientHeight);
@@ -1101,11 +1132,12 @@ export default function ProjectGraph3D(props: Props) {
       updateFocus();
       const previousHome = homePosition.clone();
       const portraitScale = aspect < 1 ? Math.min(2.2, 1 / aspect) : 1;
-      homePosition.copy(baseHomePosition).multiplyScalar(portraitScale);
+      homePosition.copy(BASE_HOME_POSITION).multiplyScalar(portraitScale);
       if (camera.position.distanceTo(previousHome) < 2) camera.position.copy(homePosition);
       camera.aspect = aspect;
       camera.updateProjectionMatrix();
-      renderer.setSize(width, height, false);
+      renderer.getSize(renderSize);
+      if (renderSize.x !== width || renderSize.y !== height) renderer.setSize(width, height, false);
       labelRenderer.setSize(width, height);
       renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
@@ -1180,10 +1212,6 @@ export default function ProjectGraph3D(props: Props) {
     };
 
     return () => {
-      callbacks.current.camera.current = {
-        x: camera.position.x, y: camera.position.y, z: camera.position.z,
-        target: [controls.target.x, controls.target.y, controls.target.z]
-      };
       sceneApiRef.current = null;
       stopRendering();
       intersectionObserver.disconnect();
@@ -1195,12 +1223,10 @@ export default function ProjectGraph3D(props: Props) {
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("keydown", onKeyDown);
       renderer.domElement.removeEventListener("blur", onBlur);
-      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
-      controls.dispose();
+      scene.traverse((object) => {
+        if (object instanceof CSS2DObject) object.element.remove();
+      });
       disposeScene(scene, textures.values());
-      renderer.dispose();
-      mount.replaceChildren();
-      renderer.forceContextLoss();
     };
   }, [empty, eventSurfaceMode, layout, slice, t]);
 

@@ -9,6 +9,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  ViewportPortal,
   getViewportForBounds,
   type Edge,
   type EdgeProps,
@@ -33,7 +34,7 @@ import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import type { SupportedLanguage } from "../i18n";
 import { RichTextFragment } from "./RichText";
-import { buildSceneData, layoutUniverse, type SceneNode } from "../lib/graph-scene-data";
+import { buildSceneData, layoutUniverse, nodesForEventCategory, type SceneNode } from "../lib/graph-scene-data";
 import { ParticleGalaxy } from "./universe/ParticleGalaxy";
 import "./universe/universe.css";
 
@@ -278,6 +279,8 @@ function ProjectGraphCanvas(props: GraphProps) {
     [...new Set(sceneNodes.flatMap((node) => node.category ? [node.category] : []))].sort(),
   [sceneNodes]);
   const category = categories.includes(eventCategory) ? eventCategory : "";
+  const categoryNodes = useMemo(() => category ? nodesForEventCategory(sceneNodes, props.graph, category) : null,
+    [sceneNodes, props.graph, category]);
   const sceneData = useMemo(() => buildSceneData({
     nodes: sceneNodes,
     graph: props.graph,
@@ -288,6 +291,7 @@ function ProjectGraphCanvas(props: GraphProps) {
   const flatScene = useMemo(() => {
     if (!props.universe2D || mode !== "2d") return null;
     const positions = layoutUniverse(sceneData.nodes, sceneData.links);
+    const chunks = new Set(sceneData.nodes.filter((node) => node.kind === "chunk").map((node) => node.id));
     let labeled = 0;
     return {
       nodes: sceneData.nodes.map((node): GraphNode => {
@@ -298,10 +302,17 @@ function ProjectGraphCanvas(props: GraphProps) {
           data: { ...node, expanded: false, labelSide: position.x > 0 ? "left" : "right",
             showLabel: selected || (node.kind === "event" && labeled++ < 8) } };
       }),
-      edges: sceneData.links.map(({ source, target }): GraphEdge => ({
-        id: JSON.stringify([source, target]), source, target, type: "straight", selectable: false,
-        style: { stroke: "#9ccbd6", strokeWidth: 1, opacity: 0.35 }
-      }))
+      links: sceneData.links.flatMap(({ source, target }) => {
+        const from = positions.get(source);
+        const to = positions.get(target);
+        if (!from || !to) return [];
+        return [{
+          key: JSON.stringify([source, target]),
+          from, to,
+          kind: chunks.has(source) ? "chunk-event" : "event-entity",
+          highlighted: source === selectedNodeId || target === selectedNodeId
+        }];
+      })
     };
   }, [props.universe2D, mode, sceneData, selectedNodeId]);
   const { fitView, getNode, setCenter, setViewport } = useReactFlow<GraphNode, GraphEdge>();
@@ -445,8 +456,8 @@ function ProjectGraphCanvas(props: GraphProps) {
   );
   const eventDisplayLimit = getGraphEventDisplayLimit(layoutStyle);
   const localSuggestions = useMemo(
-    () => rankGraphSuggestions(props.graph, graphQuery, 10, eventDisplayLimit),
-    [eventDisplayLimit, graphQuery, props.graph],
+    () => props.onRequestSuggestions ? [] : rankGraphSuggestions(props.graph, graphQuery, 10, eventDisplayLimit),
+    [eventDisplayLimit, graphQuery, props.graph, props.onRequestSuggestions],
   );
   const normalizedSuggestionQuery = graphQuery.trim();
   const remoteSuggestions = useMemo(
@@ -1270,6 +1281,7 @@ function ProjectGraphCanvas(props: GraphProps) {
   }
 
   function selectSuggestion(suggestion: GraphSuggestion) {
+    setEventCategory("");
     const shouldLoadFromProject =
       Boolean(suggestion.remote) ||
       (suggestion.kind === "entity" && Boolean(props.onSelectSuggestion));
@@ -1530,11 +1542,15 @@ function ProjectGraphCanvas(props: GraphProps) {
           <RefreshCw className="h-3.5 w-3.5" />
           {graphText(props.language, "自动重排", "Auto layout")}
         </Button>}
-        {starView && categories.length > 0 && <select
+        {categories.length > 0 && <select
           aria-label={graphText(props.language, "事件分类", "Event category")}
-          className="atlas-universe-category h-8 max-w-36 rounded-md px-2 text-xs"
+          className="atlas-universe-category h-8 max-w-36 rounded-md border border-input bg-background px-2 text-xs"
           value={category}
-          onChange={(event) => { setSelectedNodeId(null); setEventCategory(event.target.value); }}
+          onChange={(event) => {
+            setSelectedNodeId(null);
+            setEventCategory(event.target.value);
+            if (!starView) requestAnimationFrame(() => void fitView({ padding: 0.22, maxZoom: 1, duration: 240 }));
+          }}
         >
           <option value="">{graphText(props.language, "全部事件分类", "All event categories")}</option>
           {categories.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -1561,13 +1577,10 @@ function ProjectGraphCanvas(props: GraphProps) {
             if (event.nativeEvent.isComposing) {
               return;
             }
-            if (event.key === "Enter" && suggestions[0]) {
-              event.preventDefault();
-              selectSuggestion(suggestions[0]);
-              return;
-            }
             if (event.key === "Enter") {
               event.preventDefault();
+              setSuggestionsOpen(false);
+              setEventCategory("");
               props.onSearch?.(graphQuery.trim());
             }
             if (event.key === "Escape") {
@@ -1576,8 +1589,8 @@ function ProjectGraphCanvas(props: GraphProps) {
           }}
           placeholder={graphText(
             props.language,
-            "搜索切片、实体或事件，支持模糊匹配",
-            "Search chunks, entities or events with fuzzy matching",
+            "搜索切片、实体或事件",
+            "Search chunks, entities or events",
           )}
           className="h-9 w-full rounded-lg border border-input bg-background/95 pl-9 pr-3 text-sm shadow-lg outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-ring"
         />
@@ -1612,8 +1625,8 @@ function ProjectGraphCanvas(props: GraphProps) {
               <div className="px-3 py-2 text-xs text-muted-foreground">
                 {graphText(
                   props.language,
-                  "没有找到相似切片、实体或事件",
-                  "No similar chunk, entity or event found",
+                  "没有找到匹配的切片、实体或事件",
+                  "No matching chunk, entity or event found",
                 )}
               </div>
             )}
@@ -1648,8 +1661,8 @@ function ProjectGraphCanvas(props: GraphProps) {
       <div className={cn("absolute inset-0", mode === "3d" && "invisible pointer-events-none")} aria-hidden={mode === "3d"}>
       <ReactFlow<GraphNode, GraphEdge>
         className="sag-graph-flow"
-        nodes={flatScene?.nodes ?? nodes}
-        edges={flatScene?.edges ?? edges}
+        nodes={flatScene?.nodes ?? (categoryNodes ? nodes.filter((node) => categoryNodes.has(node.id)) : nodes)}
+        edges={flatScene ? [] : categoryNodes ? edges.filter((edge) => categoryNodes.has(edge.source) && categoryNodes.has(edge.target)) : edges}
         edgeTypes={graphEdgeTypes}
         nodeTypes={graphNodeTypes}
         defaultEdgeOptions={{ zIndex: 0 }}
@@ -1669,6 +1682,18 @@ function ProjectGraphCanvas(props: GraphProps) {
         proOptions={{ hideAttribution: true }}
       >
         {!props.universe2D && <Background variant={BackgroundVariant.Dots} gap={24} size={1} />}
+        {flatScene && <ViewportPortal>
+          <svg className="atlas-universe-links" width={1} height={1} aria-hidden="true">
+            {flatScene.links.map((link) => <line
+              key={link.key}
+              data-universe-link={link.kind}
+              data-highlighted={link.highlighted}
+              x1={link.from.x * 3 + 12.5} y1={-link.from.y * 3 + 12.5}
+              x2={link.to.x * 3 + 12.5} y2={-link.to.y * 3 + 12.5}
+              vectorEffect="non-scaling-stroke"
+            />)}
+          </svg>
+        </ViewportPortal>}
         <Controls showInteractive={false} />
         {!props.universe2D && <MiniMap
           pannable
@@ -1701,6 +1726,11 @@ function ProjectGraphCanvas(props: GraphProps) {
           </span>}
         </SceneBoundary>
       )}
+      {effectiveFocus?.query && props.graph.scope === "focus" &&
+        !props.graph.events.length && !props.graph.entities.length && !props.graph.chunks.length && (
+          <p role="status" className="atlas-empty-graph">{graphText(props.language,
+            "没有找到该关键词的事件、实体或原文。", "No events, entities or source text matched this keyword.")}</p>
+        )}
     </div>
   );
 }
@@ -1709,13 +1739,14 @@ function RichGraphNode({ data }: NodeProps<GraphNode>) {
   const nodeData = data as GraphNodeData;
   const isQuestion = nodeData.kind === "question";
   return (
-    <div className="sag-rich-graph-node" title={nodeData.label}>
+    <div className="sag-rich-graph-node" title={[nodeData.label, nodeData.category].filter(Boolean).join(" · ")}>
       <Handle
         type="target"
         position={Position.Top}
         isConnectable={false}
         className="sag-rich-graph-handle"
       />
+      <div className="atlas-2d-node-content">
       <div
         className={cn(
           "sag-rich-graph-label",
@@ -1725,6 +1756,8 @@ function RichGraphNode({ data }: NodeProps<GraphNode>) {
         )}
       >
         <RichTextFragment text={nodeData.label} />
+      </div>
+      {nodeData.kind === "event" && nodeData.category && <span className="atlas-2d-event-category" data-event-category="">{nodeData.category}</span>}
       </div>
       <Handle
         type="source"
@@ -1739,13 +1772,11 @@ function RichGraphNode({ data }: NodeProps<GraphNode>) {
 function UniverseGraphNode({ data }: NodeProps<GraphNode>) {
   return (
     <div className="atlas-universe-node" data-kind={data.kind} title={[data.label, data.category].filter(Boolean).join(" · ")}>
-      <Handle type="target" position={Position.Top} isConnectable={false} />
       <span className="atlas-universe-star" aria-hidden="true" />
       <span className="atlas-universe-label" data-kind={data.kind} data-visible={data.showLabel} data-side={data.labelSide}>
         {data.category && <small data-event-category="">{data.category}</small>}
         <strong>{data.label}</strong>
       </span>
-      <Handle type="source" position={Position.Bottom} isConnectable={false} />
     </div>
   );
 }
@@ -2281,6 +2312,7 @@ function buildVisibleGraph(input: {
         id: event.id,
         label: event.title,
         kind: "event",
+        category: event.category?.trim() || undefined,
         expanded: input.expandedEventIds.has(event.id),
         x: position.x,
         y: position.y,
@@ -2589,6 +2621,7 @@ function createGraphNode(input: {
   y: number;
   root?: boolean;
   entityType?: string | null;
+  category?: string;
 }): GraphNode {
   const nodeWidth =
     input.kind === "question"
@@ -2618,6 +2651,7 @@ function createGraphNode(input: {
       expanded: input.expanded,
       entityType,
       entityTypeColor,
+      category: input.category,
     },
     style: {
       width: nodeWidth,
@@ -3590,15 +3624,7 @@ function graphMatchScore(label: string, normalizedQuery: string): number {
   if (normalizedLabel.includes(normalizedQuery)) {
     return 90 - Math.min(20, normalizedLabel.length - normalizedQuery.length);
   }
-  if (normalizedQuery.includes(normalizedLabel)) return 82;
-  const similarity = trigramSimilarity(normalizedLabel, normalizedQuery);
-  if (similarity >= 0.18) return Math.round(similarity * 70);
-  return isSubsequence(normalizedQuery, normalizedLabel)
-    ? Math.max(
-        10,
-        Math.round((normalizedQuery.length / normalizedLabel.length) * 45),
-      )
-    : 0;
+  return 0;
 }
 
 function normalizeGraphText(value: string): string {
@@ -3606,36 +3632,6 @@ function normalizeGraphText(value: string): string {
     .normalize("NFKC")
     .toLocaleLowerCase()
     .replace(/[\s\p{P}\p{S}]+/gu, "");
-}
-
-function trigramSimilarity(left: string, right: string): number {
-  if (left.length < 2 || right.length < 2) return 0;
-  const leftParts = ngrams(left, Math.min(3, left.length));
-  const rightParts = ngrams(right, Math.min(3, right.length));
-  let intersection = 0;
-  for (const part of leftParts) {
-    if (rightParts.has(part)) intersection += 1;
-  }
-  return (
-    intersection / Math.max(1, leftParts.size + rightParts.size - intersection)
-  );
-}
-
-function ngrams(value: string, size: number): Set<string> {
-  const parts = new Set<string>();
-  for (let index = 0; index <= value.length - size; index += 1) {
-    parts.add(value.slice(index, index + size));
-  }
-  return parts;
-}
-
-function isSubsequence(needle: string, haystack: string): boolean {
-  let index = 0;
-  for (const character of haystack) {
-    if (character === needle[index]) index += 1;
-    if (index >= needle.length) return true;
-  }
-  return false;
 }
 
 const ENTITY_TYPE_FILTER_PANEL_TOP = 116;

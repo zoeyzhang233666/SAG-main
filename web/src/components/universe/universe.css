@@ -137,13 +137,61 @@
 .atlas-universe-node[data-kind="event"] { color: #ffd166; }
 .atlas-universe-node[data-kind="entity"] { color: #75d8e8; }
 
-.atlas-universe-node .react-flow__handle {
-  left: 50%;
-  top: 50%;
-  bottom: auto;
-  visibility: hidden;
+.atlas-universe-links {
+  position: absolute;
+  overflow: visible;
   pointer-events: none;
 }
+
+.atlas-universe-links line {
+  stroke: #80ccdc;
+  stroke-width: 1.35px;
+  opacity: 0.57;
+}
+
+.atlas-universe-links line[data-universe-link="chunk-event"] {
+  stroke: #a49bc9;
+  stroke-width: 1.1px;
+  stroke-dasharray: 3 3;
+  opacity: 0.45;
+}
+
+.atlas-universe-links line[data-highlighted="true"] {
+  stroke: #ffe092;
+  stroke-width: 1.9px;
+  opacity: 0.94;
+}
+
+.atlas-2d-node-content {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.atlas-2d-event-category {
+  max-width: 46%;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid #d1ddf0;
+  border-radius: 5px;
+  padding-inline: 4px;
+  background: #eaf0fa;
+  color: #435476;
+  font-size: 9px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlas-empty-graph {
+  position: absolute;
+  inset: 50% 1rem auto;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.atlas-universe .atlas-empty-graph { color: #cdd4dc; }
 
 .atlas-universe-star {
   position: relative;
