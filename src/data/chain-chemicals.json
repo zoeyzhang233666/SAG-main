@@ -1,0 +1,1294 @@
+[
+  {
+    "name": "乙烯",
+    "english": "Ethylene",
+    "cas": "74-85-1",
+    "formula": "C2H4",
+    "aliases": [
+      "乙烯单体",
+      "Ethene"
+    ]
+  },
+  {
+    "name": "丙烯",
+    "english": "Propylene",
+    "cas": "115-07-1",
+    "formula": "C3H6",
+    "aliases": [
+      "Propene"
+    ]
+  },
+  {
+    "name": "1,3-丁二烯",
+    "english": "1,3-Butadiene",
+    "cas": "106-99-0",
+    "formula": "C4H6",
+    "aliases": [
+      "丁二烯",
+      "Butadiene"
+    ]
+  },
+  {
+    "name": "正丁烷",
+    "english": "n-Butane",
+    "cas": "106-97-8",
+    "formula": "C4H10"
+  },
+  {
+    "name": "异丁烷",
+    "english": "Isobutane",
+    "cas": "75-28-5",
+    "formula": "C4H10",
+    "aliases": [
+      "2-甲基丙烷"
+    ]
+  },
+  {
+    "name": "乙烷",
+    "english": "Ethane",
+    "cas": "74-84-0",
+    "formula": "C2H6"
+  },
+  {
+    "name": "丙烷",
+    "english": "Propane",
+    "cas": "74-98-6",
+    "formula": "C3H8"
+  },
+  {
+    "name": "甲烷",
+    "english": "Methane",
+    "cas": "74-82-8",
+    "formula": "CH4"
+  },
+  {
+    "name": "乙炔",
+    "english": "Acetylene",
+    "cas": "74-86-2",
+    "formula": "C2H2",
+    "aliases": [
+      "Ethyne"
+    ]
+  },
+  {
+    "name": "苯",
+    "english": "Benzene",
+    "cas": "71-43-2",
+    "formula": "C6H6"
+  },
+  {
+    "name": "甲苯",
+    "english": "Toluene",
+    "cas": "108-88-3",
+    "formula": "C7H8",
+    "aliases": [
+      "甲基苯"
+    ]
+  },
+  {
+    "name": "对二甲苯",
+    "english": "p-Xylene",
+    "cas": "106-42-3",
+    "formula": "C8H10",
+    "aliases": [
+      "PX",
+      "1,4-二甲苯"
+    ]
+  },
+  {
+    "name": "间二甲苯",
+    "english": "m-Xylene",
+    "cas": "108-38-3",
+    "formula": "C8H10",
+    "aliases": [
+      "MX",
+      "1,3-二甲苯"
+    ]
+  },
+  {
+    "name": "邻二甲苯",
+    "english": "o-Xylene",
+    "cas": "95-47-6",
+    "formula": "C8H10",
+    "aliases": [
+      "OX",
+      "1,2-二甲苯"
+    ]
+  },
+  {
+    "name": "乙苯",
+    "english": "Ethylbenzene",
+    "cas": "100-41-4",
+    "formula": "C8H10"
+  },
+  {
+    "name": "苯乙烯",
+    "english": "Styrene",
+    "cas": "100-42-5",
+    "formula": "C8H8",
+    "aliases": [
+      "乙烯基苯"
+    ]
+  },
+  {
+    "name": "苯胺",
+    "english": "Aniline",
+    "cas": "62-53-3",
+    "formula": "C6H7N"
+  },
+  {
+    "name": "苯酚",
+    "english": "Phenol",
+    "cas": "108-95-2",
+    "formula": "C6H6O",
+    "aliases": [
+      "石炭酸"
+    ]
+  },
+  {
+    "name": "丙酮",
+    "english": "Acetone",
+    "cas": "67-64-1",
+    "formula": "C3H6O",
+    "aliases": [
+      "二甲基酮"
+    ]
+  },
+  {
+    "name": "异丙苯",
+    "english": "Cumene",
+    "cas": "98-82-8",
+    "formula": "C9H12"
+  },
+  {
+    "name": "双酚A",
+    "english": "Bisphenol A",
+    "cas": "80-05-7",
+    "formula": "C15H16O2",
+    "aliases": [
+      "BPA"
+    ]
+  },
+  {
+    "name": "环己烷",
+    "english": "Cyclohexane",
+    "cas": "110-82-7",
+    "formula": "C6H12"
+  },
+  {
+    "name": "环己酮",
+    "english": "Cyclohexanone",
+    "cas": "108-94-1",
+    "formula": "C6H10O"
+  },
+  {
+    "name": "己内酰胺",
+    "english": "Caprolactam",
+    "cas": "105-60-2",
+    "formula": "C6H11NO",
+    "aliases": [
+      "ε-己内酰胺"
+    ]
+  },
+  {
+    "name": "己二酸",
+    "english": "Adipic acid",
+    "cas": "124-04-9",
+    "formula": "C6H10O4",
+    "aliases": []
+  },
+  {
+    "name": "己二胺",
+    "english": "Hexamethylenediamine",
+    "cas": "124-09-4",
+    "formula": "C6H16N2",
+    "aliases": [
+      "1,6-己二胺"
+    ]
+  },
+  {
+    "name": "对苯二甲酸",
+    "english": "Terephthalic acid",
+    "cas": "100-21-0",
+    "formula": "C8H6O4",
+    "aliases": [
+      "PTA",
+      "精对苯二甲酸"
+    ]
+  },
+  {
+    "name": "间苯二甲酸",
+    "english": "Isophthalic acid",
+    "cas": "121-91-5",
+    "formula": "C8H6O4",
+    "aliases": [
+      "PIA"
+    ]
+  },
+  {
+    "name": "邻苯二甲酸酐",
+    "english": "Phthalic anhydride",
+    "cas": "85-44-9",
+    "formula": "C8H4O3",
+    "aliases": [
+      "苯酐",
+      "邻苯二甲酸酸酐"
+    ]
+  },
+  {
+    "name": "顺丁烯二酸酐",
+    "english": "Maleic anhydride",
+    "cas": "108-31-6",
+    "formula": "C4H2O3",
+    "aliases": [
+      "顺酐",
+      "马来酸酐"
+    ]
+  },
+  {
+    "name": "环氧乙烷",
+    "english": "Ethylene oxide",
+    "cas": "75-21-8",
+    "formula": "C2H4O",
+    "aliases": [
+      "EO",
+      "氧化乙烯"
+    ]
+  },
+  {
+    "name": "环氧丙烷",
+    "english": "Propylene oxide",
+    "cas": "75-56-9",
+    "formula": "C3H6O",
+    "aliases": [
+      "PO",
+      "氧化丙烯"
+    ]
+  },
+  {
+    "name": "乙二醇",
+    "english": "Ethylene glycol",
+    "cas": "107-21-1",
+    "formula": "C2H6O2",
+    "aliases": [
+      "MEG",
+      "EG",
+      "1,2-乙二醇"
+    ]
+  },
+  {
+    "name": "二甘醇",
+    "english": "Diethylene glycol",
+    "cas": "111-46-6",
+    "formula": "C4H10O3",
+    "aliases": [
+      "DEG",
+      "二乙二醇"
+    ]
+  },
+  {
+    "name": "三甘醇",
+    "english": "Triethylene glycol",
+    "cas": "112-27-6",
+    "formula": "C6H14O4",
+    "aliases": [
+      "TEG",
+      "三乙二醇"
+    ]
+  },
+  {
+    "name": "1,2-丙二醇",
+    "english": "Propylene glycol",
+    "cas": "57-55-6",
+    "formula": "C3H8O2",
+    "aliases": [
+      "丙二醇",
+      "1,2-Propylene glycol"
+    ]
+  },
+  {
+    "name": "1,4-丁二醇",
+    "english": "1,4-Butanediol",
+    "cas": "110-63-4",
+    "formula": "C4H10O2",
+    "aliases": [
+      "BDO",
+      "1,4-BDO"
+    ]
+  },
+  {
+    "name": "四氢呋喃",
+    "english": "Tetrahydrofuran",
+    "cas": "109-99-9",
+    "formula": "C4H8O",
+    "aliases": [
+      "THF"
+    ]
+  },
+  {
+    "name": "丙烯腈",
+    "english": "Acrylonitrile",
+    "cas": "107-13-1",
+    "formula": "C3H3N",
+    "aliases": [
+      "AN",
+      "乙烯基氰"
+    ]
+  },
+  {
+    "name": "丙烯酸",
+    "english": "Acrylic acid",
+    "cas": "79-10-7",
+    "formula": "C3H4O2"
+  },
+  {
+    "name": "甲基丙烯酸甲酯",
+    "english": "Methyl methacrylate",
+    "cas": "80-62-6",
+    "formula": "C5H8O2",
+    "aliases": [
+      "MMA"
+    ]
+  },
+  {
+    "name": "1,2-二氯乙烷",
+    "english": "1,2-Dichloroethane",
+    "cas": "107-06-2",
+    "formula": "C2H4Cl2",
+    "aliases": [
+      "EDC",
+      "二氯乙烷（1,2-异构体）"
+    ]
+  },
+  {
+    "name": "氯乙烯",
+    "english": "Vinyl chloride",
+    "cas": "75-01-4",
+    "formula": "C2H3Cl",
+    "aliases": [
+      "VCM",
+      "氯乙烯单体"
+    ]
+  },
+  {
+    "name": "乙酸乙烯酯",
+    "english": "Vinyl acetate",
+    "cas": "108-05-4",
+    "formula": "C4H6O2",
+    "aliases": [
+      "VAM",
+      "醋酸乙烯酯",
+      "醋酸乙烯"
+    ]
+  },
+  {
+    "name": "乙酸",
+    "english": "Acetic acid",
+    "cas": "64-19-7",
+    "formula": "C2H4O2",
+    "aliases": [
+      "醋酸",
+      "冰醋酸"
+    ]
+  },
+  {
+    "name": "乙酸乙酯",
+    "english": "Ethyl acetate",
+    "cas": "141-78-6",
+    "formula": "C4H8O2",
+    "aliases": [
+      "醋酸乙酯"
+    ]
+  },
+  {
+    "name": "乙酸丁酯",
+    "english": "n-Butyl acetate",
+    "cas": "123-86-4",
+    "formula": "C6H12O2",
+    "aliases": [
+      "乙酸正丁酯",
+      "醋酸丁酯",
+      "醋酸正丁酯"
+    ]
+  },
+  {
+    "name": "甲醇",
+    "english": "Methanol",
+    "cas": "67-56-1",
+    "formula": "CH4O",
+    "aliases": [
+      "木醇"
+    ]
+  },
+  {
+    "name": "乙醇",
+    "english": "Ethanol",
+    "cas": "64-17-5",
+    "formula": "C2H6O",
+    "aliases": [
+      "酒精",
+      "无水乙醇"
+    ]
+  },
+  {
+    "name": "甲醛",
+    "english": "Formaldehyde",
+    "cas": "50-00-0",
+    "formula": "CH2O"
+  },
+  {
+    "name": "丙三醇",
+    "english": "Glycerol",
+    "cas": "56-81-5",
+    "formula": "C3H8O3",
+    "aliases": [
+      "甘油"
+    ]
+  },
+  {
+    "name": "碳酸二甲酯",
+    "english": "Dimethyl carbonate",
+    "cas": "616-38-6",
+    "formula": "C3H6O3",
+    "aliases": [
+      "DMC（碳酸二甲酯）"
+    ]
+  },
+  {
+    "name": "碳酸乙烯酯",
+    "english": "Ethylene carbonate",
+    "cas": "96-49-1",
+    "formula": "C3H4O3",
+    "aliases": [
+      "碳酸亚乙酯",
+      "EC（碳酸乙烯酯）"
+    ]
+  },
+  {
+    "name": "碳酸二乙酯",
+    "english": "Diethyl carbonate",
+    "cas": "105-58-8",
+    "formula": "C5H10O3",
+    "aliases": [
+      "DEC",
+      "碳酸乙酯"
+    ]
+  },
+  {
+    "name": "碳酸甲乙酯",
+    "english": "Ethyl methyl carbonate",
+    "cas": "623-53-0",
+    "formula": "C4H8O3",
+    "aliases": [
+      "EMC"
+    ]
+  },
+  {
+    "name": "氨",
+    "english": "Ammonia",
+    "cas": "7664-41-7",
+    "formula": "NH3",
+    "aliases": [
+      "合成氨",
+      "液氨",
+      "氨气"
+    ]
+  },
+  {
+    "name": "尿素",
+    "english": "Urea",
+    "cas": "57-13-6",
+    "formula": "CH4N2O",
+    "aliases": [
+      "碳酰胺"
+    ]
+  },
+  {
+    "name": "硫酸",
+    "english": "Sulfuric acid",
+    "cas": "7664-93-9",
+    "formula": "H2SO4",
+    "aliases": [
+      "Sulphuric acid"
+    ]
+  },
+  {
+    "name": "硝酸",
+    "english": "Nitric acid",
+    "cas": "7697-37-2",
+    "formula": "HNO3"
+  },
+  {
+    "name": "磷酸",
+    "english": "Phosphoric acid",
+    "cas": "7664-38-2",
+    "formula": "H3PO4",
+    "aliases": [
+      "正磷酸"
+    ]
+  },
+  {
+    "name": "盐酸",
+    "english": "Hydrochloric acid",
+    "formula": "HCl",
+    "aliases": [
+      "氢氯酸"
+    ]
+  },
+  {
+    "name": "氟化氢",
+    "english": "Hydrogen fluoride",
+    "cas": "7664-39-3",
+    "formula": "HF",
+    "aliases": []
+  },
+  {
+    "name": "氢氧化钠",
+    "english": "Sodium hydroxide",
+    "cas": "1310-73-2",
+    "formula": "NaOH",
+    "aliases": [
+      "烧碱",
+      "苛性钠",
+      "片碱",
+      "液碱",
+      "Caustic soda"
+    ]
+  },
+  {
+    "name": "碳酸钠",
+    "english": "Sodium carbonate",
+    "cas": "497-19-8",
+    "formula": "Na2CO3",
+    "aliases": [
+      "纯碱",
+      "苏打灰",
+      "Soda ash"
+    ]
+  },
+  {
+    "name": "碳酸氢钠",
+    "english": "Sodium bicarbonate",
+    "cas": "144-55-8",
+    "formula": "NaHCO3",
+    "aliases": [
+      "小苏打",
+      "重碳酸钠",
+      "碳酸氢钠（无水）"
+    ]
+  },
+  {
+    "name": "氯化钠",
+    "english": "Sodium chloride",
+    "cas": "7647-14-5",
+    "formula": "NaCl"
+  },
+  {
+    "name": "氯气",
+    "english": "Chlorine",
+    "cas": "7782-50-5",
+    "formula": "Cl2",
+    "aliases": [
+      "液氯"
+    ]
+  },
+  {
+    "name": "次氯酸钠",
+    "english": "Sodium hypochlorite",
+    "cas": "7681-52-9",
+    "formula": "NaOCl"
+  },
+  {
+    "name": "三氯化铁",
+    "english": "Ferric chloride",
+    "cas": "7705-08-0",
+    "formula": "FeCl3",
+    "aliases": [
+      "氯化铁"
+    ]
+  },
+  {
+    "name": "硫酸铝",
+    "english": "Aluminium sulfate",
+    "cas": "10043-01-3",
+    "formula": "Al2(SO4)3"
+  },
+  {
+    "name": "二氧化钛",
+    "english": "Titanium dioxide",
+    "cas": "13463-67-7",
+    "formula": "TiO2",
+    "aliases": [
+      "钛白粉"
+    ]
+  },
+  {
+    "name": "氧化铝",
+    "english": "Alumina",
+    "cas": "1344-28-1",
+    "formula": "Al2O3",
+    "aliases": [
+      "三氧化二铝"
+    ]
+  },
+  {
+    "name": "碳酸锂",
+    "english": "Lithium carbonate",
+    "cas": "554-13-2",
+    "formula": "Li2CO3"
+  },
+  {
+    "name": "氢氧化锂",
+    "english": "Lithium hydroxide",
+    "cas": "1310-65-2",
+    "formula": "LiOH"
+  },
+  {
+    "name": "磷酸铁锂",
+    "english": "Lithium iron phosphate",
+    "cas": "15365-14-7",
+    "formula": "LiFePO4",
+    "aliases": [
+      "LFP"
+    ]
+  },
+  {
+    "name": "六氟磷酸锂",
+    "english": "Lithium hexafluorophosphate",
+    "cas": "21324-40-3",
+    "formula": "LiPF6"
+  },
+  {
+    "name": "硫酸镍",
+    "english": "Nickel sulfate",
+    "cas": "7786-81-4",
+    "formula": "NiSO4"
+  },
+  {
+    "name": "硫酸钴",
+    "english": "Cobalt sulfate",
+    "cas": "10124-43-3",
+    "formula": "CoSO4"
+  },
+  {
+    "name": "硫酸锰",
+    "english": "Manganese sulfate",
+    "cas": "7785-87-7",
+    "formula": "MnSO4"
+  },
+  {
+    "name": "氢气",
+    "english": "Hydrogen",
+    "cas": "1333-74-0",
+    "formula": "H2",
+    "aliases": [
+      "氢"
+    ]
+  },
+  {
+    "name": "氮气",
+    "english": "Nitrogen",
+    "cas": "7727-37-9",
+    "formula": "N2"
+  },
+  {
+    "name": "氧气",
+    "english": "Oxygen",
+    "cas": "7782-44-7",
+    "formula": "O2",
+    "aliases": [
+      "工业氧气",
+      "液氧"
+    ]
+  },
+  {
+    "name": "氩气",
+    "english": "Argon",
+    "cas": "7440-37-1",
+    "formula": "Ar",
+    "aliases": [
+      "液氩"
+    ]
+  },
+  {
+    "name": "二氧化碳",
+    "english": "Carbon dioxide",
+    "cas": "124-38-9",
+    "formula": "CO2",
+    "aliases": [
+      "液态二氧化碳"
+    ]
+  },
+  {
+    "name": "水",
+    "english": "Water",
+    "cas": "7732-18-5",
+    "formula": "H2O"
+  },
+  {
+    "name": "过氧化氢",
+    "english": "Hydrogen peroxide",
+    "cas": "7722-84-1",
+    "formula": "H2O2",
+    "aliases": [
+      "双氧水"
+    ]
+  },
+  {
+    "name": "乳酸",
+    "english": "Lactic acid",
+    "cas": "50-21-5",
+    "formula": "C3H6O3",
+    "aliases": [
+      "2-羟基丙酸"
+    ]
+  },
+  {
+    "name": "丁二酸",
+    "english": "Succinic acid",
+    "cas": "110-15-6",
+    "formula": "C4H6O4",
+    "aliases": [
+      "琥珀酸"
+    ]
+  },
+  {
+    "name": "衣康酸",
+    "english": "Itaconic acid",
+    "cas": "97-65-4",
+    "formula": "C5H6O4",
+    "aliases": [
+      "亚甲基丁二酸"
+    ]
+  },
+  {
+    "name": "乙酰丙酸",
+    "english": "Levulinic acid",
+    "cas": "123-76-2",
+    "formula": "C5H8O3",
+    "aliases": [
+      "左旋糖酸"
+    ]
+  },
+  {
+    "name": "山梨醇",
+    "english": "Sorbitol",
+    "cas": "50-70-4",
+    "formula": "C6H14O6",
+    "aliases": [
+      "山梨糖醇",
+      "D-山梨醇"
+    ]
+  },
+  {
+    "name": "木糖醇",
+    "english": "Xylitol",
+    "cas": "87-99-0",
+    "formula": "C5H12O5"
+  },
+  {
+    "name": "2,5-呋喃二甲酸",
+    "english": "2,5-Furandicarboxylic acid",
+    "cas": "3238-40-2",
+    "formula": "C6H4O5",
+    "aliases": [
+      "FDCA"
+    ]
+  },
+  {
+    "name": "糠醛",
+    "english": "Furfural",
+    "cas": "98-01-1",
+    "formula": "C5H4O2",
+    "aliases": [
+      "呋喃甲醛"
+    ]
+  },
+  {
+    "name": "糠醇",
+    "english": "Furfuryl alcohol",
+    "cas": "98-00-0",
+    "formula": "C5H6O2",
+    "aliases": [
+      "呋喃甲醇"
+    ]
+  },
+  {
+    "name": "聚乙烯",
+    "english": "Polyethylene",
+    "cas": "9002-88-4",
+    "aliases": [
+      "PE"
+    ]
+  },
+  {
+    "name": "高密度聚乙烯",
+    "english": "High-density polyethylene",
+    "aliases": [
+      "HDPE"
+    ]
+  },
+  {
+    "name": "低密度聚乙烯",
+    "english": "Low-density polyethylene",
+    "aliases": [
+      "LDPE"
+    ]
+  },
+  {
+    "name": "线型低密度聚乙烯",
+    "english": "Linear low-density polyethylene",
+    "aliases": [
+      "LLDPE"
+    ]
+  },
+  {
+    "name": "聚丙烯",
+    "english": "Polypropylene",
+    "cas": "9003-07-0",
+    "aliases": [
+      "PP"
+    ]
+  },
+  {
+    "name": "聚氯乙烯",
+    "english": "Polyvinyl chloride",
+    "cas": "9002-86-2",
+    "aliases": [
+      "PVC"
+    ]
+  },
+  {
+    "name": "聚苯乙烯",
+    "english": "Polystyrene",
+    "cas": "9003-53-6",
+    "aliases": [
+      "PS"
+    ]
+  },
+  {
+    "name": "聚对苯二甲酸乙二醇酯",
+    "english": "Polyethylene terephthalate",
+    "cas": "25038-59-9",
+    "aliases": [
+      "PET",
+      "PET树脂"
+    ]
+  },
+  {
+    "name": "聚对苯二甲酸丁二醇酯",
+    "english": "Polybutylene terephthalate",
+    "cas": "24968-12-5",
+    "aliases": [
+      "PBT"
+    ]
+  },
+  {
+    "name": "聚乙烯醇",
+    "english": "Polyvinyl alcohol",
+    "cas": "9002-89-5",
+    "aliases": [
+      "PVA"
+    ]
+  },
+  {
+    "name": "聚乙酸乙烯酯",
+    "english": "Polyvinyl acetate",
+    "cas": "9003-20-7",
+    "aliases": [
+      "PVAc",
+      "聚醋酸乙烯酯"
+    ]
+  },
+  {
+    "name": "乙烯-乙酸乙烯酯共聚物",
+    "english": "Ethylene-vinyl acetate",
+    "aliases": [
+      "EVA",
+      "乙烯-醋酸乙烯共聚物"
+    ]
+  },
+  {
+    "name": "聚偏二氟乙烯",
+    "english": "Polyvinylidene fluoride",
+    "cas": "24937-79-9",
+    "aliases": [
+      "PVDF"
+    ]
+  },
+  {
+    "name": "聚四氟乙烯",
+    "english": "Polytetrafluoroethylene",
+    "cas": "9002-84-0",
+    "aliases": [
+      "PTFE"
+    ]
+  },
+  {
+    "name": "聚碳酸酯",
+    "english": "Polycarbonate",
+    "aliases": [
+      "PC"
+    ]
+  },
+  {
+    "name": "聚氨酯",
+    "english": "Polyurethane",
+    "aliases": [
+      "PU"
+    ]
+  },
+  {
+    "name": "聚乳酸",
+    "english": "Polylactic acid",
+    "aliases": [
+      "PLA"
+    ]
+  },
+  {
+    "name": "聚酰胺6",
+    "english": "Polyamide 6",
+    "aliases": [
+      "PA6",
+      "尼龙6",
+      "锦纶6"
+    ]
+  },
+  {
+    "name": "聚酰胺66",
+    "english": "Polyamide 66",
+    "aliases": [
+      "PA66",
+      "尼龙66",
+      "锦纶66"
+    ]
+  },
+  {
+    "name": "丁苯橡胶",
+    "english": "Styrene-butadiene rubber",
+    "aliases": [
+      "SBR"
+    ]
+  },
+  {
+    "name": "顺丁橡胶",
+    "english": "Polybutadiene rubber",
+    "aliases": [
+      "BR",
+      "顺式聚丁二烯橡胶"
+    ]
+  },
+  {
+    "name": "丁腈橡胶",
+    "english": "Nitrile butadiene rubber",
+    "aliases": [
+      "NBR"
+    ]
+  },
+  {
+    "name": "三元乙丙橡胶",
+    "english": "Ethylene propylene diene rubber",
+    "aliases": [
+      "EPDM"
+    ]
+  },
+  {
+    "name": "丙烯腈-丁二烯-苯乙烯共聚物",
+    "english": "Acrylonitrile butadiene styrene",
+    "aliases": [
+      "ABS",
+      "ABS树脂"
+    ]
+  },
+  {
+    "name": "聚丙烯酰胺",
+    "english": "Polyacrylamide",
+    "aliases": [
+      "PAM"
+    ]
+  },
+  {
+    "name": "聚合氯化铝",
+    "english": "Polyaluminium chloride",
+    "aliases": [
+      "聚氯化铝",
+      "PAC（聚合氯化铝）"
+    ]
+  },
+  {
+    "name": "氢氟酸",
+    "english": "Hydrofluoric acid",
+    "aliases": [
+      "氟化氢水溶液"
+    ]
+  },
+  {
+    "name": "氦气",
+    "english": "Helium",
+    "cas": "7440-59-7",
+    "formula": "He",
+    "aliases": [
+      "氦"
+    ]
+  },
+  {
+    "name": "炭黑",
+    "english": "Carbon black",
+    "cas": "1333-86-4",
+    "aliases": [
+      "碳黑"
+    ]
+  },
+  {
+    "name": "硫酸铁",
+    "english": "Iron(III) sulfate",
+    "cas": "10028-22-5",
+    "formula": "Fe2(SO4)3",
+    "aliases": [
+      "硫酸高铁",
+      "三价铁硫酸盐"
+    ]
+  },
+  {
+    "name": "氢氧化钙",
+    "english": "Calcium hydroxide",
+    "cas": "1305-62-0",
+    "formula": "Ca(OH)2",
+    "aliases": [
+      "消石灰",
+      "熟石灰"
+    ]
+  },
+  {
+    "name": "磷酸铁",
+    "english": "Iron(III) phosphate",
+    "cas": "10045-86-0",
+    "formula": "FePO4",
+    "aliases": [
+      "正磷酸铁"
+    ]
+  },
+  {
+    "name": "镍钴锰酸锂",
+    "english": "Lithium nickel manganese cobalt oxide",
+    "aliases": [
+      "镍锰钴酸锂",
+      "NCM",
+      "NMC"
+    ]
+  },
+  {
+    "name": "镍钴铝酸锂",
+    "english": "Lithium nickel cobalt aluminum oxide",
+    "aliases": [
+      "NCA"
+    ]
+  },
+  {
+    "name": "钴酸锂",
+    "english": "Lithium cobalt oxide",
+    "cas": "12190-79-3",
+    "formula": "LiCoO2",
+    "aliases": [
+      "LCO"
+    ]
+  },
+  {
+    "name": "锰酸锂",
+    "english": "Lithium manganese oxide",
+    "cas": "12057-17-9",
+    "formula": "LiMn2O4",
+    "aliases": [
+      "尖晶石锰酸锂",
+      "LMO"
+    ]
+  },
+  {
+    "name": "双氟磺酰亚胺锂",
+    "english": "Lithium bis(fluorosulfonyl)imide",
+    "cas": "171611-11-3",
+    "aliases": [
+      "LiFSI"
+    ]
+  },
+  {
+    "name": "碳酸亚乙烯酯",
+    "english": "Vinylene carbonate",
+    "cas": "872-36-6",
+    "formula": "C3H2O3"
+  },
+  {
+    "name": "氟代碳酸乙烯酯",
+    "english": "Fluoroethylene carbonate",
+    "cas": "114435-02-8",
+    "formula": "C3H3FO3",
+    "aliases": [
+      "氟代碳酸乙撑酯",
+      "FEC"
+    ]
+  },
+  {
+    "name": "活性炭",
+    "english": "Activated carbon",
+    "aliases": [
+      "活性碳"
+    ]
+  },
+  {
+    "name": "硅酸钠",
+    "english": "Sodium silicate",
+    "cas": "1344-09-8",
+    "aliases": [
+      "水玻璃",
+      "泡花碱"
+    ]
+  },
+  {
+    "name": "聚丁二酸丁二醇酯",
+    "english": "Polybutylene succinate",
+    "aliases": [
+      "丁二酸丁二醇聚酯"
+    ]
+  },
+  {
+    "name": "苯乙烯-丙烯腈共聚物",
+    "english": "Styrene acrylonitrile copolymer",
+    "cas": "9003-54-7",
+    "aliases": [
+      "SAN树脂",
+      "AS树脂"
+    ]
+  },
+  {
+    "name": "合成气",
+    "english": "Syngas",
+    "aliases": [
+      "合成煤气"
+    ]
+  },
+  {
+    "name": "四氧化三钴",
+    "english": "Cobalt(II,III) oxide",
+    "cas": "1308-06-1",
+    "formula": "Co3O4"
+  },
+  {
+    "name": "二氧化锰",
+    "english": "Manganese dioxide",
+    "cas": "1313-13-9",
+    "formula": "MnO2"
+  },
+  {
+    "name": "勃姆石",
+    "english": "Boehmite",
+    "cas": "1318-23-6",
+    "formula": "AlO(OH)",
+    "aliases": [
+      "一水软铝石",
+      "软水铝石"
+    ]
+  },
+  {
+    "name": "异山梨醇",
+    "english": "Isosorbide",
+    "cas": "652-67-5",
+    "formula": "C6H10O4"
+  },
+  {"name": "石脑油", "english": "Naphtha"},
+  {"name": "乙醛", "english": "Acetaldehyde", "cas": "75-07-0", "formula": "C2H4O"},
+  {"name": "碳化钙", "english": "Calcium carbide", "cas": "75-20-7", "formula": "CaC2", "aliases": ["电石"]},
+  {"name": "氯化氢", "english": "Hydrogen chloride", "cas": "7647-01-0", "formula": "HCl", "aliases": ["氯化氢气体"]},
+  {"name": "二甲醚", "english": "Dimethyl ether", "cas": "115-10-6", "formula": "C2H6O", "aliases": ["二甲基醚", "DME"]},
+  {"name": "甲基叔丁基醚", "english": "Methyl tert-butyl ether", "cas": "1634-04-4", "formula": "C5H12O", "aliases": ["甲基第三丁基醚", "MTBE"]},
+  {"name": "1-丁烯", "english": "1-Butene", "cas": "106-98-9", "formula": "C4H8", "aliases": ["丁烯-1", "正丁烯-1"]},
+  {"name": "异丁烯", "english": "Isobutylene", "cas": "115-11-7", "formula": "C4H8", "aliases": ["2-甲基丙烯", "Isobutene"]},
+  {"name": "2-丁酮", "english": "2-Butanone", "cas": "78-93-3", "formula": "C4H8O", "aliases": ["丁酮", "甲乙酮", "甲基乙基酮", "MEK"]},
+  {"name": "2-丁醇", "english": "2-Butanol", "cas": "78-92-2", "formula": "C4H10O", "aliases": ["仲丁醇", "sec-Butanol"]},
+  {"name": "正丁醇", "english": "1-Butanol", "cas": "71-36-3", "formula": "C4H10O", "aliases": ["1-丁醇", "n-Butanol"]},
+  {"name": "异丁醇", "english": "Isobutanol", "cas": "78-83-1", "formula": "C4H10O", "aliases": ["2-甲基-1-丙醇"]},
+  {"name": "正丁醛", "english": "Butanal", "cas": "123-72-8", "formula": "C4H8O", "aliases": ["丁烷醛"]},
+  {"name": "异丁醛", "english": "Isobutanal", "cas": "78-84-2", "formula": "C4H8O", "aliases": ["2-甲基丙醛"]},
+  {"name": "2-乙基己醇", "english": "2-Ethylhexanol", "cas": "104-76-7", "formula": "C8H18O", "aliases": ["2-乙基-1-己醇", "2-乙基己-1-醇"]},
+  {"name": "丙烯酸甲酯", "english": "Methyl acrylate", "cas": "96-33-3", "formula": "C4H6O2", "aliases": ["MA"]},
+  {"name": "丙烯酸乙酯", "english": "Ethyl acrylate", "cas": "140-88-5", "formula": "C5H8O2", "aliases": ["EA"]},
+  {"name": "丙烯酸正丁酯", "english": "n-Butyl acrylate", "cas": "141-32-2", "formula": "C7H12O2", "aliases": ["丙烯酸丁酯", "BA"]},
+  {"name": "丙烯酸-2-乙基己酯", "english": "2-Ethylhexyl acrylate", "cas": "103-11-7", "formula": "C11H20O2", "aliases": ["丙烯酸2-乙基己酯", "丙烯酸异辛酯", "2-EHA"]},
+  {"name": "甲基丙烯酸", "english": "Methacrylic acid", "cas": "79-41-4", "formula": "C4H6O2"},
+  {"name": "丙烯酰胺", "english": "Acrylamide", "cas": "79-06-1", "formula": "C3H5NO", "aliases": ["AM"]},
+  {"name": "环戊二烯", "english": "Cyclopentadiene", "cas": "542-92-7", "formula": "C5H6", "aliases": ["CPD"]},
+  {"name": "双环戊二烯", "english": "Dicyclopentadiene", "cas": "77-73-6", "formula": "C10H12", "aliases": ["DCPD"]},
+  {"name": "富马酸", "english": "Fumaric acid", "cas": "110-17-8", "formula": "C4H4O4", "aliases": ["反丁烯二酸"]},
+  {"name": "四氯化钛", "english": "Titanium tetrachloride", "cas": "7550-45-0", "formula": "TiCl4"},
+  {"name": "四氯化硅", "english": "Silicon tetrachloride", "cas": "10026-04-7", "formula": "SiCl4", "aliases": ["四氯硅烷"]},
+  {"name": "三氯氢硅", "english": "Trichlorosilane", "cas": "10025-78-2", "formula": "SiHCl3", "aliases": ["三氯硅烷"]},
+  {"name": "二氧化硅", "english": "Silicon dioxide", "cas": "7631-86-9", "formula": "SiO2"},
+  {"name": "沉淀二氧化硅", "english": "Precipitated silica", "aliases": ["沉淀法白炭黑", "沉淀法二氧化硅"]},
+  {"name": "气相二氧化硅", "english": "Fumed silica", "aliases": ["气相白炭黑", "气相法二氧化硅"]},
+  {"name": "对苯二甲酸二甲酯", "english": "Dimethyl terephthalate", "cas": "120-61-6", "formula": "C10H10O4", "aliases": ["DMT"]},
+  {"name": "三聚氰胺甲醛树脂", "english": "Melamine-formaldehyde resin", "cas": "9003-08-1", "aliases": ["三聚氰胺树脂"]},
+  {"name": "六亚甲基四胺", "english": "Hexamethylenetetramine", "cas": "100-97-0", "formula": "C6H12N4", "aliases": ["乌洛托品", "Methenamine"]},
+  {"name": "多聚甲醛", "english": "Paraformaldehyde", "cas": "30525-89-4"},
+  {"name": "二元乙丙橡胶", "english": "Ethylene-propylene copolymer", "aliases": ["EPM"]},
+  {"name": "乙叉降冰片烯", "english": "Ethylidene norbornene", "cas": "16219-75-3", "formula": "C9H12", "aliases": ["5-亚乙基-2-降冰片烯", "ENB"]},
+  {"name": "苯乙烯-丁二烯-苯乙烯嵌段共聚物", "english": "Styrene-butadiene-styrene block copolymer", "aliases": ["SBS"]},
+  {"name": "可发性聚苯乙烯", "english": "Expandable polystyrene", "aliases": ["EPS树脂"]},
+  {"name": "磷酸二氢铵", "english": "Ammonium dihydrogen phosphate", "cas": "7722-76-1", "formula": "NH4H2PO4", "aliases": ["磷酸一铵", "Monoammonium phosphate"]},
+  {"name": "磷酸氢二铵", "english": "Diammonium hydrogen phosphate", "cas": "7783-28-0", "formula": "(NH4)2HPO4", "aliases": ["磷酸二铵", "Diammonium phosphate"]},
+  {"name": "二氟甲烷", "english": "Difluoromethane", "cas": "75-10-5", "formula": "CH2F2", "aliases": ["R-32", "R32", "HFC-32"]},
+  {"name": "五氟乙烷", "english": "Pentafluoroethane", "cas": "354-33-6", "formula": "C2HF5", "aliases": ["R-125", "R125", "HFC-125"]},
+  {"name": "1,1,1,2-四氟乙烷", "english": "1,1,1,2-Tetrafluoroethane", "cas": "811-97-2", "formula": "C2H2F4", "aliases": ["R-134a", "R134a", "HFC-134a"]},
+  {"name": "R-410A 混合制冷剂", "english": "R-410A refrigerant blend", "aliases": ["R-410A", "R410A"]},
+  {"name": "多晶硅", "english": "Polysilicon", "aliases": ["Polycrystalline silicon"]},
+  {"name": "石油焦", "english": "Petroleum coke", "aliases": ["Petcoke"]},
+  {"name": "针状焦", "english": "Needle coke"},
+  {"name":"4-甲基-2-戊酮","english":"Methyl isobutyl ketone","cas":"108-10-1","formula":"C6H12O","aliases":["甲基异丁基酮","MIBK"]},
+  {"name": "干冰", "english": "Solid carbon dioxide", "formula": "CO2", "aliases": ["固态二氧化碳", "固体二氧化碳"]},
+  {"name": "液氮", "english": "Liquid nitrogen", "formula": "N2", "aliases": ["液态氮"]},
+  {"name": "硫磺", "english": "Elemental sulfur", "cas": "7704-34-9", "aliases": ["单质硫"]},
+  {"name": "硫酸钠", "english": "Sodium sulfate", "cas": "7757-82-6", "formula": "Na2SO4", "aliases": ["无水硫酸钠"]},
+  {"name": "硫化钠", "english": "Sodium sulfide", "cas": "1313-82-2", "formula": "Na2S", "aliases": ["硫化碱"]},
+  {"name": "硫酸锌", "english": "Zinc sulfate", "cas": "7733-02-0", "formula": "ZnSO4"},
+  {"name": "亚硫酸氢镁", "english": "Magnesium bisulfite", "cas": "13774-25-9", "formula": "Mg(HSO3)2"},
+  {"name": "亚硫酸氢钙", "english": "Calcium bisulfite", "cas": "13780-03-5", "formula": "Ca(HSO3)2"},
+  {"name": "二硫化碳", "english": "Carbon disulfide", "cas": "75-15-0", "formula": "CS2"},
+  {"name": "脲醛树脂", "english": "Urea-formaldehyde resin", "cas": "9011-05-6", "aliases": ["UF树脂"]},
+  {"name": "酚醛树脂", "english": "Phenol-formaldehyde resin", "cas": "9003-35-4", "aliases": ["PF树脂"]},
+  {"name": "聚合MDI", "english": "Polymeric MDI", "cas": "9016-87-9", "aliases": ["聚合二苯基甲烷二异氰酸酯", "粗MDI"]},
+  {"name": "丁苯胶乳", "english": "Styrene-butadiene latex", "aliases": ["SBR胶乳"]},
+  {"name": "碳酸钙", "english": "Calcium carbonate", "cas": "471-34-1", "formula": "CaCO3"},
+  {"name": "重质碳酸钙", "english": "Ground calcium carbonate", "aliases": ["重钙", "GCC"]},
+  {"name": "轻质碳酸钙", "english": "Precipitated calcium carbonate", "aliases": ["轻钙", "PCC"]},
+  {"name": "高岭土", "english": "Kaolin", "cas": "1332-58-7", "aliases": ["瓷土"]},
+  {"name": "滑石粉", "english": "Talc", "cas": "14807-96-6"},
+  {"name": "聚丙烯酸钠", "english": "Sodium polyacrylate", "cas": "9003-04-7"},
+  {"name": "羟乙基纤维素", "english": "Hydroxyethyl cellulose", "cas": "9004-62-0", "aliases": ["HEC"]},
+  {"name": "异丙醇", "english": "Isopropyl alcohol", "cas": "67-63-0", "formula": "C3H8O", "aliases": ["2-丙醇"]},
+  {"name": "氢氧化钾", "english": "Potassium hydroxide", "cas": "1310-58-3", "formula": "KOH", "aliases": ["苛性钾"]},
+  {"name": "氟化铵", "english": "Ammonium fluoride", "cas": "12125-01-8", "formula": "NH4F"},
+  {"name": "四甲基氢氧化铵", "english": "Tetramethylammonium hydroxide", "cas": "75-59-2", "formula": "C4H13NO", "aliases": ["TMAH"]},
+  {"name": "四氟化碳", "english": "Carbon tetrafluoride", "cas": "75-73-0", "formula": "CF4", "aliases": ["四氟甲烷"]},
+  {"name": "三氟甲烷", "english": "Trifluoromethane", "cas": "75-46-7", "formula": "CHF3", "aliases": ["HFC-23"]},
+  {"name": "六氟化硫", "english": "Sulfur hexafluoride", "cas": "2551-62-4", "formula": "SF6"},
+  {"name": "N-甲基-2-吡咯烷酮", "english": "N-Methyl-2-pyrrolidone", "cas": "872-50-4", "formula": "C5H9NO", "aliases": ["NMP"]},
+  {"name": "N,N-二甲基甲酰胺", "english": "N,N-Dimethylformamide", "cas": "68-12-2", "formula": "C3H7NO", "aliases": ["DMF", "二甲基甲酰胺"]},
+  {"name": "二甲基亚砜", "english": "Dimethyl sulfoxide", "cas": "67-68-5", "formula": "C2H6OS", "aliases": ["DMSO"]},
+  {"name": "苯并三氮唑", "english": "Benzotriazole", "cas": "95-14-7", "formula": "C6H5N3"},
+  {"name": "一乙醇胺", "english": "Monoethanolamine", "cas": "141-43-5", "formula": "C2H7NO", "aliases": ["单乙醇胺", "2-氨基乙醇"]},
+  {"name": "二乙醇胺", "english": "Diethanolamine", "cas": "111-42-2", "formula": "C4H11NO2"},
+  {"name": "N-甲基二乙醇胺", "english": "N-Methyldiethanolamine", "cas": "105-59-9", "formula": "C5H13NO2", "aliases": ["MDEA"]},
+  {"name": "柠檬酸", "english": "Citric acid", "cas": "77-92-9", "formula": "C6H8O7", "aliases": ["无水柠檬酸"]},
+  {"name": "乙酸钠", "english": "Sodium acetate", "cas": "127-09-3", "formula": "C2H3NaO2", "aliases": ["醋酸钠"]},
+  {"name": "乙二胺四乙酸二钠", "english": "Disodium EDTA", "cas": "139-33-3", "formula": "C10H14N2Na2O8", "aliases": ["依地酸二钠", "EDTA二钠"]},
+  {"name": "亚硫酸氢钠", "english": "Sodium bisulfite", "cas": "7631-90-5", "formula": "NaHSO3", "aliases": ["重亚硫酸钠"]},
+  {"name": "焦亚硫酸钠", "english": "Sodium metabisulfite", "cas": "7681-57-4", "formula": "Na2S2O5", "aliases": ["偏重亚硫酸钠"]},
+  {"name": "羟基乙叉二膦酸", "english": "1-Hydroxyethylidene-1,1-diphosphonic acid", "cas": "2809-21-4", "formula": "C2H8O7P2", "aliases": ["HEDP"]},
+  {"name": "葡萄糖酸钠", "english": "Sodium gluconate", "cas": "527-07-1", "formula": "C6H11NaO7"},
+  {"name": "木质素磺酸钙", "english": "Calcium lignosulfonate", "cas": "8061-52-7"},
+  {"name": "五氧化二钒", "english": "Vanadium pentoxide", "cas": "1314-62-1", "formula": "V2O5"},
+  {"name": "胶体二氧化硅", "english": "Colloidal silica", "aliases": ["硅溶胶"]},
+  {"name": "氨水", "english": "Aqueous ammonia", "cas": "1336-21-6", "aliases": ["氨水溶液"]},
+  {"name": "二氧化氯", "english": "Chlorine dioxide", "cas": "10049-04-4", "formula": "ClO2"},
+  {"name": "臭氧", "english": "Ozone", "cas": "10028-15-6", "formula": "O3"},
+  {"name": "过硫酸钠", "english": "Sodium persulfate", "cas": "7775-27-1", "formula": "Na2S2O8", "aliases": ["过二硫酸钠"]},
+  {"name": "海藻酸钙", "english": "Calcium alginate", "cas": "9005-35-0"}
+]

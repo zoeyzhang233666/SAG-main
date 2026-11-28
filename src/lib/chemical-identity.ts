@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import chemicalData from "../data/chain-chemicals.json" with { type: "json" };
 
 export interface Chemical {
   name: string;
@@ -20,12 +18,6 @@ const AMBIGUOUS_ABBREVIATIONS = new Set([
   "IPA", "MA", "PAC", "PC", "PI", "POP", "PO", "TPO", "VC",
 ]);
 
-function loadChemicals(): Chemical[] {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const jsonPath = join(here, "../../web/src/data/chain-chemicals.json");
-  return JSON.parse(readFileSync(jsonPath, "utf8")) as Chemical[];
-}
-
 export function normalizeChemicalSearch(value: string): string {
   return value
     .normalize("NFKC")
@@ -41,7 +33,7 @@ function dictionaryNames(chemical: Chemical): string[] {
   );
 }
 
-const chemicals: Chemical[] = loadChemicals();
+const chemicals: Chemical[] = chemicalData as Chemical[];
 const chemicalsByName = new Map<string, Chemical | null>();
 for (const chemical of chemicals) {
   for (const name of dictionaryNames(chemical)) {
