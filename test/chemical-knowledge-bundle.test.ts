@@ -72,6 +72,27 @@ describe("getChemicalKnowledgeBundle identity chain", () => {
     db.query.mockReset();
   });
 
+  it("combines natural gas material roles and excludes same-name sector records", async () => {
+    const energy = entityRow({ id: "gas-energy", name: "天然气", type: "能源" });
+    const feedstock = entityRow({ id: "gas-feedstock", name: "Natural Gas", type: "原料气" });
+    const industry = entityRow({ id: "gas-industry", name: "天然气", type: "终端行业" });
+    const materialEvent = eventRow({ id: "material-event", title: "天然气原料供应" });
+    const industryEvent = eventRow({ id: "industry-event", title: "行业分类" });
+    db.query
+      .mockResolvedValueOnce({ rows: [energy, feedstock, industry] })
+      .mockResolvedValueOnce({ rows: [energy, feedstock, industry] })
+      .mockResolvedValueOnce({ rows: [materialEvent, industryEvent] })
+      .mockResolvedValueOnce({ rows: [energy, feedstock] })
+      .mockResolvedValueOnce({ rows: [materialEvent] });
+
+    const bundle = await getChemicalKnowledgeBundle({ terms: ["天然气"], projectId: "project", tenantId: "default" });
+    expect(bundle.entities.map((entity) => entity.id).sort()).toEqual([energy.id, feedstock.id].sort());
+    expect(bundle.events.map((event) => event.id)).toEqual([materialEvent.id]);
+    expect([...db.query.mock.calls[3][1][0]].sort()).toEqual([energy.id, feedstock.id].sort());
+    expect(resolveEntityChemical({ name: "天然气", type: "应用领域" })).toBeUndefined();
+    expect(entityBelongsToChemical({ name: "甲烷", type: "原料" }, resolveChemicalByName("天然气")!)).toBe(false);
+  });
+
   it("filters candidates with entityBelongsToChemical and reloads events for confirmed ids only", async () => {
     const caustic = resolveChemicalByName("氢氧化钠");
     expect(caustic).toBeTruthy();

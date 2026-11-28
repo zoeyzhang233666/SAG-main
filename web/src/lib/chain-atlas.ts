@@ -2,6 +2,7 @@ import source from "../data/chain-source.json" with { type: "json" };
 import applications from "../data/chain-applications.json" with { type: "json" };
 import chemicalData from "../data/chain-chemicals.json" with { type: "json" };
 import supplements from "../data/chain-supplements.json" with { type: "json" };
+import type { Chemical } from "./chemical-identity.js";
 
 export type ChainTrack = "source" | "applications";
 
@@ -15,14 +16,6 @@ export const chainRelations: Record<string, readonly [string, string]> = {
   grade: ["品类", "Grade"],
   historical: ["历史路线", "Historical route"]
 };
-
-export interface Chemical {
-  name: string;
-  english: string;
-  cas?: string;
-  formula?: string;
-  aliases?: string[];
-}
 
 interface AtlasNode {
   label: string;
@@ -99,6 +92,7 @@ export {
   resolveChemicalByName,
   resolveChemicalFromQuery,
   resolveEntityChemical,
+  type Chemical,
   type ChemicalMatchCandidate,
 } from "./chemical-identity.js";
 
@@ -132,6 +126,9 @@ function chemicalFor(node: AtlasNode) {
   const named = [name, withoutCas, applicationName, arrowPlain, arrowHan]
     .map(candidate => chemicalsByName.get(normalizeAtlasSearch(candidate)))
     .find(Boolean);
+  if (named?.materialEntityTypes && !chemicalNames(named).some(
+    (materialName) => normalizeAtlasSearch(materialName) === normalizeAtlasSearch(cleanLabel(node.label)),
+  )) return undefined;
   const cas =
     unqualified.match(/\[(\d{2,7}-\d{2}-\d)\]/u)?.[1] ??
     head.match(/\[(\d{2,7}-\d{2}-\d)\]/u)?.[1];

@@ -18,7 +18,7 @@ import {
   chainAtlas,
   chainRelations,
   chemicalIdentityTerms,
-  matchBelongsToChemical,
+  entityBelongsToChemical,
   normalizeAtlasSearch,
   type ChainNode,
   type ChainTrack,
@@ -197,10 +197,9 @@ export default function ChainAtlasWorkspace({
   }
 
   function knowledgeMatches(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
-    if (!item.chemical) return [];
-    return matches.filter((match) =>
-      matchBelongsToChemical(match.name, item.chemical!, match.description),
-    );
+    const chemical = item.chemical;
+    if (!chemical || !onOpenKnowledge) return [];
+    return matches.filter((match) => entityBelongsToChemical(match, chemical));
   }
 
   function openMatch(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
@@ -236,10 +235,13 @@ export default function ChainAtlasWorkspace({
   }
 
   function renderMatches(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
-    if (expandedMatch !== item.id || matches.length < 2) return null;
+    if (expandedMatch !== item.id) return null;
+    const confirmed = new Set(knowledgeMatches(item, matches).map((match) => match.id));
+    const remaining = matches.filter((match) => !confirmed.has(match.id));
+    if (!remaining.length) return null;
     return (
       <div className="chain-atlas-matches">
-        {matches.map(match => (
+        {remaining.map(match => (
           <button key={match.id} type="button" onClick={() => onOpenEntity(match.id)}>
             <Database size={15} />
             <span><strong>{match.name}</strong><small>{match.sourceName} · {match.type}</small></span>
@@ -252,18 +254,26 @@ export default function ChainAtlasWorkspace({
 
   function renderMatchAction(item: ChainNode, matches: ChainAtlasEntityMatch[]) {
     if (!matches.length) return null;
+    const confirmed = knowledgeMatches(item, matches).length;
+    const remaining = matches.length - confirmed;
     return (
-      <button type="button" className="chain-atlas-match" onClick={() => openMatch(item, matches)}
-        aria-expanded={matches.length > 1 ? expandedMatch === item.id : undefined}
-        aria-label={`${item.chemical ? t("查看知识", "View knowledge") : t("查看知识库记录", "View library records")} ${item.label}`}>
-        <Database size={13} />
-        <span>{item.chemical && knowledgeMatches(item, matches).length > 0
-          ? t("查看知识", "View knowledge")
-          : matches.length === 1
-            ? t("查看实体", "View entity")
-            : t(`${matches.length} 个实体`, `${matches.length} entities`)}</span>
-        <ArrowUpRight size={13} />
-      </button>
+      <>
+        <button type="button" className="chain-atlas-match" onClick={() => openMatch(item, matches)}
+          aria-expanded={!confirmed && matches.length > 1 ? expandedMatch === item.id : undefined}
+          aria-label={`${confirmed ? t("查看知识", "View knowledge") : t("查看知识库记录", "View library records")} ${item.label}`}>
+          <Database size={13} />
+          <span>{confirmed ? t("查看知识", "View knowledge")
+            : matches.length === 1 ? t("查看实体", "View entity")
+              : t(`${matches.length} 个实体`, `${matches.length} entities`)}</span>
+          <ArrowUpRight size={13} />
+        </button>
+        {confirmed > 0 && remaining > 0 && (
+          <button type="button" className="chain-atlas-match" aria-expanded={expandedMatch === item.id}
+            onClick={() => setExpandedMatch((current) => current === item.id ? undefined : item.id)}>
+            {t(`其他记录 ${remaining} 条`, `Other records (${remaining})`)}
+          </button>
+        )}
+      </>
     );
   }
 
